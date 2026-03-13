@@ -891,6 +891,8 @@ body::before{
 .trade-player-option:hover{border-color:rgba(100,180,255,.3);}
 .trade-player-option.selected-trade-target{border-color:#4a8abe;background:rgba(30,60,120,.2);}
 </style>
+<!-- Socket.io client — loaded from our own server -->
+<script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
 
@@ -3481,204 +3483,409 @@ function spExplore(){
 }
 
 // ─────────────────────────────────────────
-//  ONLINE MODE
+//  ONLINE MODE  — Real Socket.io multiplayer
 // ─────────────────────────────────────────
-let onlineSimPlayers=[];
+
+// ── Socket connection ──
+let socket = null;
+let onlineRoomPlayers = [];   // real players in current room
 let friendsList = [];
-let tradeSelected = {cardIdx:-1, targetIdx:-1};
+let tradeSelected = { cardIdx: -1, targetIdx: -1 };
+let _tradeTargetId = '';
+let _tradeTargetName = '';
 let pendingTrades = [];
 
-function goOnline(){
-  // Pre-fill username from gameState
+function getSocket() {
+  if (socket && socket.connected) return socket;
+  // Connect to the same server serving this page
+  socket = io({ transports: ['websocket', 'polling'] });
+
+  // ── Connected ──
+  socket.on('connect', () => {
+    console.log('[Socket] Connected:', socket.id);
+    // Register this player on the server
+    socket.emit('player:register', {
+      username: gameState.username || 'Hero',
+      level:    gameState.playerLevel || 1,
+      deckSize: gameState.deck.length,
+      gold:     gameState.playerGold,
+    });
+  });
+
+  socket.on('disconnect', () => {
+    console.log('[Socket] Disconnected');
+    toast('⚠️ Disconnected from server. Reconnecting...');
+  });
+
+  socket.on('error', ({ msg }) => toast(`⚠️ ${msg}`));
+
+  // ── Room events ──
+  socket.on('room:hosted', ({ code }) => {
+    gameState.onlineRoomCode = code;
+    document.getElementById('room-code-display').textContent = code;
+    document.getElementById('online-status').textContent = 'Waiting for players...';
+    document.getElementById('online-status').className = 'online-status';
+  });
+
+  socket.on('room:joined', ({ code }) => {
+    gameState.onlineRoomCode = code;
+    document.getElementById('join-status').textContent = `✅ Joined room ${code}!`;
+    document.getElementById('join-status').className = 'online-status ok';
+    toast(`Connected to room ${code}!`);
+  });
+
+  socket.on('room:update', ({ players }) => {
+    onlineRoomPlayers = players;
+    renderPlayerList();
+    renderTradeParty();
+    renderTradePlayers();
+  });
+
+  socket.on('player:joined', ({ username }) => {
+    document.getElementById('online-status').textContent = `${username} joined!`;
+    document.getElementById('online-status').className = 'online-status ok';
+    toast(`👤 ${username} joined the room!`);
+  });
+
+  socket.on('player:left', ({ username }) => {
+    toast(`👤 ${username} left the room.`);
+  });
+
+  socket.on('host:transferred', ({ username }) => {
+    toast(`👑 ${username} is now the host.`);
+  });
+
+  // ── Lobby (online player list) ──
+  socket.on('lobby:players', (list) => {
+    renderOnlinePlayers(list);
+    renderTradePlayers(list);
+  });
+
+  socket.on('player:registered', () => {
+    // Request lobby list once registered
+    socket.emit('lobby:request');
+  });
+
+  // ── Battle ──
+  socket.on('game:started', ({ mode, battleState }) => {
+    if (mode === 'duel' && battleState) {
+      startOnlineDuel(battleState);
+    } else if (mode === 'story') {
+      showScreen('screen-sp'); initSP();
+      spLog(`🌐 <b>Online Story Mode</b>`,'l');
+    }
+  });
+
+  socket.on('battle:update', ({ battleState, message }) => {
+    updateOnlineDuel(battleState, message);
+  });
+
+  socket.on('battle:over', ({ winnerName, log }) => {
+    const msg = winnerName ? `🏆 ${winnerName} wins!` : '🏃 Duel ended.';
+    showModal('⚔️ Duel Over', `
+      <div style="text-align:center;padding:10px 0 16px;">
+        <div style="font-size:2rem;">🏆</div>
+        <div style="font-family:'Cinzel Decorative',serif;font-size:1rem;color:var(--gold);margin:8px 0;">${msg}</div>
+      </div>
+      <div style="max-height:200px;overflow-y:auto;font-size:.65rem;color:var(--text);">
+        ${log.map(l=>`<div style="padding:3px 0;border-bottom:1px solid rgba(255,255,255,.05);">${l}</div>`).join('')}
+      </div>`,
+      [{label:'Back to Lobby', cls:'btn', cb:()=>{ closeModal(); onlineTab('lobby'); }}]
+    );
+  });
+
+  // ── Trade ──
+  socket.on('trade:incoming', ({ tradeId, from, fromId, card }) => {
+    pendingTrades.push({ tradeId, from, fromId, card });
+    renderTradeIncoming();
+    toast(`🤝 ${from} wants to trade ${card.emoji||'⚔️'} ${card.name}!`);
+  });
+
+  socket.on('trade:sent', () => {
+    const el = document.getElementById('trade-status');
+    if (el) { el.textContent = 'Trade offer sent! Waiting for response...'; el.style.color='var(--dim)'; }
+  });
+
+  socket.on('trade:complete', ({ receivedCard, fromUsername }) => {
+    if (gameState.deck.length < 4) {
+      const newCard = { ...receivedCard, statuses:[], abilityCooldown:0, fainted:false };
+      gameState.deck.push(newCard);
+      if (gameState.activeCardIdx >= gameState.deck.length) gameState.activeCardIdx = 0;
+      updateMenuHud(); renderSPDeckList(); saveGame();
+    }
+    const el = document.getElementById('trade-status');
+    if (el) { el.textContent = `✅ Trade complete! Got ${receivedCard.emoji||'⚔️'} ${receivedCard.name}!`; el.style.color='#60d060'; }
+    toast(`🤝 Trade complete! Received ${receivedCard.name} from ${fromUsername}!`);
+    tradeSelected = { cardIdx:-1, targetIdx:-1 };
+    renderTradeParty();
+  });
+
+  socket.on('trade:declined', () => {
+    const el = document.getElementById('trade-status');
+    if (el) { el.textContent = 'Trade was declined.'; el.style.color='#d06060'; }
+    toast('Trade declined.');
+  });
+
+  // ── Chat ──
+  socket.on('chat:message', ({ from, message }) => {
+    toast(`💬 ${from}: ${message}`);
+  });
+
+  return socket;
+}
+
+// ── Go Online screen ──
+function goOnline() {
+  if (!gameState.deck.length) { goCardPick('online_return'); return; }
   const greet = document.getElementById('online-greeting-name');
-  if(greet) greet.textContent = gameState.username||gameState.onlineUsername||'Hero';
-  if(!gameState.deck.length){ goCardPick('online_return'); return; }
+  if (greet) greet.textContent = gameState.username || 'Hero';
+  // Connect socket
+  getSocket();
   onlineTab('lobby');
   showScreen('screen-online');
   renderFriendsList();
-  renderOnlinePlayers();
 }
 
-function onlineSetUsername(){
-  // Legacy — username now set at intro screen
+function onlineSetUsername() {
   const name = document.getElementById('online-username')?.value?.trim();
-  if(name){ gameState.onlineUsername=name; gameState.username=name; }
+  if (name) { gameState.onlineUsername = name; gameState.username = name; }
   goOnline();
 }
 
-function onlineTab(tab){
-  ['lobby','friends','trade'].forEach(t=>{
-    const el = document.getElementById('online-tab-'+t);
+function onlineTab(tab) {
+  ['lobby','friends','trade'].forEach(t => {
+    const el  = document.getElementById('online-tab-'+t);
     const btn = document.getElementById('otab-'+t);
-    if(el) el.style.display = t===tab?'':'none';
-    if(btn){ btn.style.background = t===tab?'linear-gradient(135deg,#3a2008,#7a4818)':'rgba(0,0,0,.4)'; btn.style.borderColor = t===tab?'rgba(200,151,58,.3)':'var(--border)'; }
+    if (el)  el.style.display = t===tab ? '' : 'none';
+    if (btn) {
+      btn.style.background   = t===tab ? 'linear-gradient(135deg,#3a2008,#7a4818)' : 'rgba(0,0,0,.4)';
+      btn.style.borderColor  = t===tab ? 'rgba(200,151,58,.3)' : 'var(--border)';
+    }
   });
-  if(tab==='friends'){ renderFriendsList(); renderOnlinePlayers(); }
-  if(tab==='trade'){ renderTradeParty(); renderTradePlayers(); renderTradeIncoming(); }
+  if (tab==='friends') { renderFriendsList(); getSocket().emit('lobby:request'); }
+  if (tab==='trade')   { renderTradeParty(); renderTradePlayers(); renderTradeIncoming(); }
 }
 
-function onlineHost(){
-  if(!gameState.deck.length){toast('Pick your deck first!');goCardPick('online_host');return;}
-  const code=Math.random().toString(36).substr(2,6).toUpperCase();
-  gameState.onlineRoomCode=code;
-  document.getElementById('online-user-setup').style.display='none';
-  document.getElementById('online-host-panel').style.display='';
-  document.getElementById('room-code-display').textContent=code;
-  document.getElementById('online-status').textContent='Waiting for players...';
-  setTimeout(()=>{
-    onlineSimPlayers=[{name:gameState.username||'You',deck:gameState.deck,host:true,partyLevel:gameState.playerLevel||1}];
-    const botNames=['Shadowfell','Ignar','Luneth','Orix','Vexra','Thornix'];
-    const botDeck=[...CHARACTERS].sort(()=>Math.random()-.5).slice(0,3).map(c=>({...c,maxHp:c.hp,cardLevel:Math.floor(1+Math.random()*3),cardXp:0}));
-    onlineSimPlayers.push({name:botNames[Math.floor(Math.random()*botNames.length)],deck:botDeck,host:false,partyLevel:Math.floor(1+Math.random()*5)});
-    document.getElementById('online-status').textContent=`${onlineSimPlayers[1].name} joined with their deck!`;
-    document.getElementById('online-status').className='online-status ok';
-    renderPlayerList();
-  },1800);
+// ── HOST ──
+function onlineHost() {
+  if (!gameState.deck.length) { toast('Pick your deck first!'); goCardPick('online_host'); return; }
+  const s = getSocket();
+  document.getElementById('online-user-setup').style.display = 'none';
+  document.getElementById('online-host-panel').style.display = '';
+  document.getElementById('room-code-display').textContent = '...';
+  document.getElementById('online-status').textContent = 'Creating room...';
+  s.emit('room:host', {
+    username: gameState.username || 'Hero',
+    deck:     gameState.deck,
+    level:    gameState.playerLevel || 1,
+  });
 }
 
-function renderPlayerList(){
+// ── JOIN ──
+function showJoinForm() {
+  document.getElementById('online-user-setup').style.display = 'none';
+  document.getElementById('online-join-panel').style.display = '';
+}
+
+function onlineJoin() {
+  const code = document.getElementById('join-code-input').value.trim().toUpperCase();
+  if (code.length !== 6) { document.getElementById('join-status').textContent='Code must be 6 chars.'; document.getElementById('join-status').className='online-status err'; return; }
+  if (!gameState.deck.length) { toast('Pick your deck first!'); goCardPick('online_join'); return; }
+  document.getElementById('join-status').textContent = 'Connecting...';
+  const s = getSocket();
+  s.emit('room:join', {
+    username: gameState.username || 'Hero',
+    code,
+    deck:  gameState.deck,
+    level: gameState.playerLevel || 1,
+  });
+  // Show host panel so they can see the room
+  document.getElementById('online-join-panel').style.display = 'none';
+  document.getElementById('online-host-panel').style.display = '';
+  document.getElementById('room-code-display').textContent = code;
+}
+
+// ── COPY CODE ──
+function copyRoomCode() {
+  navigator.clipboard.writeText(gameState.onlineRoomCode).then(() => toast('Code copied!')).catch(() => {
+    const el = document.createElement('textarea'); el.value = gameState.onlineRoomCode;
+    document.body.appendChild(el); el.select(); document.execCommand('copy');
+    document.body.removeChild(el); toast('Code copied!');
+  });
+}
+
+// ── RENDER PLAYER LIST ──
+function renderPlayerList() {
   const el = document.getElementById('player-list');
-  if(!el) return;
-  el.innerHTML=onlineSimPlayers.map(p=>`
-    <div class="player-entry" style="flex-direction:column;align-items:flex-start;gap:8px;margin-bottom:10px;">
-      <div style="display:flex;align-items:center;gap:8px;width:100%;">
-        <span class="pe-emoji">${p.deck?.[0]?.emoji||'⚔️'}</span>
+  if (!el) return;
+  if (!onlineRoomPlayers.length) {
+    el.innerHTML = '<div style="color:var(--dim);font-size:.65rem;font-style:italic;">Waiting for players...</div>';
+    return;
+  }
+  el.innerHTML = onlineRoomPlayers.map(p => `
+    <div class="player-entry" style="flex-direction:column;align-items:flex-start;gap:6px;margin-bottom:10px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:1.4rem;">⚔️</span>
         <div>
-          <div class="pe-name">${p.name}${p.host?' 👑':''}</div>
-          <div style="font-size:.58rem;color:var(--dim);">Party Lv.${p.partyLevel||1} · ${p.deck?.length||0} members</div>
+          <div class="pe-name">${p.username}${p.isHost?' 👑':''}</div>
+          <div style="font-size:.58rem;color:var(--dim);">Level ${p.level||1} · ${p.deckSize||0} cards</div>
         </div>
-      </div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;">
-        ${(p.deck||[]).map(c=>{
-          const lv=c.cardLevel||1;const xpPct=Math.min(100,Math.floor(((c.cardXp||0)/(80+lv*40))*100));
-          return `<div style="background:rgba(0,0,0,.5);border:1px solid var(--border);border-radius:8px;padding:6px 9px;text-align:center;min-width:66px;">
-            <div style="font-size:1.3rem;">${c.emoji||'⚔️'}</div>
-            <div style="font-family:'Cinzel',serif;font-size:.48rem;color:var(--gold);">${c.name.split(' ')[0]}</div>
-            <div style="font-family:'Share Tech Mono',monospace;font-size:.48rem;color:var(--gold2);">Lv.${lv}</div>
-            <div style="height:3px;border-radius:2px;background:rgba(0,0,0,.5);margin-top:3px;">
-              <div style="height:100%;background:linear-gradient(90deg,#1a6040,#30c080);width:${xpPct}%;"></div>
-            </div>
-          </div>`;
-        }).join('')}
+        <div class="friend-status-dot dot-online" style="margin-left:auto;"></div>
       </div>
     </div>`).join('');
 }
 
-function copyRoomCode(){
-  navigator.clipboard.writeText(gameState.onlineRoomCode).then(()=>toast('Code copied!')).catch(()=>{
-    const el=document.createElement('textarea');el.value=gameState.onlineRoomCode;
-    document.body.appendChild(el);el.select();document.execCommand('copy');
-    document.body.removeChild(el);toast('Code copied!');
-  });
-}
-function showJoinForm(){
-  document.getElementById('online-user-setup').style.display='none';
-  document.getElementById('online-join-panel').style.display='';
-}
-function onlineJoin(){
-  const code=document.getElementById('join-code-input').value.trim().toUpperCase();
-  if(code.length!==6){document.getElementById('join-status').textContent='Code must be 6 chars.';document.getElementById('join-status').className='online-status err';return;}
-  if(!gameState.deck.length){toast('Pick your deck first!');goCardPick('online_join');return;}
-  document.getElementById('join-status').textContent='Connecting...';
-  setTimeout(()=>{
-    document.getElementById('join-status').textContent=`Joined room ${code}! Ready to play.`;
-    document.getElementById('join-status').className='online-status ok';
-    toast(`Connected to room ${code}!`);
-  },1500);
-}
-function onlineStartStory(){
-  if(onlineSimPlayers.length<2){toast('Need players!');return;}
-  showScreen('screen-sp');initSP();
-  spLog(`🌐 <b>Online Story — Room ${gameState.onlineRoomCode}</b>`,'l');
-  onlineSimPlayers.forEach(p=>spLog(`👤 <b>${p.name}</b> · Party: ${p.deck?.map(c=>c.name).join(', ')}`,'mn'));
-}
-function onlineStartDuel(){
-  if(onlineSimPlayers.length<2){toast('Need players!');return;}
-  const opp=onlineSimPlayers.find(p=>!p.host);
-  if(opp&&opp.deck){
-    const lead={...opp.deck[0],maxHp:opp.deck[0].hp};
-    toast(`⚔️ Dueling ${opp.name}!`);
-    startBattle(lead,'screen-online',false);
-  }
+// ── START MODES ──
+function onlineStartStory() {
+  if (onlineRoomPlayers.length < 2) { toast('Need at least 2 players!'); return; }
+  getSocket().emit('game:start', { mode: 'story' });
 }
 
-// ── FRIENDS LIST ──
-function renderFriendsList(){
+function onlineStartDuel() {
+  if (onlineRoomPlayers.length < 2) { toast('Need at least 2 players!'); return; }
+  getSocket().emit('game:start', { mode: 'duel' });
+}
+
+// ── ONLINE DUEL ──
+let onlineDuelState = null;
+
+function startOnlineDuel(bs) {
+  onlineDuelState = bs;
+  const me  = bs.combatants.find(c => c.id === socket.id);
+  const opp = bs.combatants.find(c => c.id !== socket.id);
+  if (!me || !opp) return;
+
+  showModal('⚔️ Online Duel', buildDuelHTML(bs, me, opp), []);
+}
+
+function buildDuelHTML(bs, me, opp) {
+  const myTurn = bs.activePlayer === socket?.id;
+  return `
+    <div style="text-align:center;margin-bottom:10px;">
+      <div style="font-size:.6rem;color:${myTurn?'#60d060':'var(--dim)'};">
+        ${myTurn ? '⚡ YOUR TURN' : `⏳ ${opp.name}'s turn...`}
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+      <div style="background:rgba(0,100,0,.15);border:2px solid rgba(0,200,0,.2);border-radius:10px;padding:10px;text-align:center;">
+        <div style="font-size:1.6rem;">${me.emoji||'⚔️'}</div>
+        <div style="font-family:'Cinzel',serif;font-size:.65rem;color:var(--gold);">${me.name}</div>
+        <div style="font-size:.6rem;color:var(--dim);">${me.cardName||''}</div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:.7rem;color:#60d060;margin-top:4px;">${me.hp}/${me.maxHp} HP</div>
+        <div style="height:5px;background:rgba(0,0,0,.5);border-radius:3px;margin-top:4px;">
+          <div style="height:100%;background:linear-gradient(90deg,#1a6040,#30c080);width:${Math.max(0,me.hp/me.maxHp*100)}%;border-radius:3px;"></div>
+        </div>
+      </div>
+      <div style="background:rgba(100,0,0,.15);border:2px solid rgba(200,0,0,.2);border-radius:10px;padding:10px;text-align:center;">
+        <div style="font-size:1.6rem;">${opp.emoji||'👾'}</div>
+        <div style="font-family:'Cinzel',serif;font-size:.65rem;color:#d06060;">${opp.name}</div>
+        <div style="font-size:.6rem;color:var(--dim);">${opp.cardName||''}</div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:.7rem;color:#d06060;margin-top:4px;">${opp.hp}/${opp.maxHp} HP</div>
+        <div style="height:5px;background:rgba(0,0,0,.5);border-radius:3px;margin-top:4px;">
+          <div style="height:100%;background:linear-gradient(90deg,#601a1a,#c03030);width:${Math.max(0,opp.hp/opp.maxHp*100)}%;border-radius:3px;"></div>
+        </div>
+      </div>
+    </div>
+    ${myTurn ? `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+      <button class="btn" onclick="duelAction('attack')" style="font-size:.75rem;">⚔️ Attack</button>
+      <button class="btn" onclick="duelAction('ability')" style="font-size:.75rem;${me.abilityCooldown>0?'opacity:.5;':''}">${me.abilityCooldown>0?`✨ Cooldown (${me.abilityCooldown})`:`✨ ${me.ability}`}</button>
+      <button class="btn-ghost" onclick="duelAction('heal')" style="font-size:.75rem;">🧪 Heal</button>
+      <button class="btn-ghost" onclick="duelAction('flee')" style="font-size:.75rem;border-color:rgba(200,50,50,.3);color:#d06060;">🏃 Flee</button>
+    </div>` : `<div style="text-align:center;color:var(--dim);font-size:.65rem;padding:10px;">Waiting for ${opp.name} to take their turn...</div>`}
+    <div id="duel-log" style="max-height:120px;overflow-y:auto;font-size:.6rem;color:var(--dim);">
+      ${bs.log.slice(-5).map(l=>`<div style="padding:2px 0;">${l}</div>`).join('')}
+    </div>`;
+}
+
+function duelAction(action) {
+  if (!socket) return;
+  socket.emit('battle:action', { action });
+}
+
+function updateOnlineDuel(bs, message) {
+  onlineDuelState = bs;
+  const me  = bs.combatants.find(c => c.id === socket?.id);
+  const opp = bs.combatants.find(c => c.id !== socket?.id);
+  if (!me || !opp) return;
+  // Update modal body
+  document.getElementById('modal-body').innerHTML = buildDuelHTML(bs, me, opp);
+  // Flash the new message
+  toast(message.replace(/<b>|<\/b>/g,''));
+}
+
+// ── FRIENDS ──
+function renderFriendsList() {
   const el = document.getElementById('friends-list-el');
-  if(!el) return;
-  if(!friendsList.length){
+  if (!el) return;
+  if (!friendsList.length) {
     el.innerHTML = `<div style="color:var(--dim);font-size:.65rem;font-style:italic;padding:8px;">No friends yet. Add someone above!</div>`;
     return;
   }
-  el.innerHTML = friendsList.map((f,i)=>`
+  el.innerHTML = friendsList.map((f, i) => `
     <div class="friend-entry">
-      <div class="friend-status-dot ${Math.random()>.6?'dot-online':'dot-offline'}"></div>
+      <div class="friend-status-dot dot-offline"></div>
       <span class="friend-name">${f}</span>
       <button class="btn-sm" onclick="inviteFriend('${f}')" style="font-size:.52rem;padding:3px 8px;">Invite</button>
       <button class="btn-sm" onclick="removeFriend(${i})" style="font-size:.52rem;padding:3px 8px;background:rgba(80,10,10,.5);border-color:rgba(150,30,30,.3);">✕</button>
     </div>`).join('');
 }
 
-function addFriend(){
+function addFriend() {
   const input = document.getElementById('friend-add-input');
-  const name = input.value.trim();
-  if(!name){ input.style.borderColor='rgba(200,50,50,.6)'; return; }
-  if(friendsList.includes(name)){ toast('Already friends!'); return; }
-  if(name === (gameState.username||'You')){ toast("Can't add yourself!"); return; }
+  const name  = input.value.trim();
+  if (!name) { input.style.borderColor='rgba(200,50,50,.6)'; return; }
+  if (friendsList.includes(name)) { toast('Already friends!'); return; }
+  if (name === gameState.username) { toast("Can't add yourself!"); return; }
   friendsList.push(name);
-  localStorage.setItem('aetherion_friends', JSON.stringify(friendsList));
   input.value = '';
   renderFriendsList();
-  toast(`👥 Added ${name} as a friend!`);
-  // Simulate sending request
-  setTimeout(()=>{
-    renderFriendRequests([{from:name,msg:'accepted your request!'}]);
-  },2500);
+  toast(`👥 Added ${name}!`);
 }
 
-function removeFriend(idx){
+function removeFriend(idx) {
   const name = friendsList[idx];
-  friendsList.splice(idx,1);
-  localStorage.setItem('aetherion_friends', JSON.stringify(friendsList));
+  friendsList.splice(idx, 1);
   renderFriendsList();
   toast(`Removed ${name}.`);
 }
 
-function renderFriendRequests(reqs){
+function renderFriendRequests() {
   const el = document.getElementById('friend-requests-el');
-  if(!el) return;
-  if(!reqs||!reqs.length){
-    el.innerHTML = `<div style="color:var(--dim);font-size:.62rem;font-style:italic;padding:4px;">No pending requests.</div>`;
+  if (el) el.innerHTML = `<div style="color:var(--dim);font-size:.62rem;font-style:italic;padding:4px;">No pending requests.</div>`;
+}
+
+function renderOnlinePlayers(list) {
+  const el = document.getElementById('online-players-el');
+  if (!el) return;
+  // Filter out self
+  const others = (list||[]).filter(p => p.username !== gameState.username);
+  if (!others.length) {
+    el.innerHTML = `<div style="color:var(--dim);font-size:.62rem;font-style:italic;padding:4px;">No other players online right now.</div>`;
     return;
   }
-  el.innerHTML = reqs.map(r=>`
-    <div class="friend-entry" style="flex-wrap:wrap;gap:4px;">
-      <span class="friend-name" style="font-size:.62rem;color:var(--gold);">${r.from}</span>
-      <span style="font-size:.58rem;color:var(--dim);">${r.msg}</span>
+  el.innerHTML = others.map(p => `
+    <div class="friend-entry">
+      <div class="friend-status-dot dot-online"></div>
+      <span class="friend-name">${p.username} <span style="font-size:.52rem;color:var(--dim);">Lv.${p.level||1}</span></span>
+      <button class="btn-sm" onclick="addFriendDirect('${p.username}')" style="font-size:.52rem;padding:3px 8px;">+ Add</button>
     </div>`).join('');
 }
 
-function renderOnlinePlayers(){
-  const el = document.getElementById('online-players-el');
-  if(!el) return;
-  el.innerHTML = `<div style="color:var(--dim);font-size:.62rem;font-style:italic;padding:4px;">No players online right now.</div>`;
-}
-
-function addFriendDirect(name){
-  if(!friendsList.includes(name)){ friendsList.push(name); localStorage.setItem('aetherion_friends',JSON.stringify(friendsList)); renderFriendsList(); toast(`Added ${name}!`); }
+function addFriendDirect(name) {
+  if (!friendsList.includes(name)) { friendsList.push(name); renderFriendsList(); toast(`Added ${name}!`); }
   else toast('Already friends!');
 }
 
-function inviteFriend(name){
+function inviteFriend(name) {
   toast(`📨 Invite sent to ${name}!`);
-  setTimeout(()=>toast(`${name} accepted your invite!`),3000);
 }
 
-// ── TRADE SYSTEM ──
-function renderTradeParty(){
+// ── TRADE ──
+function renderTradeParty() {
   const el = document.getElementById('trade-your-party');
-  if(!el) return;
-  el.innerHTML = gameState.deck.map((c,i)=>`
+  if (!el) return;
+  el.innerHTML = gameState.deck.map((c, i) => `
     <div class="trade-card-option ${tradeSelected.cardIdx===i?'selected-trade':''}" onclick="selectTradeCard(${i})">
       <span style="font-size:1.3rem;">${c.emoji||'⚔️'}</span>
       <div style="flex:1;">
@@ -3688,28 +3895,33 @@ function renderTradeParty(){
     </div>`).join('');
 }
 
-function renderTradePlayers(){
+function renderTradePlayers(list) {
   const el = document.getElementById('trade-players-list');
-  if(!el) return;
-  const players = [...friendsList, ...onlineSimPlayers.filter(p=>!p.host).map(p=>p.name)];
-  if(!players.length){
-    el.innerHTML = `<div style="color:var(--dim);font-size:.62rem;font-style:italic;padding:6px;">No players online. Add friends or host a room.</div>`;
+  if (!el) return;
+  // Combine room players + online list, minus self
+  const allPlayers = [
+    ...onlineRoomPlayers.filter(p => !p.isHost || p.id !== socket?.id),
+    ...((list||[]).filter(p => p.username !== gameState.username && !onlineRoomPlayers.find(r=>r.id===p.id))),
+  ];
+  if (!allPlayers.length) {
+    el.innerHTML = `<div style="color:var(--dim);font-size:.62rem;font-style:italic;padding:6px;">No players online. Host a room or join one.</div>`;
     return;
   }
-  el.innerHTML = [...new Set(players)].map((name,i)=>`
-    <div class="trade-player-option ${tradeSelected.targetIdx===i?'selected-trade-target':''}" onclick="selectTradeTarget(${i},'${name}')">
-      <span style="font-size:.95rem;">👤</span> ${name}
+  el.innerHTML = allPlayers.map((p, i) => `
+    <div class="trade-player-option ${tradeSelected.targetIdx===i?'selected-trade-target':''}"
+      onclick="selectTradeTarget(${i},'${p.id||''}','${p.username||p.name}')">
+      👤 ${p.username||p.name} <span style="font-size:.55rem;color:var(--dim);">Lv.${p.level||1}</span>
     </div>`).join('');
 }
 
-function renderTradeIncoming(){
+function renderTradeIncoming() {
   const el = document.getElementById('trade-incoming');
-  if(!el) return;
-  if(!pendingTrades.length){
+  if (!el) return;
+  if (!pendingTrades.length) {
     el.innerHTML = `<div style="color:var(--dim);font-size:.65rem;font-style:italic;padding:8px;">No incoming trade offers.</div>`;
     return;
   }
-  el.innerHTML = pendingTrades.map((t,i)=>`
+  el.innerHTML = pendingTrades.map((t, i) => `
     <div style="background:rgba(0,0,0,.4);border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:6px;">
       <div style="font-size:.65rem;color:var(--gold);margin-bottom:6px;">
         <b>${t.from}</b> offers: ${t.card.emoji||'⚔️'} ${t.card.name} (Lv.${t.card.cardLevel||1})
@@ -3721,55 +3933,35 @@ function renderTradeIncoming(){
     </div>`).join('');
 }
 
-let _tradeTargetName = '';
-function selectTradeCard(idx){ tradeSelected.cardIdx=idx; renderTradeParty(); }
-function selectTradeTarget(idx,name){ tradeSelected.targetIdx=idx; _tradeTargetName=name; renderTradePlayers(); }
+function selectTradeCard(idx)  { tradeSelected.cardIdx = idx; renderTradeParty(); }
+function selectTradeTarget(idx, id, name) { tradeSelected.targetIdx = idx; _tradeTargetId = id; _tradeTargetName = name; renderTradePlayers(); }
 
-function sendTradeOffer(){
-  if(tradeSelected.cardIdx<0){toast('Select a card to offer!');return;}
-  if(!_tradeTargetName){toast('Select a player to trade with!');return;}
-  if(gameState.deck.length<=1){toast('Cannot trade your last member!');return;}
+function sendTradeOffer() {
+  if (tradeSelected.cardIdx < 0)  { toast('Select a card to offer!'); return; }
+  if (!_tradeTargetId)            { toast('Select a player to trade with!'); return; }
+  if (gameState.deck.length <= 1) { toast('Cannot trade your last member!'); return; }
   const card = gameState.deck[tradeSelected.cardIdx];
-  const status = document.getElementById('trade-status');
-  status.textContent = `Offer sent to ${_tradeTargetName}...`;
-  status.style.color = 'var(--dim)';
-  // Simulate response
-  setTimeout(()=>{
-    if(Math.random()>0.35){
-      // Accepted — they send one back
-      const theirCard = [...CHARACTERS].sort(()=>Math.random()-.5)[0];
-      theirCard.maxHp=theirCard.hp; theirCard.cardLevel=Math.floor(1+Math.random()*3); theirCard.cardXp=0;
-      theirCard.statuses=[]; theirCard.abilityCooldown=0; theirCard.fainted=false;
-      // Remove offered card, add received
-      gameState.deck.splice(tradeSelected.cardIdx,1);
-      if(gameState.deck.length<4) gameState.deck.push(theirCard);
-      if(gameState.activeCardIdx>=gameState.deck.length) gameState.activeCardIdx=0;
-      status.textContent = `✓ ${_tradeTargetName} accepted! You received ${theirCard.emoji||'⚔️'} ${theirCard.name}!`;
-      status.style.color = '#60d060';
-      toast(`🤝 Trade complete! Got ${theirCard.name}!`);
-      updateMenuHud(); renderSPDeckList();
-    } else {
-      status.textContent = `${_tradeTargetName} declined the trade.`;
-      status.style.color = '#d06060';
-    }
-    tradeSelected = {cardIdx:-1,targetIdx:-1};
-    renderTradeParty();
-  }, 2000+Math.random()*2000);
+  getSocket().emit('trade:offer', { toSocketId: _tradeTargetId, card });
 }
 
-function acceptTrade(idx){
-  if(gameState.deck.length>=4){toast('Party full! Dismiss someone first.');return;}
+function acceptTrade(idx) {
+  if (gameState.deck.length >= 4) { toast('Party full! Dismiss someone first.'); return; }
   const trade = pendingTrades[idx];
-  gameState.deck.push({...trade.card,statuses:[],abilityCooldown:0,fainted:false});
-  pendingTrades.splice(idx,1);
-  renderTradeIncoming(); renderTradeParty(); updateMenuHud();
-  toast(`🤝 Trade accepted! ${trade.card.name} joins your party!`);
-}
-function declineTrade(idx){
-  const name = pendingTrades[idx]?.from||'player';
-  pendingTrades.splice(idx,1);
+  if (!trade) return;
+  // Send back one of our cards as the counter offer
+  const myCard = gameState.deck[0];
+  getSocket().emit('trade:respond', { tradeId: trade.tradeId, accepted: true, counterCard: myCard });
+  pendingTrades.splice(idx, 1);
   renderTradeIncoming();
-  toast(`Trade from ${name} declined.`);
+}
+
+function declineTrade(idx) {
+  const trade = pendingTrades[idx];
+  if (!trade) return;
+  getSocket().emit('trade:respond', { tradeId: trade.tradeId, accepted: false });
+  pendingTrades.splice(idx, 1);
+  renderTradeIncoming();
+  toast('Trade declined.');
 }
 
 // ─────────────────────────────────────────
