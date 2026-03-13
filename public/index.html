@@ -891,8 +891,8 @@ body::before{
 .trade-player-option:hover{border-color:rgba(100,180,255,.3);}
 .trade-player-option.selected-trade-target{border-color:#4a8abe;background:rgba(30,60,120,.2);}
 </style>
-<!-- Socket.io client — loaded from our own server -->
-<script src="/socket.io/socket.io.js"></script>
+<!-- Socket.io client — loaded from CDN -->
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 </head>
 <body>
 
@@ -1289,6 +1289,7 @@ body::before{
       </div>
       <div id="online-host-panel" style="display:none;">
         <div class="card" style="max-width:500px;margin:0 auto;">
+          <button class="btn-ghost" onclick="backToLobbyChoice()" style="font-size:.6rem;padding:6px 14px;margin-bottom:10px;">← Back</button>
           <div class="card-title">Room Code</div>
           <div class="room-code" id="room-code-display">——</div>
           <div class="online-status" id="online-status">Waiting for players...</div>
@@ -1305,6 +1306,7 @@ body::before{
       </div>
       <div id="online-join-panel" style="display:none;">
         <div class="card" style="max-width:400px;margin:0 auto;">
+          <button class="btn-ghost" onclick="backToLobbyChoice()" style="font-size:.6rem;padding:6px 14px;margin-bottom:10px;">← Back</button>
           <div class="card-title">Join a Room</div>
           <input type="text" id="join-code-input" placeholder="ABC123" maxlength="6"
             style="width:100%;background:rgba(0,0,0,.5);border:2px solid var(--border);border-radius:8px;
@@ -1953,24 +1955,49 @@ function toggleCardSelect(i, el){
 function confirmDeck(){
   if(!gameState._dealtCards) return;
   // All 3 go into deck; selected one leads
-  gameState.deck = gameState._dealtCards.map((c,i)=>({
+  // If player already has a party, MERGE new cards in (don't wipe upgrades)
+  const isFirstDeck = gameState.deck.length === 0;
+  const newCards = gameState._dealtCards.map((c,i)=>({
     ...c,
     statuses:[],
     abilityCooldown:0,
     fainted:false,
+    cardLevel: 1,
+    cardXp: 0,
   }));
-  // The selected card leads
-  const leadIdx = gameState._dealtCards.findIndex(c=>c.selected);
-  gameState.activeCardIdx = leadIdx >= 0 ? leadIdx : 0;
-  gameState.playerLevel = 1;
-  gameState.playerXp = 0;
-  gameState.xpToNext = 100;
-  gameState.playerGold = 0;
-  gameState.inventory = [{item:'Health Potion',rarity:'Common',qty:3}];
-  gameState.unlockedSkills = [];
-  gameState.skillXp = 0;
-  gameState.statuses = [];
+  if(isFirstDeck){
+    // Brand new game — set up fresh
+    gameState.deck = newCards;
+    const leadIdx = gameState._dealtCards.findIndex(c=>c.selected);
+    gameState.activeCardIdx = leadIdx >= 0 ? leadIdx : 0;
+    gameState.playerLevel = 1;
+    gameState.playerXp = 0;
+    gameState.xpToNext = 100;
+    gameState.playerGold = 0;
+    gameState.inventory = [{item:'Health Potion',rarity:'Common',qty:3}];
+    gameState.unlockedSkills = [];
+    gameState.skillXp = 0;
+    gameState.statuses = [];
+  } else {
+    // Already have a party — ADD new cards up to max 4, keep all upgrades
+    newCards.forEach(nc => {
+      if(gameState.deck.length < 4 && !gameState.deck.find(ec=>ec.id===nc.id)){
+        gameState.deck.push(nc);
+        spLog ? spLog(`🃏 <b>${nc.name}</b> added to your party!`,'l') : null;
+      }
+    });
+    // Set selected card as leader if chosen
+    const leadIdx = gameState._dealtCards.findIndex(c=>c.selected);
+    if(leadIdx >= 0){
+      // Find the new card in deck and set as active
+      const nc = newCards[leadIdx];
+      const di = gameState.deck.findIndex(c=>c.id===nc.id);
+      if(di >= 0) gameState.activeCardIdx = di;
+    }
+    toast('New cards added to your party!');
+  }
   gameState._dealtCards = null;
+  saveGame();
 
   if(_afterDeck === 'dungeon'){generateDungeon();showScreen('screen-dungeon');}
   else if(_afterDeck === 'duel'){const mon=randomMonsterForLevel(1);startBattle(mon,'screen-menu',false);}
@@ -3497,6 +3524,10 @@ let pendingTrades = [];
 
 function getSocket() {
   if (socket && socket.connected) return socket;
+  if (typeof io === 'undefined') {
+    toast('⚠️ Multiplayer not available in offline mode.');
+    return { emit: ()=>{}, on: ()=>{}, connected: false };
+  }
   // Connect to the same server serving this page
   socket = io({ transports: ['websocket', 'polling'] });
 
@@ -3736,9 +3767,52 @@ function renderPlayerList() {
 }
 
 // ── START MODES ──
+function backToLobbyChoice(){
+  document.getElementById('online-host-panel').style.display = 'none';
+  document.getElementById('online-join-panel').style.display = 'none';
+  document.getElementById('online-user-setup').style.display = '';
+}
+
 function onlineStartStory() {
   if (onlineRoomPlayers.length < 2) { toast('Need at least 2 players!'); return; }
-  getSocket().emit('game:start', { mode: 'story' });
+  // If player has a saved story, offer to use it
+  const stories = JSON.parse(localStorage.getItem('aetherion_stories')||'[]');
+  if(stories.length){
+    const body = `
+      <div style="font-size:.68rem;color:var(--dim);margin-bottom:12px;">Pick a story to play online with your party:</div>
+      ${stories.map((s,i)=>`
+        <div class="saved-story-entry" style="cursor:pointer;padding:10px 12px;border:2px solid var(--border);border-radius:8px;margin-bottom:6px;transition:all .15s;"
+          onmouseover="this.style.borderColor='rgba(200,151,58,.4)'" onmouseout="this.style.borderColor='var(--border)'"
+          onclick="launchOnlineStory(${i})">
+          <div style="font-family:'Cinzel',serif;font-size:.72rem;color:var(--gold);">📖 ${s.title}</div>
+          <div style="font-size:.58rem;color:var(--dim);margin-top:2px;">${s.blocks?.length||0} scenes</div>
+        </div>`).join('')}
+      <div style="margin-top:10px;">
+        <button class="btn-ghost" onclick="launchOnlineStoryRandom()" style="width:100%;font-size:.65rem;">🎲 Random Adventure</button>
+      </div>`;
+    showModal('📖 Pick a Story', body, [{label:'Cancel', cls:'btn-ghost', cb:closeModal}]);
+  } else {
+    launchOnlineStoryRandom();
+  }
+}
+
+function launchOnlineStory(idx){
+  closeModal();
+  const stories = JSON.parse(localStorage.getItem('aetherion_stories')||'[]');
+  const story = stories[idx];
+  if(!story) return;
+  getSocket().emit('game:start', { mode:'story', storyBlocks: story.blocks });
+  showScreen('screen-sp'); initSP();
+  spLog(`🌐 <b>Online Story: ${story.title}</b>`,'l');
+  onlineRoomPlayers.forEach(p=>spLog(`👤 <b>${p.username}</b> joined the adventure`,'mn'));
+}
+
+function launchOnlineStoryRandom(){
+  closeModal();
+  getSocket().emit('game:start', { mode:'story' });
+  showScreen('screen-sp'); initSP();
+  spLog(`🌐 <b>Online Adventure Mode</b>`,'l');
+  onlineRoomPlayers.forEach(p=>spLog(`👤 <b>${p.username}</b> joined the adventure`,'mn'));
 }
 
 function onlineStartDuel() {
