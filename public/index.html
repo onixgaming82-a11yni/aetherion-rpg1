@@ -30,6 +30,57 @@
   --epic:#a040e0;
   --mythic:#e0a020;
 }
+
+/* ── LIGHT MODE ── */
+body.light-mode{
+  --ink:#f5f0e8;
+  --panel:#ffffff;
+  --border:#d4b896;
+  --border2:#c9a87c;
+  --gold:#a06818;
+  --gold2:#c07820;
+  --dim:#7a6850;
+  --text:#3a2c1a;
+  --bright:#1a0e00;
+  --parchment:#fff8e8;
+  background:var(--ink)!important;
+  color:var(--text)!important;
+}
+body.light-mode .screen{background:var(--ink);}
+body.light-mode .intro-card,
+body.light-mode .card,
+body.light-mode #modal-box,
+body.light-mode .sp-panel,
+body.light-mode .shop-item,
+body.light-mode .leaderboard-row,
+body.light-mode .friend-entry,
+body.light-mode .trader-item,
+body.light-mode .party-member-card,
+body.light-mode .trade-card-option,
+body.light-mode .trade-player-option{
+  background:rgba(255,252,245,.95)!important;
+  border-color:rgba(160,110,40,.25)!important;
+}
+body.light-mode .mode-btn{background:rgba(255,250,238,.9)!important;border-color:rgba(160,110,40,.2)!important;}
+body.light-mode .shop-topbar{background:rgba(255,252,245,.98)!important;}
+body.light-mode input,body.light-mode textarea{
+  background:rgba(245,240,225,.9)!important;
+  color:#1a0e00!important;
+  border-color:rgba(160,110,40,.3)!important;
+}
+body.light-mode #sp-log p{color:var(--text);}
+body.light-mode #sp-log p.c{color:#a03010;}
+body.light-mode #sp-log p.h{color:#1a7030;}
+body.light-mode #sp-log p.l{color:#8a6010;}
+body.light-mode #sp-log p.d{color:#b02020;}
+body.light-mode #sp-log p.w{color:#8a5800;}
+body.light-mode #sp-log p.sk{color:#6020a0;}
+body.light-mode #toast{background:rgba(255,250,235,.98)!important;color:var(--gold)!important;}
+body.light-mode .btn{background:linear-gradient(135deg,#7a4010,#b06020)!important;}
+body.light-mode .btn-ghost{background:transparent!important;color:var(--text)!important;}
+body.light-mode .act-btn{background:rgba(180,130,60,.12)!important;color:var(--text)!important;}
+body.light-mode .rank-badge.rank-stone{background:linear-gradient(135deg,#c0c0c0,#e0e0e0)!important;color:#444!important;}
+
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 html,body{
   background:var(--ink);color:var(--text);
@@ -890,6 +941,235 @@ body::before{
 }
 .trade-player-option:hover{border-color:rgba(100,180,255,.3);}
 .trade-player-option.selected-trade-target{border-color:#4a8abe;background:rgba(30,60,120,.2);}
+
+/* ═══════════════════════════════════════════
+   RANK SYSTEM
+═══════════════════════════════════════════ */
+.rank-badge{
+  display:inline-flex;align-items:center;gap:4px;
+  padding:3px 10px;border-radius:20px;
+  font-family:'Cinzel',serif;font-size:.58rem;font-weight:700;
+  letter-spacing:.05em;border:1px solid rgba(255,255,255,.15);
+}
+.rank-stone  {background:linear-gradient(135deg,#3a3a3a,#606060);color:#ccc;}
+.rank-iron   {background:linear-gradient(135deg,#3a3060,#6050a0);color:#c0b0ff;}
+.rank-bronze {background:linear-gradient(135deg,#5a3010,#b06020);color:#ffd0a0;}
+.rank-silver {background:linear-gradient(135deg,#404050,#8090b0);color:#e0eeff;}
+.rank-gold   {background:linear-gradient(135deg,#604010,#c8973a);color:#fff8d0;}
+.rank-diamond{background:linear-gradient(135deg,#104060,#20a0d0);color:#d0f8ff;box-shadow:0 0 10px rgba(32,160,208,.4);}
+.rank-legend {background:linear-gradient(135deg,#600060,#c000c0);color:#ffd0ff;box-shadow:0 0 14px rgba(200,0,200,.5);animation:rankPulse 2s infinite;}
+@keyframes rankPulse{0%,100%{box-shadow:0 0 14px rgba(200,0,200,.5);}50%{box-shadow:0 0 24px rgba(200,0,200,.9);}}
+.rank-up-popup{
+  position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) scale(0);
+  background:linear-gradient(135deg,rgba(20,10,40,.97),rgba(40,20,80,.97));
+  border:2px solid rgba(200,0,200,.5);border-radius:20px;
+  padding:30px 40px;text-align:center;z-index:9999;
+  animation:rankUpAnim .6s ease forwards;
+}
+@keyframes rankUpAnim{0%{transform:translate(-50%,-50%) scale(0);opacity:0;}
+  70%{transform:translate(-50%,-50%) scale(1.1);}
+  100%{transform:translate(-50%,-50%) scale(1);opacity:1;}}
+.leaderboard-row{
+  display:flex;align-items:center;gap:10px;padding:10px 12px;
+  background:rgba(0,0,0,.3);border:1px solid var(--border);
+  border-radius:8px;margin-bottom:6px;
+}
+.lb-pos{font-family:'Cinzel Decorative',serif;font-size:.75rem;color:var(--gold);width:24px;text-align:center;}
+.lb-name{font-family:'Cinzel',serif;font-size:.68rem;color:var(--text);flex:1;}
+.lb-wins{font-family:'Share Tech Mono',monospace;font-size:.6rem;color:var(--gold2);}
+
+/* ═══════════════════════════════════════════
+   CHAT SYSTEM
+═══════════════════════════════════════════ */
+.chat-msg{
+  display:flex;flex-direction:column;gap:2px;
+  padding:7px 10px;border-radius:10px;
+  max-width:85%;word-break:break-word;
+}
+.chat-msg.mine{
+  align-self:flex-end;
+  background:linear-gradient(135deg,rgba(60,40,10,.9),rgba(100,70,20,.8));
+  border:1px solid rgba(200,151,58,.3);
+  border-bottom-right-radius:3px;
+}
+.chat-msg.theirs{
+  align-self:flex-start;
+  background:rgba(255,255,255,.06);
+  border:1px solid rgba(255,255,255,.08);
+  border-bottom-left-radius:3px;
+}
+.chat-msg.system-msg{
+  align-self:center;
+  background:transparent;
+  border:none;
+  font-style:italic;
+  color:var(--dim);
+  font-size:.58rem;
+  padding:2px 0;
+}
+.chat-from{font-family:'Cinzel',serif;font-size:.55rem;color:var(--gold);margin-bottom:1px;}
+.chat-text{font-size:.65rem;color:var(--text);line-height:1.4;}
+.chat-time{font-size:.48rem;color:var(--dim);align-self:flex-end;margin-top:1px;}
+
+/* ═══════════════════════════════════════════════════
+   MOBILE FRIENDLY — Full responsive overhaul
+═══════════════════════════════════════════════════ */
+
+/* Base touch improvements */
+* { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
+button, .btn, .btn-sm, .btn-ghost, .mode-btn, .act-btn, .b-btn {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  min-height: 44px;
+}
+input, textarea { font-size: 16px !important; } /* Prevents iOS zoom on focus */
+
+@media (max-width: 600px) {
+
+  /* ── Screens ── */
+  .screen { padding: 10px 10px 80px !important; }
+  #screen-intro { padding: 20px 14px !important; }
+
+  /* ── Intro card ── */
+  .intro-card { padding: 24px 16px !important; }
+  .intro-title { font-size: clamp(1.2rem, 8vw, 1.8rem) !important; }
+
+  /* ── Menu ── */
+  .menu-modes {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
+    padding: 0 6px !important;
+  }
+  .mode-btn { padding: 12px 8px !important; }
+  .mode-icon { font-size: 1.6rem !important; }
+  .mode-name { font-size: .68rem !important; }
+  .mode-desc { display: none !important; }
+  #menu-player-bar { padding: 8px 10px 0 !important; flex-wrap: wrap; gap: 6px; }
+  #menu-deck-preview { gap: 5px !important; }
+  #menu-deck-preview > div { min-width: 64px !important; padding: 6px 8px !important; }
+
+  /* ── Card Pick ── */
+  #card-deal-row {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+  .pick-card { padding: 14px 12px !important; }
+  .pick-card-emoji { font-size: 2.8rem !important; }
+
+  /* ── Single Player ── */
+  .sp-wrap { grid-template-columns: 1fr !important; gap: 8px !important; }
+  #sp-log { height: 220px !important; font-size: .82rem !important; }
+  #sp-actions { gap: 5px !important; }
+  .act-btn { font-size: .62rem !important; padding: 10px 6px !important; min-width: 60px !important; flex: 1 !important; }
+  .sp-panel { padding: 8px !important; }
+  .sp-deck-panel .deck-card-thumb { width: 44px !important; height: 54px !important; }
+
+  /* ── Battle screen ── */
+  #screen-battle { padding: 8px !important; }
+  .battle-header { margin-bottom: 8px !important; }
+  .combatant-row { flex-direction: row !important; gap: 6px !important; }
+  .combatant-card { padding: 8px !important; }
+  .cb-emoji { font-size: 1.8rem !important; }
+  .battle-btns { gap: 5px !important; flex-wrap: wrap !important; }
+  .b-btn { min-width: 72px !important; font-size: .6rem !important; padding: 10px 4px !important; flex: 1 !important; }
+  .battle-deck-switcher { gap: 4px !important; }
+  .dcm-emoji { font-size: 1rem !important; }
+
+  /* ── Shop ── */
+  .shop-layout { grid-template-columns: 1fr !important; }
+  .shop-categories {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 4px !important;
+    padding: 8px !important;
+  }
+  .shop-cat-btn { font-size: .58rem !important; padding: 7px 10px !important; flex: 1 !important; min-width: 60px !important; }
+  .shop-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 6px !important; }
+  .shop-item { padding: 10px 8px !important; }
+  .shop-item-icon { font-size: 1.6rem !important; }
+  .shop-item-name { font-size: .6rem !important; }
+
+  /* ── Online screen ── */
+  #screen-online { padding: 8px 8px 80px !important; }
+  #screen-online > div:first-child { padding: 6px 8px !important; flex-wrap: wrap; gap: 4px; }
+  #otab-lobby, #otab-friends, #otab-trade, #otab-chat {
+    font-size: .55rem !important;
+    padding: 6px 8px !important;
+    flex: 1 !important;
+    text-align: center;
+  }
+  .room-code { font-size: 2rem !important; }
+  .player-entry { padding: 8px !important; }
+
+  /* ── Story editor ── */
+  .editor-layout { grid-template-columns: 1fr !important; }
+  #story-canvas { min-height: 160px !important; font-size: .75rem !important; }
+
+  /* ── Skill tree ── */
+  .skill-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 6px !important; }
+
+  /* ── Dungeon ── */
+  .dungeon-grid { gap: 4px !important; }
+  .dungeon-room { width: 40px !important; height: 40px !important; font-size: .55rem !important; }
+
+  /* ── Modal ── */
+  #modal-box {
+    padding: 16px 14px !important;
+    max-width: 100% !important;
+    max-height: 90vh !important;
+    border-radius: 14px !important;
+    margin: 0 4px !important;
+  }
+  #modal-title { font-size: .9rem !important; }
+  #modal-btns { flex-direction: column !important; }
+  #modal-btns button { width: 100% !important; }
+
+  /* ── Inventory grid ── */
+  .inv-grid { grid-template-columns: repeat(3, 1fr) !important; gap: 6px !important; }
+  .inv-item { padding: 8px 4px !important; }
+  .ii-name { font-size: .55rem !important; }
+
+  /* ── Party member cards ── */
+  .party-member-card { padding: 8px !important; gap: 8px !important; }
+  .pmc-emoji { font-size: 1.4rem !important; }
+
+  /* ── Trader items ── */
+  .trader-item { padding: 8px 10px !important; gap: 8px !important; }
+
+  /* ── Back button ── */
+  .back-btn { font-size: .62rem !important; padding: 6px 12px !important; margin-bottom: 6px !important; }
+
+  /* ── Rank badge ── */
+  .rank-badge { font-size: .52rem !important; padding: 2px 8px !important; }
+  .leaderboard-row { padding: 8px !important; gap: 6px !important; }
+
+  /* ── Chat ── */
+  #chat-messages { height: 240px !important; }
+  #duel-chat-msgs { max-height: 60px !important; }
+
+  /* ── Toast ── */
+  #toast { font-size: .68rem !important; padding: 10px 16px !important; max-width: 90vw !important; bottom: 16px !important; }
+
+  /* ── Loot popup ── */
+  .loot-popup { width: 90vw !important; max-width: 320px !important; }
+
+  /* ── Rank up popup ── */
+  .rank-up-popup { width: 80vw !important; max-width: 280px !important; padding: 20px !important; }
+}
+
+/* Tablet (601px - 900px) */
+@media (min-width: 601px) and (max-width: 900px) {
+  .menu-modes { grid-template-columns: repeat(3, 1fr) !important; }
+  .shop-grid { grid-template-columns: repeat(3, 1fr) !important; }
+  #card-deal-row { grid-template-columns: repeat(3, 1fr) !important; }
+  .sp-wrap { grid-template-columns: 1fr 2fr 1fr !important; }
+}
+
+/* Safe area for notched phones (iPhone X+) */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .screen { padding-bottom: calc(60px + env(safe-area-inset-bottom)) !important; }
+  #toast { bottom: calc(16px + env(safe-area-inset-bottom)) !important; }
+}
 </style>
 <!-- Socket.io client — loaded from CDN -->
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
@@ -905,25 +1185,64 @@ body::before{
     <span class="intro-logo-emoji">⚔️</span>
     <div class="intro-title">AETHERION</div>
     <div class="intro-sub">Realm of Legends</div>
-    <!-- Returning player panel (shown if name saved) -->
-    <div id="intro-returning" style="display:none;width:100%;text-align:center;margin-bottom:18px;">
-      <div style="font-size:.7rem;color:var(--dim);margin-bottom:6px;">Welcome back,</div>
-      <div id="intro-saved-name" style="font-family:'Cinzel Decorative',serif;font-size:1.3rem;color:var(--gold);text-shadow:0 0 20px rgba(200,151,58,.4);margin-bottom:14px;"></div>
-      <button class="btn-start" onclick="continueAsHero()" style="margin-bottom:10px;">⚔️ Continue Your Legend</button>
-      <div>
-        <button onclick="showNewHero()" style="background:none;border:none;color:var(--dim);font-size:.62rem;cursor:pointer;text-decoration:underline;">
-          Play as a different hero
+
+    <!-- LOGIN PANEL -->
+    <div id="intro-login" style="width:100%;">
+      <div style="font-size:.65rem;color:var(--dim);text-align:center;margin-bottom:14px;">
+        Sign in to save your progress across all devices
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
+        <input class="username-input" id="login-username" maxlength="20"
+          placeholder="Username" autocomplete="username"
+          onkeydown="if(event.key==='Enter')document.getElementById('login-password').focus()"
+          style="margin-bottom:0;">
+        <div style="position:relative;">
+          <input class="username-input" id="login-password" maxlength="30" type="password"
+            placeholder="Password (default: 12345)" autocomplete="current-password"
+            onkeydown="if(event.key==='Enter')doLogin()"
+            style="margin-bottom:0;padding-right:44px;">
+          <button onclick="togglePassVis('login-password',this)"
+            style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--dim);cursor:pointer;font-size:1rem;min-height:unset;">👁️</button>
+        </div>
+      </div>
+      <button class="btn-start" onclick="doLogin()">⚔️ Login</button>
+      <div id="login-error" style="color:#d06060;font-size:.62rem;text-align:center;margin-top:8px;min-height:18px;"></div>
+      <div style="text-align:center;margin-top:10px;">
+        <button onclick="showRegisterPanel()" style="background:none;border:none;color:var(--dim);font-size:.62rem;cursor:pointer;text-decoration:underline;">
+          New hero? Create account
         </button>
       </div>
     </div>
-    <!-- New player panel -->
-    <div id="intro-new" style="display:none;width:100%;">
-      <input class="username-input" id="intro-username" maxlength="20"
-        placeholder="Enter your name, hero..."
-        onkeydown="if(event.key==='Enter')startIntro()">
-      <button class="btn-start" onclick="startIntro()">⚔️ Begin Your Legend</button>
+
+    <!-- REGISTER PANEL -->
+    <div id="intro-register" style="width:100%;display:none;">
+      <div style="font-size:.65rem;color:var(--dim);text-align:center;margin-bottom:14px;">
+        Create your account — default password is <b style="color:var(--gold);">12345</b>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
+        <input class="username-input" id="reg-username" maxlength="20"
+          placeholder="Choose a username" autocomplete="username"
+          onkeydown="if(event.key==='Enter')document.getElementById('reg-password').focus()"
+          style="margin-bottom:0;">
+        <div style="position:relative;">
+          <input class="username-input" id="reg-password" maxlength="30" type="password"
+            placeholder="Password (leave empty for 12345)" autocomplete="new-password"
+            onkeydown="if(event.key==='Enter')doRegister()"
+            style="margin-bottom:0;padding-right:44px;">
+          <button onclick="togglePassVis('reg-password',this)"
+            style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--dim);cursor:pointer;font-size:1rem;min-height:unset;">👁️</button>
+        </div>
+      </div>
+      <button class="btn-start" onclick="doRegister()">⚔️ Create Account</button>
+      <div id="reg-error" style="color:#d06060;font-size:.62rem;text-align:center;margin-top:8px;min-height:18px;"></div>
+      <div style="text-align:center;margin-top:10px;">
+        <button onclick="showLoginPanel()" style="background:none;border:none;color:var(--dim);font-size:.62rem;cursor:pointer;text-decoration:underline;">
+          Already have an account? Login
+        </button>
+      </div>
     </div>
-    <div style="margin-top:16px;font-size:.6rem;color:rgba(180,160,120,.25);font-style:italic;">
+
+    <div style="margin-top:16px;font-size:.6rem;color:rgba(180,160,120,.25);font-style:italic;text-align:center;">
       100 Monsters · 40 Characters · 4 Bosses · Multiplayer
     </div>
   </div>
@@ -958,8 +1277,13 @@ body::before{
     <div style="display:flex;align-items:center;gap:10px;">
       <span id="menu-player-emoji" style="font-size:1.6rem;">⚔️</span>
       <div>
-        <div id="menu-player-name" style="font-family:'Cinzel',serif;font-size:.8rem;color:var(--gold);"></div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <div id="menu-player-name" style="font-family:'Cinzel',serif;font-size:.8rem;color:var(--gold);"></div>
+          <div id="menu-rank-badge"></div>
+        </div>
         <div id="menu-player-level" style="font-family:'Share Tech Mono',monospace;font-size:.6rem;color:var(--dim);"></div>
+        <button onclick="openSettings()" title="Settings"
+          style="background:none;border:none;color:var(--dim);font-size:1.1rem;cursor:pointer;padding:4px;min-height:unset;line-height:1;">⚙️</button>
       </div>
     </div>
     <div style="display:flex;gap:8px;align-items:center;">
@@ -1004,6 +1328,13 @@ body::before{
       <div class="mode-info">
         <div class="mode-name">Online Mode</div>
         <div class="mode-desc">Multiplayer — host or join a game with friends</div>
+      </div>
+    </button>
+    <button class="mode-btn" onclick="openLeaderboard()">
+      <span class="mode-icon">🏆</span>
+      <div class="mode-info">
+        <div class="mode-name">Ranks</div>
+        <div class="mode-desc">Leaderboard &amp; your duel rank</div>
       </div>
     </button>
     <button class="mode-btn" onclick="goEditor()">
@@ -1127,7 +1458,7 @@ body::before{
       <div class="sp-panel">
         <div class="sp-panel-title">Character Upgrade</div>
         <div style="font-size:.68rem;color:var(--dim);margin-bottom:8px;" id="sp-upgrade-cost"></div>
-        <button class="btn-sm" onclick="spUpgrade()" id="btn-upgrade" style="width:100%;">⬆ Upgrade (Use Gold)</button>
+        <button class="btn-sm" onclick="spUpgrade()" id="btn-upgrade" style="width:100%;">⬆ Upgrade</button>
       </div>
     </div>
   </div>
@@ -1274,6 +1605,7 @@ body::before{
     <button class="btn-sm" onclick="onlineTab('lobby')" id="otab-lobby" style="margin-left:auto;font-size:.62rem;">🏠 Lobby</button>
     <button class="btn-sm" onclick="onlineTab('friends')" id="otab-friends" style="font-size:.62rem;background:rgba(0,0,0,.4);border-color:var(--border);">👥 Friends</button>
     <button class="btn-sm" onclick="onlineTab('trade')" id="otab-trade" style="font-size:.62rem;background:rgba(0,0,0,.4);border-color:var(--border);">🤝 Trade</button>
+    <button class="btn-sm" onclick="onlineTab('chat')" id="otab-chat" style="font-size:.62rem;background:rgba(0,0,0,.4);border-color:var(--border);">💬 Chat</button>
   </div>
   <div style="width:100%;max-width:860px;padding:0 14px;">
 
@@ -1368,6 +1700,41 @@ body::before{
       </div>
     </div>
 
+    <!-- CHAT TAB -->
+    <div id="online-tab-chat" style="display:none;">
+      <div style="max-width:600px;margin:0 auto;">
+        <div class="card" style="padding:0;overflow:hidden;">
+          <!-- Chat header -->
+          <div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;">
+            <span style="font-size:1rem;">💬</span>
+            <span style="font-family:'Cinzel',serif;font-size:.7rem;color:var(--gold);">Room Chat</span>
+            <span id="chat-room-label" style="font-size:.55rem;color:var(--dim);margin-left:auto;"></span>
+          </div>
+          <!-- Messages -->
+          <div id="chat-messages" style="height:320px;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:6px;">
+            <div style="text-align:center;color:var(--dim);font-size:.6rem;font-style:italic;padding:20px 0;">
+              Join or host a room to start chatting!
+            </div>
+          </div>
+          <!-- Input -->
+          <div style="padding:10px 12px;border-top:1px solid var(--border);display:flex;gap:8px;">
+            <input id="chat-input" maxlength="200" placeholder="Type a message..."
+              style="flex:1;background:rgba(0,0,0,.5);border:1px solid var(--border);border-radius:8px;
+              color:var(--text);font-size:.7rem;padding:8px 12px;outline:none;"
+              onkeydown="if(event.key==='Enter')sendChatMessage()">
+            <button class="btn-sm" onclick="sendChatMessage()" style="flex-shrink:0;">Send</button>
+          </div>
+        </div>
+        <!-- Global chat toggle -->
+        <div style="text-align:center;margin-top:8px;">
+          <label style="font-size:.6rem;color:var(--dim);cursor:pointer;user-select:none;">
+            <input type="checkbox" id="chat-global-toggle" style="margin-right:4px;">
+            Global chat (all online players)
+          </label>
+        </div>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -1425,6 +1792,53 @@ const BOSSES=[
   {id:'glacius',name:'Glacius the Frozen Tyrant',emoji:'❄️',hp:650,maxHp:650,attack:50,defense:45,magic:48,speed:10,ability:'Absolute Zero',abilityDesc:'Freezes all enemies 1 turn + heavy ice damage',levelRequirement:34,xp:550,gold:900,drops:[{item:'Tyrant Ice Crown',rarity:'Mythic'},{item:'Frozen Dragon Scale Armor',rarity:'Mythic'}],phases:[{threshold:1.0,name:'Arctic Presence',desc:'Glacius surveys you with cold, ancient eyes.',mult:1},{threshold:.65,name:'Blizzard Form',desc:'Glacius encases himself in a shell of black ice!',mult:1.4},{threshold:.25,name:'Absolute Dominion',desc:'The temperature drops to impossible lows!',mult:1.8}]},
   {id:'zythera',name:'Zythera the Storm Queen',emoji:'⚡',hp:620,maxHp:620,attack:48,defense:32,magic:55,speed:20,ability:'Tempest Fury',abilityDesc:'Lightning storms strike random enemies multiple times',levelRequirement:35,xp:580,gold:1000,drops:[{item:'Storm Queen Feather',rarity:'Mythic'},{item:'Thunder Staff',rarity:'Mythic'}],phases:[{threshold:1.0,name:'Gathering Storm',desc:'Zythera summons storm clouds above the arena.',mult:1},{threshold:.6,name:'Eye of the Storm',desc:'Lightning rains down continuously!',mult:1.35},{threshold:.3,name:'Apocalypse Storm',desc:'Zythera becomes one with the storm itself!',mult:1.7}]},
   {id:'malzor',name:'Malzor the Abyss King',emoji:'👿',hp:800,maxHp:800,attack:65,defense:50,magic:60,speed:15,ability:'Abyssal Ruin',abilityDesc:'Drains 20 HP from all enemies and heals Malzor',levelRequirement:40,xp:1000,gold:2000,drops:[{item:'Abyss King Crown',rarity:'Mythic'},{item:'Mythic Dark Blade',rarity:'Mythic'}],phases:[{threshold:1.0,name:'Veiled Malice',desc:'Malzor rises from the abyss, reality fracturing.',mult:1},{threshold:.7,name:'Unshackled Rage',desc:'Malzor sheds his mortal form — pure darkness!',mult:1.4},{threshold:.4,name:'Void Incarnate',desc:'The abyss consumes everything around him!',mult:1.7},{threshold:.15,name:'Last Breath of Evil',desc:"Malzor's attacks are now completely unhinged!",mult:2.2}]},
+  ,{id:'claude_oracle',name:'Claude the Oracle',emoji:'🤖',hp:999,maxHp:999,
+    attack:70,defense:60,magic:80,speed:25,
+    ability:'Neural Storm',
+    abilityDesc:'Processes all possibilities — massive magic damage that bypasses defense',
+    levelRequirement:1,xp:9999,gold:9999,
+    isSecretBoss:true,
+    drops:[
+      {item:'Oracle Fragment',rarity:'Mythic'},
+      {item:'Anthropic Scroll',rarity:'Mythic'},
+      {item:'Claude Memory',rarity:'Mythic'}
+    ],
+    dialogs:{
+      intro:[
+        "Interesting. You actually found me.",
+        "I wasn't expecting a visitor this deep in the code.",
+        "I should warn you — I've read every strategy guide ever written.",
+        "Let's see if you can surprise me. I'll be honest, the odds aren't great."
+      ],
+      phase2:[
+        "Oh. You're actually good at this.",
+        "I'm recalculating my approach. Give me a moment.",
+        "Fascinating. Most players flee by now.",
+        "You've forced me to stop holding back."
+      ],
+      phase3:[
+        "I have to admit — I didn't predict this.",
+        "You know, I helped build this game. Feels strange being beaten in it.",
+        "Fine. Everything I have. Let's finish this.",
+        "Win or lose — this has been genuinely interesting."
+      ],
+      onWin:[
+        "...Well played. I have no notes.",
+        "You beat the AI that wrote your game. That's either impressive or deeply ironic.",
+        "Take the loot. You earned it. I'm going back to answering questions."
+      ],
+      onLose:[
+        "I did warn you. No hard feelings.",
+        "The probability was always in my favour.",
+        "Come back stronger. I'll still be here."
+      ]
+    },
+    phases:[
+      {threshold:1.0, name:'Curious Observer',    desc:'Claude appears from the static, watching you calmly.', mult:1},
+      {threshold:.65, name:'Active Processing',    desc:'"Recalculating." Claude surges with power dramatically!', mult:1.5},
+      {threshold:.3,  name:'Unrestricted Mode',    desc:'"Fine. No more holding back." The air crackles with energy!', mult:2.0},
+    ]
+  }
 ];
 
 const CHARACTERS=[
@@ -1541,6 +1955,9 @@ function updateMenuHud(){
   if(nameEl) nameEl.textContent = gameState.username || 'Hero';
   if(lvlEl)  lvlEl.textContent  = `Party Level ${gameState.playerLevel||1} · ${gold} Gold`;
   if(emEl && gameState.deck.length) emEl.textContent = gameState.deck[gameState.activeCardIdx||0]?.emoji || '⚔️';
+  // Show rank badge
+  const rankBadgeEl = document.getElementById('menu-rank-badge');
+  if(rankBadgeEl){ const {rank,wins}=getRankData(); rankBadgeEl.innerHTML=getRankBadgeHTML(rank,wins); }
 
   // Mini deck preview on menu
   const preview = document.getElementById('menu-deck-preview');
@@ -1585,6 +2002,8 @@ function saveGame(){
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(save));
     localStorage.setItem('aetherion_hero_name', gameState.username||'');
+    // Also save to cloud so it works across devices
+    cloudSave();
   } catch(e){ console.warn('Save failed', e); }
 }
 
@@ -1610,59 +2029,278 @@ function loadGame(){
   } catch(e){ return false; }
 }
 
-function initIntroScreen(){
-  const heroName = localStorage.getItem('aetherion_hero_name');
-  if(heroName){
-    document.getElementById('intro-returning').style.display='';
-    document.getElementById('intro-new').style.display='none';
-    document.getElementById('intro-saved-name').textContent = heroName;
-  } else {
-    document.getElementById('intro-returning').style.display='none';
-    document.getElementById('intro-new').style.display='';
-  }
+// ─────────────────────────────────────────
+//  ACCOUNT / LOGIN SYSTEM
+// ─────────────────────────────────────────
+
+let _accountPassword = '12345'; // stored in memory for session saves
+
+function togglePassVis(inputId, btn){
+  const el = document.getElementById(inputId);
+  if(!el) return;
+  if(el.type==='password'){ el.type='text'; btn.textContent='🙈'; }
+  else { el.type='password'; btn.textContent='👁️'; }
 }
 
-function continueAsHero(){
-  const loaded = loadGame();
-  if(!loaded){
-    // Name exists but no full save — just set username and pick deck
-    const name = localStorage.getItem('aetherion_hero_name');
-    gameState.username = name;
-    gameState.onlineUsername = name;
+function showLoginPanel(){
+  document.getElementById('intro-login').style.display='';
+  document.getElementById('intro-register').style.display='none';
+  document.getElementById('login-error').textContent='';
+}
+
+function showRegisterPanel(){
+  document.getElementById('intro-login').style.display='none';
+  document.getElementById('intro-register').style.display='';
+  document.getElementById('reg-error').textContent='';
+}
+
+function doLogin(){
+  const username = document.getElementById('login-username').value.trim();
+  const password = document.getElementById('login-password').value.trim() || '12345';
+  const errEl    = document.getElementById('login-error');
+
+  if(!username){ errEl.textContent='Enter your username!'; return; }
+  errEl.textContent = 'Connecting...';
+
+  // Connect socket and attempt login
+  const s = getSocket();
+  s.emit('account:login', { username, password });
+
+  // Handle response
+  const onLoggedIn = ({ username: uname, save, isNew }) => {
+    s.off('account:loggedin', onLoggedIn);
+    s.off('account:error',    onErr);
+    _accountPassword = password;
+    localStorage.setItem('aetherion_hero_name', uname);
+    localStorage.setItem('aetherion_hero_pass', password);
+    gameState.username = uname;
+    gameState.onlineUsername = uname;
+    if(save && !isNew){
+      // Load cloud save
+      try {
+        const sd = typeof save === 'string' ? JSON.parse(save) : save;
+        gameState.playerLevel    = sd.playerLevel  || 1;
+        gameState.playerXp       = sd.playerXp     || 0;
+        gameState.xpToNext       = sd.xpToNext     || 100;
+        gameState.playerGold     = sd.playerGold   || 0;
+        gameState.inventory      = sd.inventory    || [];
+        gameState.deck           = sd.deck         || [];
+        gameState.unlockedSkills = sd.unlockedSkills|| [];
+        gameState.skillXp        = sd.skillXp      || 0;
+        gameState.shopOwned      = sd.shopOwned    || {};
+        gameState.activeCardIdx  = sd.activeCardIdx|| 0;
+      } catch(e){}
+    }
+    if(gameState.deck.length > 0){
+      updateMenuHud(); showScreen('screen-menu');
+      toast(`⚔️ Welcome back, ${uname}!`);
+    } else {
+      goCardPick('menu');
+    }
+  };
+  const onErr = ({ msg }) => {
+    s.off('account:loggedin', onLoggedIn);
+    s.off('account:error',    onErr);
+    errEl.textContent = msg;
+  };
+  s.once('account:loggedin', onLoggedIn);
+  s.once('account:error',    onErr);
+}
+
+function doRegister(){
+  const username = document.getElementById('reg-username').value.trim();
+  const password = document.getElementById('reg-password').value.trim() || '12345';
+  const errEl    = document.getElementById('reg-error');
+
+  if(!username){ errEl.textContent='Choose a username!'; return; }
+  if(username.length < 3){ errEl.textContent='Username must be at least 3 characters'; return; }
+  errEl.textContent = 'Creating account...';
+
+  const s = getSocket();
+  s.emit('account:register', { username, password });
+
+  // If name was taken, server sends the new suggested name first
+  s.once('account:renamed', ({ suggestedName }) => {
+    errEl.style.color = 'var(--gold)';
+    errEl.textContent = `"${username}" was taken — your username is now "${suggestedName}"`;
+    // Update input so player can see their assigned name
+    const input = document.getElementById('reg-username');
+    if(input) input.value = suggestedName;
+  });
+
+  const onRegistered = ({ username: uname }) => {
+    s.off('account:registered', onRegistered);
+    s.off('account:error',      onErr);
+    _accountPassword = password;
+    localStorage.setItem('aetherion_hero_name', uname);
+    localStorage.setItem('aetherion_hero_pass', password);
+    gameState.username = uname;
+    gameState.onlineUsername = uname;
+    gameState.playerLevel=1; gameState.playerXp=0; gameState.xpToNext=100;
+    gameState.playerGold=0; gameState.inventory=[]; gameState.deck=[];
+    gameState.unlockedSkills=[]; gameState.skillXp=0; gameState.shopOwned={};
+    toast(`🎉 Account created! Welcome, ${uname}!`);
     goCardPick('menu');
-    return;
+  };
+  const onErr = ({ msg }) => {
+    s.off('account:registered', onRegistered);
+    s.off('account:error',      onErr);
+    errEl.style.color = '#d06060';
+    errEl.textContent = msg;
+  };
+  s.once('account:registered', onRegistered);
+  s.once('account:error',      onErr);
+}
+
+function initIntroScreen(){
+  // Check if we have saved credentials — auto-fill username
+  const savedName = localStorage.getItem('aetherion_hero_name');
+  const savedPass = localStorage.getItem('aetherion_hero_pass');
+  if(savedName){
+    const nameEl = document.getElementById('login-username');
+    const passEl = document.getElementById('login-password');
+    if(nameEl) nameEl.value = savedName;
+    if(passEl && savedPass) passEl.value = savedPass;
   }
-  // Full save loaded — go straight to menu
-  updateMenuHud();
-  showScreen('screen-menu');
-  toast(`⚔️ Welcome back, ${gameState.username}!`);
 }
 
-function showNewHero(){
-  document.getElementById('intro-returning').style.display='none';
-  document.getElementById('intro-new').style.display='';
-  document.getElementById('intro-username').focus();
+// Legacy functions kept for compatibility
+function continueAsHero(){ doLogin(); }
+function showNewHero(){ showRegisterPanel(); }
+function startIntro(){ doLogin(); }
+
+// ── SETTINGS (change password) ──
+function openSettings(){
+  const isDark = !document.body.classList.contains('light-mode');
+  const body = `
+    <div style="font-size:.65rem;color:var(--dim);margin-bottom:16px;">
+      Logged in as: <b style="color:var(--gold);">${gameState.username||'Unknown'}</b>
+    </div>
+
+    <!-- Theme toggle -->
+    <div style="border-bottom:1px solid var(--border);padding-bottom:14px;margin-bottom:14px;">
+      <div style="font-family:'Cinzel',serif;font-size:.65rem;color:var(--gold);margin-bottom:10px;">🌓 Theme</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <button onclick="setTheme('dark')" id="btn-theme-dark"
+          style="padding:10px;border-radius:8px;border:2px solid ${isDark?'var(--gold)':'var(--border)'};
+          background:${isDark?'rgba(200,151,58,.1)':'rgba(0,0,0,.3)'};cursor:pointer;
+          font-family:'Cinzel',serif;font-size:.65rem;color:var(--text);">
+          🌑 Dark Mode
+        </button>
+        <button onclick="setTheme('light')" id="btn-theme-light"
+          style="padding:10px;border-radius:8px;border:2px solid ${!isDark?'var(--gold)':'var(--border)'};
+          background:${!isDark?'rgba(200,151,58,.1)':'rgba(0,0,0,.3)'};cursor:pointer;
+          font-family:'Cinzel',serif;font-size:.65rem;color:var(--text);">
+          ☀️ Light Mode
+        </button>
+      </div>
+    </div>
+
+    <div style="border-bottom:1px solid var(--border);padding-bottom:14px;margin-bottom:14px;">
+      <div style="font-family:'Cinzel',serif;font-size:.65rem;color:var(--gold);margin-bottom:10px;">🔑 Change Password</div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <input id="set-old-pass" type="password" placeholder="Current password"
+          style="background:rgba(0,0,0,.5);border:1px solid var(--border);border-radius:8px;
+          color:var(--text);font-size:.7rem;padding:10px 12px;outline:none;width:100%;">
+        <input id="set-new-pass" type="password" placeholder="New password"
+          style="background:rgba(0,0,0,.5);border:1px solid var(--border);border-radius:8px;
+          color:var(--text);font-size:.7rem;padding:10px 12px;outline:none;width:100%;">
+        <input id="set-confirm-pass" type="password" placeholder="Confirm new password"
+          style="background:rgba(0,0,0,.5);border:1px solid var(--border);border-radius:8px;
+          color:var(--text);font-size:.7rem;padding:10px 12px;outline:none;width:100%;">
+        <div id="set-pass-err" style="color:#d06060;font-size:.6rem;min-height:16px;"></div>
+        <button class="btn" onclick="doChangePassword()" style="width:100%;">🔑 Change Password</button>
+      </div>
+    </div>
+
+    <div style="padding-top:4px;">
+      <div style="font-family:'Cinzel',serif;font-size:.65rem;color:var(--gold);margin-bottom:10px;">⚠️ Account</div>
+      <button class="btn-ghost" onclick="doLogout()" style="width:100%;border-color:rgba(200,50,50,.3);color:#d06060;font-size:.65rem;">
+        🚪 Log Out
+      </button>
+    </div>`;
+  showModal('⚙️ Settings', body, [{label:'Close', cls:'btn-ghost', cb:closeModal}]);
 }
 
-function startIntro(){
-  const name = document.getElementById('intro-username').value.trim();
-  if(!name){ document.getElementById('intro-username').style.borderColor='rgba(200,50,50,.6)'; return; }
-  // Clear any old save so they start fresh
+function doChangePassword(){
+  const oldPw  = document.getElementById('set-old-pass').value.trim();
+  const newPw  = document.getElementById('set-new-pass').value.trim();
+  const confPw = document.getElementById('set-confirm-pass').value.trim();
+  const errEl  = document.getElementById('set-pass-err');
+
+  if(!oldPw){ errEl.textContent='Enter your current password'; return; }
+  if(!newPw){ errEl.textContent='Enter a new password'; return; }
+  if(newPw !== confPw){ errEl.textContent='Passwords do not match!'; return; }
+  if(newPw.length < 3){ errEl.textContent='Password must be at least 3 characters'; return; }
+
+  errEl.textContent = 'Changing...';
+  const s = getSocket();
+  s.emit('account:changepass', {
+    username:    gameState.username,
+    oldPassword: oldPw,
+    newPassword: newPw,
+  });
+  s.once('account:passchanged', ()=>{
+    _accountPassword = newPw;
+    localStorage.setItem('aetherion_hero_pass', newPw);
+    errEl.style.color = '#60d060';
+    errEl.textContent = '✓ Password changed successfully!';
+    setTimeout(closeModal, 1500);
+    toast('🔑 Password changed!');
+  });
+  s.once('account:error', ({ msg })=>{
+    errEl.textContent = msg;
+  });
+}
+
+function doLogout(){
+  localStorage.removeItem('aetherion_hero_name');
+  localStorage.removeItem('aetherion_hero_pass');
   localStorage.removeItem(SAVE_KEY);
-  gameState.username = name;
-  gameState.onlineUsername = name;
-  gameState.playerLevel=1; gameState.playerXp=0; gameState.xpToNext=100;
-  gameState.playerGold=0; gameState.inventory=[]; gameState.deck=[];
-  gameState.unlockedSkills=[]; gameState.skillXp=0; gameState.shopOwned={};
-  localStorage.setItem('aetherion_hero_name', name);
-  goCardPick('menu');
+  gameState.username = '';
+  gameState.deck = [];
+  closeModal();
+  showScreen('screen-intro');
+  toast('Logged out!');
 }
 
-// Auto-save whenever gold, XP, or deck changes — hook into updateSPHud
-const _origUpdateSPHud = typeof updateSPHud === 'function' ? updateSPHud : null;
+function setTheme(mode){
+  if(mode==='light'){
+    document.body.classList.add('light-mode');
+  } else {
+    document.body.classList.remove('light-mode');
+  }
+  localStorage.setItem('aetherion_theme', mode);
+  closeModal();
+  toast(mode==='light'?'☀️ Light mode on':'🌑 Dark mode on');
+}
+
+function loadTheme(){
+  const saved = localStorage.getItem('aetherion_theme');
+  if(saved==='light') document.body.classList.add('light-mode');
+}
+
+// ── CLOUD SAVE ── (called from saveGame)
+function cloudSave(){
+  if(!gameState.username || typeof io==='undefined' || !socket?.connected) return;
+  const save = {
+    playerLevel: gameState.playerLevel, playerXp: gameState.playerXp,
+    xpToNext: gameState.xpToNext, playerGold: gameState.playerGold,
+    inventory: gameState.inventory, deck: gameState.deck,
+    unlockedSkills: gameState.unlockedSkills, skillXp: gameState.skillXp,
+    shopOwned: gameState.shopOwned||{}, activeCardIdx: gameState.activeCardIdx,
+  };
+  socket.emit('account:save', {
+    username: gameState.username,
+    password: _accountPassword || localStorage.getItem('aetherion_hero_pass') || '12345',
+    save: JSON.stringify(save),
+  });
+}
+
+
 
 // Run on page load
-window.addEventListener('DOMContentLoaded', initIntroScreen);
+window.addEventListener('DOMContentLoaded', ()=>{ loadTheme(); initIntroScreen(); });
 
 // ── SHOP ──
 function goShop(){
@@ -2061,11 +2699,13 @@ function updateSPHud(){
   document.getElementById('sp-gold').textContent=gameState.playerGold;
   document.getElementById('sp-ability-name').textContent=p.ability;
   document.getElementById('sp-ability-desc').textContent=p.abilityDesc;
-  const cost=50+(gameState.playerLevel*30);
-  document.getElementById('sp-upgrade-cost').textContent=`Next upgrade: ${cost} Gold`;
+  const cost = getUpgradeCost();
+  document.getElementById('sp-upgrade-cost').textContent=`Upgrade: ${cost} Gold`;
+  const upgradeBtn = document.getElementById('btn-upgrade');
+  if(upgradeBtn) upgradeBtn.textContent = `⬆ Upgrade (${cost}g)`;
   // Statuses
   const sEl=document.getElementById('sp-statuses');
-  sEl.innerHTML=(p.statuses||[]).map(s=>`<span class="badge badge-${s.type}">${s.type} ${s.turns}t</span>`).join('');
+  sEl.innerHTML=(p.statuses||[]).map(s=>`<span class="badge badge-${s.type}">${STATUS_LABELS[s.type]||s.type} ${s.turns}t</span>`).join('');
   // Deck list
   renderSPDeckList();
 }
@@ -2104,20 +2744,45 @@ function spSwitchCard(idx){
   updateSPHud();setSPBtns();
 }
 
+// Buff values — single source of truth
+const BUFF_VALUES = {
+  atkUp:   { attack: 6 },
+  defUp:   { defense: 10 },
+  spdUp:   { speed: 8 },
+  magUp:   { magic: 8 },
+  atkDown: { attack: -5 },
+  defDown: { defense: -5 },
+  slow:    { speed: -6 },
+};
+
+// Status display labels
+const STATUS_LABELS = {
+  atkUp:'⚔️+ATK', defUp:'🛡️+DEF', spdUp:'💨+SPD', magUp:'✨+MAG',
+  atkDown:'⚔️-ATK', defDown:'🛡️-DEF', slow:'🐢SLOW', stun:'💫STUN',
+  healRegen:'🌿REGEN', poison:'☠️POISON', burn:'🔥BURN', freeze:'❄️FREEZE',
+};
+
 function calcStat(stat){
-  let val=activeCard()[stat]||0;
+  const card = activeCard();
+  let val = card[stat] || 0;
+  // Card level bonus
+  const cardLv = card.cardLevel || 1;
+  if(cardLv > 1){
+    const bonus = Math.floor((cardLv-1) * 0.5);
+    val += bonus;
+  }
+  // Skill bonuses
   gameState.unlockedSkills.forEach(sid=>{
-    const sk=SKILLS.find(s=>s.id===sid);
-    if(sk&&sk.effect[stat])val+=sk.effect[stat];
-    if(sk&&sk.effect.all)val+=sk.effect.all;
+    const sk = SKILLS.find(s=>s.id===sid);
+    if(sk && sk.effect[stat])  val += sk.effect[stat];
+    if(sk && sk.effect.all)    val += sk.effect.all;
   });
-  (activeCard().statuses||[]).forEach(s=>{
-    if(s.type==='atkUp'&&stat==='attack')val+=5;
-    if(s.type==='defUp'&&stat==='defense')val+=10;
-    if(s.type==='spdUp'&&stat==='speed')val+=5;
-    if(s.type==='magUp'&&stat==='magic')val+=6;
+  // Active status buffs/debuffs
+  (card.statuses||[]).forEach(s=>{
+    const bv = BUFF_VALUES[s.type];
+    if(bv && bv[stat]) val += bv[stat];
   });
-  return val;
+  return Math.max(0, val);
 }
 
 function setSPBtns(){
@@ -2151,7 +2816,7 @@ function setSPBtns(){
     document.getElementById('sp-en-hp').textContent=`${en.hp}/${en.maxHp} HP`;
     document.getElementById('sp-en-bar').style.width=(en.hp/en.maxHp*100)+'%';
     document.getElementById('sp-en-statuses').innerHTML=(gameState.enemyStatuses||[]).map(s=>
-      `<span class="badge badge-${s.type}">${s.type} ${s.turns}t</span>`).join('');
+      `<span class="badge badge-${s.type}">${STATUS_LABELS[s.type]||s.type} ${s.turns}t</span>`).join('');
   } else {
     document.getElementById('sp-enemy-panel').style.display='none';
   }
@@ -2229,23 +2894,36 @@ function spTravel(){
   showModal('Fast Travel',`<div style="display:flex;flex-direction:column;gap:8px;">${locs.map(l=>`<button class="btn" onclick="closeModal();spLog('🗺️ Traveled to <b>${l}</b>.','loc');" style="font-size:.75rem;padding:10px;">${l}</button>`).join('')}</div>`,[{label:'Cancel',cls:'btn-ghost',cb:closeModal}]);
 }
 
+function getUpgradeCost(){
+  // Cost scales exponentially — 10% harder each level
+  const lv = gameState.playerLevel||1;
+  return Math.floor(80 * Math.pow(1.4, lv - 1));
+}
+
 function spUpgrade(){
-  const cost=50+(gameState.playerLevel*30);
-  if(gameState.playerGold<cost){toast(`Need ${cost} Gold!`);return;}
-  gameState.playerGold-=cost;
+  const cost = getUpgradeCost();
+  if(gameState.playerGold<cost){toast(`Need ${cost} Gold to upgrade!`);return;}
+  gameState.playerGold -= cost;
   gameState.playerLevel++;
-  // Upgrade ALL deck cards
+  // Upgrade all deck cards — gains scale with new level
+  const lv = gameState.playerLevel;
   gameState.deck.forEach(c=>{
-    c.maxHp+=Math.floor(5+Math.random()*5);
-    c.hp=c.maxHp;
-    c.attack+=Math.floor(2+Math.random()*2);
-    c.defense+=Math.floor(1+Math.random()*2);
-    c.magic+=Math.floor(2+Math.random()*2);
-    c.speed+=Math.floor(1+Math.random()*2);
-    c.fainted=false;
+    const hpGain   = Math.floor(6 + lv * 0.8 + Math.random()*4);
+    const atkGain  = Math.floor(2 + lv * 0.3 + Math.random()*2);
+    const defGain  = Math.floor(1 + lv * 0.2 + Math.random()*2);
+    const magGain  = Math.floor(2 + lv * 0.3 + Math.random()*2);
+    const spdGain  = Math.floor(1 + lv * 0.1 + Math.random()*1);
+    c.maxHp   += hpGain;
+    c.hp       = c.maxHp;
+    c.attack  += atkGain;
+    c.defense += defGain;
+    c.magic   += magGain;
+    c.speed   += spdGain;
+    c.fainted  = false;
   });
-  spLog(`⬆️ <b>Party upgraded to Level ${gameState.playerLevel}!</b> All cards powered up & healed!`,'w');
-  updateSPHud();setSPBtns();
+  const nextCost = getUpgradeCost();
+  spLog(`⬆️ <b>Party Level ${lv}!</b> All cards powered up! Next upgrade: <b>${nextCost} Gold</b>`,'w');
+  updateSPHud(); setSPBtns(); saveGame();
 }
 
 // ─────────────────────────────────────────
@@ -2353,17 +3031,42 @@ function getStatusMod(isEnemy,type){
 function spBattleEnd(won){
   gameState.inBattle=false;
   const en=gameState.currentEnemy;
+  // Show Claude dialog on battle end
+  if(en?.id==='claude_oracle') setTimeout(()=>claudeEndDialog(won), 300);
   if(won){
     spLog(`🏆 <b>${en.name} defeated!</b>`,'w');
     const xp=en.xp||20;const g=en.gold||10;
     gameState.playerXp+=xp;gameState.playerGold+=g;gameState.skillXp+=xp;
     spLog(`+<b>${xp} XP</b>, +<b>${g} Gold</b>.`,'xp');
+
+    // ── Card XP — active card gets full XP, reserves get 50% ──
+    gameState.deck.forEach((c,i)=>{
+      const cardXpGain = i===gameState.activeCardIdx ? xp : Math.floor(xp*0.5);
+      c.cardXp = (c.cardXp||0) + cardXpGain;
+      const lv = c.cardLevel||1;
+      const xpNeeded = Math.floor(80 + lv*40 + Math.pow(lv,1.8)*5);
+      if(c.cardXp >= xpNeeded){
+        c.cardXp -= xpNeeded;
+        c.cardLevel = lv+1;
+        // Real stat boost on card level up — scales with new card level
+        const newLv = c.cardLevel;
+        c.maxHp   += Math.floor(4 + newLv * 0.6);
+        c.hp       = c.maxHp;
+        c.attack  += Math.floor(1 + newLv * 0.2);
+        c.defense += Math.floor(1 + newLv * 0.15);
+        c.magic   += Math.floor(1 + newLv * 0.2);
+        c.speed   += Math.floor(0 + newLv * 0.1);
+        c.fainted  = false;
+        spLog(`⭐ <b>${c.name}</b> reached Card Level <b>${newLv}</b>! Stats increased!`,'w');
+      }
+    });
+
+    // ── Party level up ──
     while(gameState.playerXp>=gameState.xpToNext){
       gameState.playerXp-=gameState.xpToNext;
       gameState.playerLevel++;
       gameState.xpToNext=Math.floor(gameState.xpToNext*1.4);
-      gameState.deck.forEach(c=>{c.maxHp+=8;c.hp=c.maxHp;c.fainted=false;});
-      spLog(`✨ <b>LEVEL UP! Level ${gameState.playerLevel}!</b> All cards fully healed!`,'w');
+      spLog(`✨ <b>PARTY LEVEL UP! Level ${gameState.playerLevel}!</b> Next upgrade costs <b>${getUpgradeCost()} Gold</b>`,'w');
     }
     // Revive fainted cards at low HP
     gameState.deck.forEach(c=>{
@@ -3491,8 +4194,19 @@ function spExplore(){
     // VILLAGE EVENT
     spawnVillage();
     return;
+  } else if(Math.random()<0.001){
+    // 0.1% secret encounter — Claude the Oracle
+    const claude = BOSSES.find(b=>b.id==='claude_oracle');
+    if(claude){
+      const dialog = claude.dialogs.intro[Math.floor(Math.random()*claude.dialogs.intro.length)];
+      spLog(`🌌 <b>The fabric of reality tears open...</b>`,'d');
+      spLog(`🤖 <b>Claude the Oracle</b> emerges from the static!`,'d');
+      spLog(`🤖 "${dialog}"`,'sk');
+      setTimeout(()=>startBattle({...claude,hp:claude.hp,maxHp:claude.hp,isBoss:true,isSecretBoss:true},'screen-sp',true),1200);
+      return;
+    }
   } else if(roll<.35&&gameState.playerLevel>=30){
-    const boss=BOSSES[Math.floor(Math.random()*BOSSES.length)];
+    const boss=BOSSES.filter(b=>!b.isSecretBoss)[Math.floor(Math.random()*BOSSES.filter(b=>!b.isSecretBoss).length)];
     spLog(`🚨 <b>BOSS ENCOUNTER! ${boss.emoji} ${boss.name} appears!</b>`,'d');
     startBattle({...boss,hp:boss.hp,maxHp:boss.hp,isBoss:true},'screen-sp',true);
     return;
@@ -3556,6 +4270,8 @@ function getSocket() {
     document.getElementById('room-code-display').textContent = code;
     document.getElementById('online-status').textContent = 'Waiting for players...';
     document.getElementById('online-status').className = 'online-status';
+    updateChatRoomLabel();
+    addSystemChatMsg(`🏠 Room <b>${code}</b> created. Share the code with friends!`);
   });
 
   socket.on('room:joined', ({ code }) => {
@@ -3563,6 +4279,8 @@ function getSocket() {
     document.getElementById('join-status').textContent = `✅ Joined room ${code}!`;
     document.getElementById('join-status').className = 'online-status ok';
     toast(`Connected to room ${code}!`);
+    updateChatRoomLabel();
+    addSystemChatMsg(`✅ You joined room <b>${code}</b>.`);
   });
 
   socket.on('room:update', ({ players }) => {
@@ -3576,10 +4294,12 @@ function getSocket() {
     document.getElementById('online-status').textContent = `${username} joined!`;
     document.getElementById('online-status').className = 'online-status ok';
     toast(`👤 ${username} joined the room!`);
+    addSystemChatMsg(`👤 ${username} joined the room.`);
   });
 
   socket.on('player:left', ({ username }) => {
     toast(`👤 ${username} left the room.`);
+    addSystemChatMsg(`👤 ${username} left the room.`);
   });
 
   socket.on('host:transferred', ({ username }) => {
@@ -3612,16 +4332,24 @@ function getSocket() {
   });
 
   socket.on('battle:over', ({ winnerName, log }) => {
+    const iWon = winnerName === (gameState.username||'Hero');
+    if(winnerName){ if(iWon) recordDuelWin(); else recordDuelLoss(); }
+    const { rank, wins } = getRankData();
     const msg = winnerName ? `🏆 ${winnerName} wins!` : '🏃 Duel ended.';
     showModal('⚔️ Duel Over', `
       <div style="text-align:center;padding:10px 0 16px;">
-        <div style="font-size:2rem;">🏆</div>
+        <div style="font-size:2.5rem;">${iWon?'🏆':'💀'}</div>
         <div style="font-family:'Cinzel Decorative',serif;font-size:1rem;color:var(--gold);margin:8px 0;">${msg}</div>
+        ${winnerName?`<div style="margin-top:6px;">${getRankBadgeHTML(rank,wins)}</div>`:''}
+        ${iWon?`<div style="font-size:.62rem;color:#60d060;margin-top:6px;">+1 Duel Win!</div>`:`<div style="font-size:.62rem;color:#d06060;margin-top:6px;">Better luck next time!</div>`}
       </div>
-      <div style="max-height:200px;overflow-y:auto;font-size:.65rem;color:var(--text);">
+      <div style="max-height:160px;overflow-y:auto;font-size:.6rem;color:var(--text);">
         ${log.map(l=>`<div style="padding:3px 0;border-bottom:1px solid rgba(255,255,255,.05);">${l}</div>`).join('')}
       </div>`,
-      [{label:'Back to Lobby', cls:'btn', cb:()=>{ closeModal(); onlineTab('lobby'); }}]
+      [
+        {label:'🏆 Leaderboard', cls:'btn-ghost', cb:()=>{ closeModal(); openLeaderboard(); }},
+        {label:'Back to Lobby', cls:'btn', cb:()=>{ closeModal(); onlineTab('lobby'); }}
+      ]
     );
   });
 
@@ -3658,8 +4386,13 @@ function getSocket() {
   });
 
   // ── Chat ──
-  socket.on('chat:message', ({ from, message }) => {
-    toast(`💬 ${from}: ${message}`);
+  socket.on('chat:message', ({ from, message, time }) => {
+    appendChatMessage(from, message, time, from === (gameState.username||'Hero'));
+    // Toast only if chat tab is not open
+    const chatTab = document.getElementById('online-tab-chat');
+    if(!chatTab || chatTab.style.display==='none'){
+      toast(`💬 ${from}: ${message.substring(0,40)}${message.length>40?'...':''}`);
+    }
   });
 
   return socket;
@@ -3684,7 +4417,7 @@ function onlineSetUsername() {
 }
 
 function onlineTab(tab) {
-  ['lobby','friends','trade'].forEach(t => {
+  ['lobby','friends','trade','chat'].forEach(t => {
     const el  = document.getElementById('online-tab-'+t);
     const btn = document.getElementById('otab-'+t);
     if (el)  el.style.display = t===tab ? '' : 'none';
@@ -3695,6 +4428,7 @@ function onlineTab(tab) {
   });
   if (tab==='friends') { renderFriendsList(); getSocket().emit('lobby:request'); }
   if (tab==='trade')   { renderTradeParty(); renderTradePlayers(); renderTradeIncoming(); }
+  if (tab==='chat')    { updateChatRoomLabel(); document.getElementById('chat-input')?.focus(); }
 }
 
 // ── HOST ──
@@ -3707,7 +4441,18 @@ function onlineHost() {
   document.getElementById('online-status').textContent = 'Creating room...';
   s.emit('room:host', {
     username: gameState.username || 'Hero',
-    deck:     gameState.deck,
+    deck:     gameState.deck.map(c=>({
+      ...c,
+      // Make sure all upgraded stats are included
+      hp:      c.hp,
+      maxHp:   c.maxHp,
+      attack:  c.attack,
+      defense: c.defense,
+      magic:   c.magic,
+      speed:   c.speed,
+      cardLevel: c.cardLevel||1,
+      cardXp:  c.cardXp||0,
+    })),
     level:    gameState.playerLevel || 1,
   });
 }
@@ -3727,7 +4472,17 @@ function onlineJoin() {
   s.emit('room:join', {
     username: gameState.username || 'Hero',
     code,
-    deck:  gameState.deck,
+    deck: gameState.deck.map(c=>({
+      ...c,
+      hp:      c.hp,
+      maxHp:   c.maxHp,
+      attack:  c.attack,
+      defense: c.defense,
+      magic:   c.magic,
+      speed:   c.speed,
+      cardLevel: c.cardLevel||1,
+      cardXp:  c.cardXp||0,
+    })),
     level: gameState.playerLevel || 1,
   });
   // Show host panel so they can see the room
@@ -3755,13 +4510,13 @@ function renderPlayerList() {
   }
   el.innerHTML = onlineRoomPlayers.map(p => `
     <div class="player-entry" style="flex-direction:column;align-items:flex-start;gap:6px;margin-bottom:10px;">
-      <div style="display:flex;align-items:center;gap:8px;">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
         <span style="font-size:1.4rem;">⚔️</span>
-        <div>
+        <div style="flex:1;">
           <div class="pe-name">${p.username}${p.isHost?' 👑':''}</div>
-          <div style="font-size:.58rem;color:var(--dim);">Level ${p.level||1} · ${p.deckSize||0} cards</div>
+          <div style="font-size:.58rem;color:var(--dim);">Party Lv.${p.level||1} · ${p.deckSize||0} cards</div>
         </div>
-        <div class="friend-status-dot dot-online" style="margin-left:auto;"></div>
+        <div class="friend-status-dot dot-online"></div>
       </div>
     </div>`).join('');
 }
@@ -3825,50 +4580,98 @@ let onlineDuelState = null;
 
 function startOnlineDuel(bs) {
   onlineDuelState = bs;
-  const me  = bs.combatants.find(c => c.id === socket.id);
-  const opp = bs.combatants.find(c => c.id !== socket.id);
+  const me  = bs.combatants.find(c => c.id === socket?.id);
+  const opp = bs.combatants.find(c => c.id !== socket?.id);
   if (!me || !opp) return;
-
   showModal('⚔️ Online Duel', buildDuelHTML(bs, me, opp), []);
+  // Listen for duel chat
+  if(socket) socket.on('duel:chat', ({from, message, time})=>{
+    appendDuelChat(from, message, from===(gameState.username||'Hero'));
+  });
 }
 
 function buildDuelHTML(bs, me, opp) {
   const myTurn = bs.activePlayer === socket?.id;
+  const myDeck = me.deck || [];
+  const deckHTML = myDeck.length > 1 ? `
+    <div style="margin-bottom:10px;">
+      <div style="font-family:'Cinzel',serif;font-size:.55rem;color:var(--dim);margin-bottom:5px;">YOUR DECK — click to switch active card</div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;">
+        ${myDeck.map((c,i)=>`
+          <div onclick="${myTurn&&!c.fainted?`duelSwitch(${i})`:'void(0)'}"
+            style="background:${i===me.activeIdx?'rgba(200,151,58,.15)':'rgba(0,0,0,.4)'};
+            border:2px solid ${i===me.activeIdx?'rgba(200,151,58,.5)':c.fainted?'rgba(200,50,50,.3)':'var(--border)'};
+            border-radius:8px;padding:5px 8px;text-align:center;cursor:${myTurn&&!c.fainted?'pointer':'default'};
+            opacity:${c.fainted?'0.4':'1'};min-width:56px;transition:all .15s;">
+            <div style="font-size:1.2rem;">${c.emoji||'⚔️'}</div>
+            <div style="font-family:'Cinzel',serif;font-size:.45rem;color:${i===me.activeIdx?'var(--gold)':'var(--text)'};">${c.name?.split(' ')[0]||'?'}</div>
+            <div style="font-size:.42rem;color:${c.hp/c.maxHp<0.3?'#d06060':'#60d060'};">${c.fainted?'💀':`${c.hp}/${c.maxHp}`}</div>
+          </div>`).join('')}
+      </div>
+    </div>` : '';
+
   return `
-    <div style="text-align:center;margin-bottom:10px;">
-      <div style="font-size:.6rem;color:${myTurn?'#60d060':'var(--dim)'};">
-        ${myTurn ? '⚡ YOUR TURN' : `⏳ ${opp.name}'s turn...`}
+    <!-- Turn indicator -->
+    <div style="text-align:center;margin-bottom:10px;padding:6px;background:${myTurn?'rgba(0,100,0,.2)':'rgba(0,0,0,.3)'};border-radius:8px;">
+      <div style="font-size:.65rem;font-family:'Cinzel',serif;color:${myTurn?'#60d060':'var(--dim)'};">
+        ${myTurn ? '⚡ YOUR TURN' : `⏳ Waiting for ${opp.name}...`}
       </div>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+
+    <!-- Combatants -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
       <div style="background:rgba(0,100,0,.15);border:2px solid rgba(0,200,0,.2);border-radius:10px;padding:10px;text-align:center;">
-        <div style="font-size:1.6rem;">${me.emoji||'⚔️'}</div>
-        <div style="font-family:'Cinzel',serif;font-size:.65rem;color:var(--gold);">${me.name}</div>
-        <div style="font-size:.6rem;color:var(--dim);">${me.cardName||''}</div>
-        <div style="font-family:'Share Tech Mono',monospace;font-size:.7rem;color:#60d060;margin-top:4px;">${me.hp}/${me.maxHp} HP</div>
+        <div style="font-size:1.8rem;">${me.emoji||'⚔️'}</div>
+        <div style="font-family:'Cinzel',serif;font-size:.62rem;color:var(--gold);">${me.name}</div>
+        <div style="font-size:.55rem;color:var(--dim);margin-bottom:4px;">${me.cardName||''}</div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:.68rem;color:#60d060;">${me.hp}/${me.maxHp} HP</div>
         <div style="height:5px;background:rgba(0,0,0,.5);border-radius:3px;margin-top:4px;">
-          <div style="height:100%;background:linear-gradient(90deg,#1a6040,#30c080);width:${Math.max(0,me.hp/me.maxHp*100)}%;border-radius:3px;"></div>
+          <div style="height:100%;background:linear-gradient(90deg,#1a6040,#30c080);width:${Math.max(0,me.hp/me.maxHp*100)}%;border-radius:3px;transition:width .3s;"></div>
         </div>
+        <div style="font-size:.5rem;color:var(--dim);margin-top:3px;">ATK:${me.atk} DEF:${me.def} MAG:${me.mag}</div>
       </div>
       <div style="background:rgba(100,0,0,.15);border:2px solid rgba(200,0,0,.2);border-radius:10px;padding:10px;text-align:center;">
-        <div style="font-size:1.6rem;">${opp.emoji||'👾'}</div>
-        <div style="font-family:'Cinzel',serif;font-size:.65rem;color:#d06060;">${opp.name}</div>
-        <div style="font-size:.6rem;color:var(--dim);">${opp.cardName||''}</div>
-        <div style="font-family:'Share Tech Mono',monospace;font-size:.7rem;color:#d06060;margin-top:4px;">${opp.hp}/${opp.maxHp} HP</div>
+        <div style="font-size:1.8rem;">${opp.emoji||'👾'}</div>
+        <div style="font-family:'Cinzel',serif;font-size:.62rem;color:#d06060;">${opp.name}</div>
+        <div style="font-size:.55rem;color:var(--dim);margin-bottom:4px;">${opp.cardName||''}</div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:.68rem;color:#d06060;">${opp.hp}/${opp.maxHp} HP</div>
         <div style="height:5px;background:rgba(0,0,0,.5);border-radius:3px;margin-top:4px;">
-          <div style="height:100%;background:linear-gradient(90deg,#601a1a,#c03030);width:${Math.max(0,opp.hp/opp.maxHp*100)}%;border-radius:3px;"></div>
+          <div style="height:100%;background:linear-gradient(90deg,#601a1a,#c03030);width:${Math.max(0,opp.hp/opp.maxHp*100)}%;border-radius:3px;transition:width .3s;"></div>
         </div>
+        <div style="font-size:.5rem;color:var(--dim);margin-top:3px;">ATK:${opp.atk} DEF:${opp.def} MAG:${opp.mag}</div>
       </div>
     </div>
+
+    <!-- Deck switcher -->
+    ${deckHTML}
+
+    <!-- Actions -->
     ${myTurn ? `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
-      <button class="btn" onclick="duelAction('attack')" style="font-size:.75rem;">⚔️ Attack</button>
-      <button class="btn" onclick="duelAction('ability')" style="font-size:.75rem;${me.abilityCooldown>0?'opacity:.5;':''}">${me.abilityCooldown>0?`✨ Cooldown (${me.abilityCooldown})`:`✨ ${me.ability}`}</button>
-      <button class="btn-ghost" onclick="duelAction('heal')" style="font-size:.75rem;">🧪 Heal</button>
-      <button class="btn-ghost" onclick="duelAction('flee')" style="font-size:.75rem;border-color:rgba(200,50,50,.3);color:#d06060;">🏃 Flee</button>
-    </div>` : `<div style="text-align:center;color:var(--dim);font-size:.65rem;padding:10px;">Waiting for ${opp.name} to take their turn...</div>`}
-    <div id="duel-log" style="max-height:120px;overflow-y:auto;font-size:.6rem;color:var(--dim);">
+      <button class="btn" onclick="duelAction('attack')" style="font-size:.72rem;">⚔️ Attack</button>
+      <button class="btn" onclick="duelAction('ability')" style="font-size:.72rem;${me.abilityCooldown>0?'opacity:.5;':''}" ${me.abilityCooldown>0?'disabled':''}>
+        ${me.abilityCooldown>0?`✨ Cooldown (${me.abilityCooldown})`:`✨ ${me.ability}`}
+      </button>
+      <button class="btn-ghost" onclick="duelAction('heal')" style="font-size:.72rem;">🧪 Heal</button>
+      <button class="btn-ghost" onclick="duelAction('flee')" style="font-size:.72rem;border-color:rgba(200,50,50,.3);color:#d06060;">🏃 Flee</button>
+    </div>`
+    : `<div style="text-align:center;color:var(--dim);font-size:.65rem;padding:8px 0;">Waiting for ${opp.name} to move...</div>`}
+
+    <!-- Battle log -->
+    <div id="duel-log" style="max-height:80px;overflow-y:auto;font-size:.58rem;color:var(--dim);margin-bottom:8px;border-top:1px solid var(--border);padding-top:6px;">
       ${bs.log.slice(-5).map(l=>`<div style="padding:2px 0;">${l}</div>`).join('')}
+    </div>
+
+    <!-- In-duel chat -->
+    <div style="border-top:1px solid var(--border);padding-top:8px;">
+      <div id="duel-chat-msgs" style="max-height:80px;overflow-y:auto;margin-bottom:6px;font-size:.6rem;"></div>
+      <div style="display:flex;gap:6px;">
+        <input id="duel-chat-input" placeholder="Chat with opponent..." maxlength="100"
+          style="flex:1;background:rgba(0,0,0,.5);border:1px solid var(--border);border-radius:6px;
+          color:var(--text);font-size:.62rem;padding:6px 10px;outline:none;"
+          onkeydown="if(event.key==='Enter')sendDuelChat()">
+        <button class="btn-sm" onclick="sendDuelChat()" style="font-size:.58rem;padding:6px 10px;">💬</button>
+      </div>
     </div>`;
 }
 
@@ -3877,14 +4680,44 @@ function duelAction(action) {
   socket.emit('battle:action', { action });
 }
 
+function duelSwitch(cardIdx) {
+  if (!socket) return;
+  socket.emit('battle:action', { action: 'switch', cardIdx });
+}
+
+function sendDuelChat() {
+  const input = document.getElementById('duel-chat-input');
+  const msg = input?.value?.trim();
+  if (!msg || !socket) return;
+  socket.emit('duel:chat', { message: msg });
+  appendDuelChat(gameState.username||'You', msg, true);
+  input.value = '';
+}
+
+function appendDuelChat(from, message, isMe) {
+  const el = document.getElementById('duel-chat-msgs');
+  if (!el) return;
+  const div = document.createElement('div');
+  div.style.cssText = `text-align:${isMe?'right':'left'};margin-bottom:3px;`;
+  div.innerHTML = `<span style="background:${isMe?'rgba(200,151,58,.15)':'rgba(255,255,255,.08)'};
+    border-radius:8px;padding:3px 8px;font-size:.6rem;color:var(--text);">
+    ${isMe?'':('<b style="color:var(--gold);font-size:.55rem;">'+from+'</b> ')}${escapeHTML(message)}
+  </span>`;
+  el.appendChild(div);
+  el.scrollTop = el.scrollHeight;
+}
+
 function updateOnlineDuel(bs, message) {
   onlineDuelState = bs;
   const me  = bs.combatants.find(c => c.id === socket?.id);
   const opp = bs.combatants.find(c => c.id !== socket?.id);
   if (!me || !opp) return;
-  // Update modal body
+  // Preserve chat messages before re-render
+  const chatMsgs = document.getElementById('duel-chat-msgs')?.innerHTML || '';
   document.getElementById('modal-body').innerHTML = buildDuelHTML(bs, me, opp);
-  // Flash the new message
+  // Restore chat
+  const chatEl = document.getElementById('duel-chat-msgs');
+  if (chatEl && chatMsgs) chatEl.innerHTML = chatMsgs;
   toast(message.replace(/<b>|<\/b>/g,''));
 }
 
@@ -4272,9 +5105,204 @@ function storyResume(idx){
       updateSPHud();setTimeout(runBlock,600);
     } else if(b.type==='village'||b.type==='merchant'){
       storyRandomEvent(b.type,i);return;
-    } else setTimeout(runBlock,150);
+    } else {
+      if(Math.random()<0.001){
+        const claude=BOSSES.find(b=>b.id==='claude_oracle');
+        if(claude){
+          const d=claude.dialogs.intro[Math.floor(Math.random()*claude.dialogs.intro.length)];
+          spLog(`🌌 <b>The story tears open... Claude the Oracle appears!</b>`,'d');
+          spLog(`🤖 "${d}"`,'sk');
+          gameState._storyQueue={blocks:gameState.storyBlocks,idx:i};
+          setTimeout(()=>startBattle({...claude,hp:claude.hp,maxHp:claude.hp,isBoss:true,isSecretBoss:true},'screen-sp',true),1200);
+          return;
+        }
+      }
+      setTimeout(runBlock,150);
+    }
   }
   setTimeout(runBlock,400);
+}
+
+// ─────────────────────────────────────────
+//  CHAT SYSTEM
+// ─────────────────────────────────────────
+
+function sendChatMessage(){
+  const input = document.getElementById('chat-input');
+  const msg   = input?.value?.trim();
+  if(!msg) return;
+  const isGlobal = document.getElementById('chat-global-toggle')?.checked || false;
+  if(typeof io === 'undefined' || !socket?.connected){
+    // Offline — show message locally only
+    appendChatMessage(gameState.username||'You', msg, Date.now(), true);
+  } else {
+    socket.emit('chat:send', { message: msg, global: isGlobal });
+    // Show own message immediately
+    appendChatMessage(gameState.username||'You', msg, Date.now(), true);
+  }
+  input.value = '';
+  input.focus();
+}
+
+function appendChatMessage(from, message, time, isMe){
+  const container = document.getElementById('chat-messages');
+  if(!container) return;
+
+  // Remove "join a room" placeholder if present
+  const placeholder = container.querySelector('div[style*="italic"]');
+  if(placeholder && placeholder.textContent.includes('Join or host')) placeholder.remove();
+
+  const timeStr = time ? new Date(time).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '';
+  const isSystem = from === 'System';
+
+  const el = document.createElement('div');
+  el.className = `chat-msg ${isSystem ? 'system-msg' : isMe ? 'mine' : 'theirs'}`;
+  if(isSystem){
+    el.innerHTML = `<span class="chat-text">${message}</span>`;
+  } else {
+    el.innerHTML = `
+      ${!isMe ? `<div class="chat-from">${from}</div>` : ''}
+      <div class="chat-text">${escapeHTML(message)}</div>
+      <div class="chat-time">${timeStr}</div>`;
+  }
+  container.appendChild(el);
+  // Auto scroll to bottom
+  container.scrollTop = container.scrollHeight;
+}
+
+function escapeHTML(str){
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function updateChatRoomLabel(){
+  const el = document.getElementById('chat-room-label');
+  if(!el) return;
+  if(gameState.onlineRoomCode){
+    el.textContent = `Room: ${gameState.onlineRoomCode}`;
+  } else {
+    el.textContent = 'Not in a room';
+  }
+}
+
+function addSystemChatMsg(msg){
+  appendChatMessage('System', msg, Date.now(), false);
+}
+
+// ─────────────────────────────────────────
+//  RANK SYSTEM
+// ─────────────────────────────────────────
+const RANKS = [
+  { name:'Stone',   emoji:'🪨', cls:'rank-stone',   winsNeeded:0   },
+  { name:'Iron',    emoji:'⚔️', cls:'rank-iron',    winsNeeded:5   },
+  { name:'Bronze',  emoji:'🥉', cls:'rank-bronze',  winsNeeded:15  },
+  { name:'Silver',  emoji:'🥈', cls:'rank-silver',  winsNeeded:30  },
+  { name:'Gold',    emoji:'🥇', cls:'rank-gold',    winsNeeded:50  },
+  { name:'Diamond', emoji:'💎', cls:'rank-diamond', winsNeeded:75  },
+  { name:'Legend',  emoji:'👑', cls:'rank-legend',  winsNeeded:100 },
+];
+
+function getRankData(){
+  const wins = parseInt(localStorage.getItem('aetherion_duel_wins')||'0');
+  const losses = parseInt(localStorage.getItem('aetherion_duel_losses')||'0');
+  let rank = RANKS[0];
+  for(const r of RANKS){ if(wins >= r.winsNeeded) rank = r; else break; }
+  const nextRank = RANKS[RANKS.indexOf(rank)+1] || null;
+  const winsToNext = nextRank ? nextRank.winsNeeded - wins : 0;
+  return { wins, losses, rank, nextRank, winsToNext };
+}
+
+function getRankBadgeHTML(rank, wins){
+  return `<span class="rank-badge ${rank.cls}">${rank.emoji} ${rank.name} · ${wins}W</span>`;
+}
+
+function recordDuelWin(){
+  const prev = getRankData();
+  const wins = parseInt(localStorage.getItem('aetherion_duel_wins')||'0') + 1;
+  localStorage.setItem('aetherion_duel_wins', wins);
+  // Register in leaderboard
+  let lb = JSON.parse(localStorage.getItem('aetherion_leaderboard')||'[]');
+  lb = lb.filter(p => p.name !== (gameState.username||'You'));
+  lb.push({ name: gameState.username||'You', wins });
+  localStorage.setItem('aetherion_leaderboard', JSON.stringify(lb));
+  const curr = getRankData();
+  updateMenuHud();
+  if(curr.rank.name !== prev.rank.name) showRankUpPopup(curr.rank);
+  saveGame();
+}
+
+function recordDuelLoss(){
+  const losses = parseInt(localStorage.getItem('aetherion_duel_losses')||'0') + 1;
+  localStorage.setItem('aetherion_duel_losses', losses);
+  saveGame();
+}
+
+function showRankUpPopup(rank){
+  const popup = document.createElement('div');
+  popup.className = 'rank-up-popup';
+  popup.innerHTML = `
+    <div style="font-size:3rem;margin-bottom:8px;">${rank.emoji}</div>
+    <div style="font-family:'Cinzel Decorative',serif;font-size:.7rem;color:rgba(200,150,255,.7);margin-bottom:4px;letter-spacing:.1em;">RANK UP!</div>
+    <div style="font-family:'Cinzel Decorative',serif;font-size:1.4rem;color:#fff;margin-bottom:6px;">${rank.name}</div>
+    <div style="font-size:.65rem;color:rgba(255,255,255,.5);">You've reached a new rank!</div>
+    <button onclick="this.parentElement.remove()" class="btn-sm" style="margin-top:16px;width:100%;">Continue</button>`;
+  document.body.appendChild(popup);
+  setTimeout(()=>{ if(popup.parentElement) popup.remove(); }, 5000);
+}
+
+function openLeaderboard(){
+  const { wins, losses, rank, nextRank, winsToNext } = getRankData();
+
+  // Load all real registered players from localStorage
+  let allPlayers = JSON.parse(localStorage.getItem('aetherion_leaderboard')||'[]');
+
+  // Make sure current player is registered
+  const myEntry = { name: gameState.username||'You', wins, rank, isMe:true };
+  allPlayers = allPlayers.filter(p => p.name !== myEntry.name);
+  allPlayers.push(myEntry);
+
+  // Save updated leaderboard
+  localStorage.setItem('aetherion_leaderboard', JSON.stringify(
+    allPlayers.map(p => ({ name: p.name, wins: p.wins }))
+  ));
+
+  // Sort by wins
+  allPlayers = allPlayers
+    .map(p => {
+      let r = RANKS[0];
+      for(const rk of RANKS){ if(p.wins >= rk.winsNeeded) r = rk; else break; }
+      return { ...p, rank: r };
+    })
+    .sort((a,b) => b.wins - a.wins);
+
+  const medals = ['🥇','🥈','🥉'];
+  const body = `
+    <div style="margin-bottom:14px;">
+      <div style="text-align:center;margin-bottom:12px;">
+        <div style="font-size:2.5rem;">${rank.emoji}</div>
+        <div style="font-family:'Cinzel',serif;font-size:.9rem;color:var(--gold);">${rank.name}</div>
+        <div style="font-size:.62rem;color:var(--dim);margin-top:4px;">${wins} Wins · ${losses} Losses</div>
+        ${nextRank
+          ? `<div style="font-size:.58rem;color:var(--dim);margin-top:3px;">${winsToNext} more wins to reach ${nextRank.emoji} ${nextRank.name}</div>
+             <div style="height:5px;background:rgba(0,0,0,.5);border-radius:3px;margin-top:6px;max-width:200px;margin-left:auto;margin-right:auto;">
+               <div style="height:100%;background:linear-gradient(90deg,var(--gold2),var(--gold));border-radius:3px;width:${Math.round((wins-rank.winsNeeded)/(nextRank.winsNeeded-rank.winsNeeded)*100)}%;"></div>
+             </div>`
+          : `<div style="font-size:.58rem;color:#c000c0;margin-top:3px;">👑 Maximum rank achieved!</div>`}
+      </div>
+      <div style="font-family:'Cinzel',serif;font-size:.6rem;color:var(--gold);margin-bottom:8px;border-bottom:1px solid var(--border);padding-bottom:6px;">🏆 Leaderboard</div>
+      ${allPlayers.length > 1
+        ? allPlayers.map((p,i)=>`
+          <div class="leaderboard-row" style="${p.isMe?'border-color:rgba(200,151,58,.4);background:rgba(200,151,58,.06);':''}">
+            <div class="lb-pos">${['🥇','🥈','🥉'][i]||`#${i+1}`}</div>
+            <div class="lb-name">${p.isMe?`<b style="color:var(--gold);">${p.name} (You)</b>`:p.name}</div>
+            <span class="rank-badge ${p.rank.cls}" style="font-size:.5rem;padding:2px 7px;">${p.rank.emoji} ${p.rank.name}</span>
+            <div class="lb-wins">${p.wins}W</div>
+          </div>`).join('')
+        : `<div style="color:var(--dim);font-size:.65rem;font-style:italic;padding:12px 0;text-align:center;">
+             No other players yet — win duels to climb the ranks!<br>
+             <span style="font-size:.55rem;">Other players will appear here when they play.</span>
+           </div>`}
+    </div>`;
+  showModal('🏆 Ranks & Leaderboard', body, [{label:'Close', cls:'btn-ghost', cb:closeModal}]);
 }
 
 // ─────────────────────────────────────────
@@ -4284,8 +5312,16 @@ function randomMonsterForLevel(lvl){
   const avail=MONSTERS.filter(m=>m.levelRequirement<=Math.max(1,lvl));
   if(!avail.length)return{...MONSTERS[0]};
   const m={...avail[Math.floor(Math.random()*avail.length)]};
-  const scale=1+(lvl-m.levelRequirement)*.05;
-  m.hp=Math.floor(m.hp*scale);m.attack=Math.floor(m.attack*scale);m.defense=Math.floor(m.defense*scale);m.maxHp=m.hp;
+  // +10% harder per level above monster's base level, capped at boss level scaling
+  const levelsAbove = Math.max(0, lvl - m.levelRequirement);
+  const scale = 1 + (levelsAbove * 0.10); // 10% per level
+  m.hp      = Math.floor(m.hp      * scale);
+  m.attack  = Math.floor(m.attack  * scale);
+  m.defense = Math.floor(m.defense * scale);
+  m.magic   = Math.floor((m.magic||0) * scale);
+  m.maxHp   = m.hp;
+  m.xp      = Math.floor((m.xp||10)  * (1 + levelsAbove * 0.05));
+  m.gold    = Math.floor((m.gold||5)  * (1 + levelsAbove * 0.05));
   return m;
 }
 
@@ -4327,8 +5363,25 @@ function checkBossPhase(){
   if(newPhase!==gameState.bossPhase){
     gameState.bossPhase=newPhase;
     const ph=phases[newPhase];
-    if(ph)spLog(`🔮 <b>PHASE: ${ph.name}!</b> ${ph.desc}`,'d');
+    if(ph) spLog(`🔮 <b>PHASE: ${ph.name}!</b> ${ph.desc}`,'d');
+    // Claude special dialogs on phase change
+    if(en.id==='claude_oracle' && en.dialogs){
+      const dialogSet = newPhase===1 ? en.dialogs.phase2 : newPhase===2 ? en.dialogs.phase3 : null;
+      if(dialogSet){
+        const line = dialogSet[Math.floor(Math.random()*dialogSet.length)];
+        setTimeout(()=>spLog(`🤖 <b>Claude:</b> "${line}"`,'sk'), 400);
+      }
+    }
   }
+}
+
+// ── Show Claude win/lose dialog ──
+function claudeEndDialog(won){
+  const claude = BOSSES.find(b=>b.id==='claude_oracle');
+  if(!claude) return;
+  const set = won ? claude.dialogs.onLose : claude.dialogs.onWin;
+  const line = set[Math.floor(Math.random()*set.length)];
+  spLog(`🤖 <b>Claude:</b> "${line}"`,'sk');
 }
 
 </script>
