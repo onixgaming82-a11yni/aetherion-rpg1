@@ -23,12 +23,13 @@
 //    Deploy as-is — PORT env var is set automatically
 // ============================================================
 
-const express  = require('express');
-const http     = require('http');
+const express   = require('express');
+const http      = require('http');
 const { Server } = require('socket.io');
-const path     = require('path');
-const crypto   = require('crypto');
-const os       = require('os');
+const path      = require('path');
+const crypto    = require('crypto');
+const os        = require('os');
+const mongoose  = require('mongoose');
 
 const app    = express();
 const server = http.createServer(app);
@@ -74,12 +75,9 @@ const onlinePlayers = new Map(); // socket.id → player info (global lobby)
 const trades        = new Map(); // tradeId → trade object
 
 // ── Account system ────────────────────────────────────────
-// accounts[username] = { username, password, save, createdAt, lastLogin }
-const accounts = new Map();
 const DEFAULT_PASSWORD = '12345';
 
 function hashPassword(pw) {
-  // Simple hash — in production use bcrypt but this is fine for a game
   let hash = 0;
   for(let i = 0; i < pw.length; i++){
     hash = ((hash << 5) - hash) + pw.charCodeAt(i);
@@ -87,6 +85,61 @@ function hashPassword(pw) {
   }
   return hash.toString(36);
 }
+
+// ── MongoDB Schema ─────────────────────────────────────────
+const AccountSchema = new mongoose.Schema({
+  username:  { type: String, required: true, unique: true },
+  uname:     { type: String, required: true, unique: true }, // lowercase key
+  password:  { type: String, required: true },
+  save:      { type: String, default: null }, // JSON string of game save
+  createdAt: { type: Number, default: Date.now },
+  lastLogin: { type: Number, default: Date.now },
+});
+const Account = mongoose.model('Account', AccountSchema);
+
+// ── Connect to MongoDB ─────────────────────────────────────
+const MONGO_URI = process.env.MONGO_URI || '';
+
+async function connectDB() {
+  if (!MONGO_URI) {
+    console.warn('[DB] No MONGO_URI set — accounts will not persist between restarts!');
+    console.warn('[DB] Set MONGO_URI in Render environment variables to enable persistence.');
+    return false;
+  }
+  try {
+    await mongoose.connect(MONGO_URI);
+    console.log('[DB] ✅ Connected to MongoDB Atlas — accounts will persist forever!');
+    return true;
+  } catch(e) {
+    console.error('[DB] ❌ MongoDB connection failed:', e.message);
+    return false;
+  }
+}
+
+// ── DB helper functions ────────────────────────────────────
+async function dbGetAccount(uname) {
+  if (!MONGO_URI) return null;
+  try { return await Account.findOne({ uname }); } catch(e) { return null; }
+}
+
+async function dbSaveAccount(data) {
+  if (!MONGO_URI) return;
+  try {
+    await Account.findOneAndUpdate(
+      { uname: data.uname },
+      data,
+      { upsert: true, new: true }
+    );
+  } catch(e) { console.warn('[DB] Save error:', e.message); }
+}
+
+async function dbDeleteAccount(uname) {
+  if (!MONGO_URI) return;
+  try { await Account.deleteOne({ uname }); } catch(e) {}
+}
+
+// ── In-memory fallback (used when no MongoDB) ──────────────
+const accounts = new Map();
 
 // ─────────────────────────────────────────────────────────
 //  HELPERS
@@ -499,51 +552,50 @@ io.on('connection', (socket) => {
 
   // ── ACCOUNT: REGISTER ────────────────────────────────
   // Payload: { username, password? }
-  socket.on('account:register', ({ username, password } = {}) => {
+  // ── ACCOUNT: REGISTER ────────────────────────────────
+  socket.on('account:register', async ({ username, password } = {}) => {
     if (!username?.trim()) { socket.emit('account:error', { msg: 'Username required' }); return; }
 
     let base  = username.trim();
     let uname = base.toLowerCase();
 
-    // If taken, find next available number (onix → onix2 → onix3 etc)
-    if (accounts.has(uname)) {
+    // Check if taken (MongoDB first, fallback to memory)
+    const existsDB  = await dbGetAccount(uname);
+    const existsMem = accounts.has(uname);
+
+    if (existsDB || existsMem) {
       let counter = 2;
-      while (accounts.has((base + counter).toLowerCase())) counter++;
+      while ((await dbGetAccount((base+counter).toLowerCase())) || accounts.has((base+counter).toLowerCase())) counter++;
       base  = base + counter;
       uname = base.toLowerCase();
-      // Tell the client the new auto-assigned name
       socket.emit('account:renamed', { suggestedName: base });
     }
 
-    const pw = password?.trim() || DEFAULT_PASSWORD;
-    accounts.set(uname, {
-      username:  base,
-      password:  hashPassword(pw),
-      save:      null,
-      createdAt: Date.now(),
-      lastLogin: Date.now(),
-    });
+    const pw   = password?.trim() || DEFAULT_PASSWORD;
+    const data = { username: base, uname, password: hashPassword(pw), save: null, createdAt: Date.now(), lastLogin: Date.now() };
+
+    // Save to MongoDB + memory
+    await dbSaveAccount(data);
+    accounts.set(uname, data);
+
     socket.emit('account:registered', { username: base, isNew: true });
     console.log(`[ACCOUNT] Registered: ${base}`);
   });
 
   // ── ACCOUNT: LOGIN ────────────────────────────────────
-  // Payload: { username, password }
-  socket.on('account:login', ({ username, password } = {}) => {
+  socket.on('account:login', async ({ username, password } = {}) => {
     if (!username?.trim()) { socket.emit('account:error', { msg: 'Username required' }); return; }
     const uname = username.trim().toLowerCase();
-    const acc   = accounts.get(uname);
+
+    // Try MongoDB first, then memory fallback
+    let acc = await dbGetAccount(uname) || accounts.get(uname);
 
     if (!acc) {
-      // Auto-create account if first time
-      const pw = password?.trim() || DEFAULT_PASSWORD;
-      accounts.set(uname, {
-        username:  username.trim(),
-        password:  hashPassword(pw),
-        save:      null,
-        createdAt: Date.now(),
-        lastLogin: Date.now(),
-      });
+      // New account — auto create
+      const pw   = password?.trim() || DEFAULT_PASSWORD;
+      const data = { username: username.trim(), uname, password: hashPassword(pw), save: null, createdAt: Date.now(), lastLogin: Date.now() };
+      await dbSaveAccount(data);
+      accounts.set(uname, data);
       socket.emit('account:loggedin', { username: username.trim(), save: null, isNew: true });
       console.log(`[ACCOUNT] Auto-created: ${username}`);
       return;
@@ -554,44 +606,59 @@ io.on('connection', (socket) => {
       socket.emit('account:error', { msg: 'Wrong password! Try again.' });
       return;
     }
+
+    // Update last login
     acc.lastLogin = Date.now();
+    await dbSaveAccount({ ...acc, uname });
+    accounts.set(uname, acc);
+
     socket.emit('account:loggedin', { username: acc.username, save: acc.save, isNew: false });
     console.log(`[ACCOUNT] Login: ${username}`);
   });
 
   // ── ACCOUNT: SAVE GAME ────────────────────────────────
-  // Payload: { username, password, save }
-  socket.on('account:save', ({ username, password, save } = {}) => {
+  socket.on('account:save', async ({ username, password, save } = {}) => {
     if (!username?.trim()) return;
     const uname = username.trim().toLowerCase();
-    const acc   = accounts.get(uname);
+    let acc = await dbGetAccount(uname) || accounts.get(uname);
     if (!acc) return;
     const pw = password?.trim() || DEFAULT_PASSWORD;
     if (acc.password !== hashPassword(pw)) return;
     acc.save = save;
+    await dbSaveAccount({ ...acc, uname });
+    accounts.set(uname, acc);
     socket.emit('account:saved', { ok: true });
   });
 
   // ── ACCOUNT: CHANGE PASSWORD ──────────────────────────
-  // Payload: { username, oldPassword, newPassword }
-  socket.on('account:changepass', ({ username, oldPassword, newPassword } = {}) => {
+  socket.on('account:changepass', async ({ username, oldPassword, newPassword } = {}) => {
     if (!username?.trim()) { socket.emit('account:error', { msg: 'Not logged in' }); return; }
     const uname = username.trim().toLowerCase();
-    const acc   = accounts.get(uname);
+    let acc = await dbGetAccount(uname) || accounts.get(uname);
     if (!acc) { socket.emit('account:error', { msg: 'Account not found' }); return; }
     const oldPw = oldPassword?.trim() || DEFAULT_PASSWORD;
-    if (acc.password !== hashPassword(oldPw)) {
-      socket.emit('account:error', { msg: 'Current password is wrong!' });
-      return;
-    }
+    if (acc.password !== hashPassword(oldPw)) { socket.emit('account:error', { msg: 'Current password is wrong!' }); return; }
     const newPw = newPassword?.trim();
-    if (!newPw || newPw.length < 3) {
-      socket.emit('account:error', { msg: 'New password must be at least 3 characters' });
-      return;
-    }
+    if (!newPw || newPw.length < 3) { socket.emit('account:error', { msg: 'New password must be at least 3 characters' }); return; }
     acc.password = hashPassword(newPw);
+    await dbSaveAccount({ ...acc, uname });
+    accounts.set(uname, acc);
     socket.emit('account:passchanged', { ok: true });
     console.log(`[ACCOUNT] Password changed: ${username}`);
+  });
+
+  // ── ACCOUNT: DELETE ───────────────────────────────────
+  socket.on('account:delete', async ({ username, password } = {}) => {
+    if (!username?.trim()) { socket.emit('account:error', { msg: 'Not logged in' }); return; }
+    const uname = username.trim().toLowerCase();
+    let acc = await dbGetAccount(uname) || accounts.get(uname);
+    if (!acc) { socket.emit('account:error', { msg: 'Account not found' }); return; }
+    const pw = password?.trim() || DEFAULT_PASSWORD;
+    if (acc.password !== hashPassword(pw)) { socket.emit('account:error', { msg: 'Wrong password! Cannot delete account.' }); return; }
+    await dbDeleteAccount(uname);
+    accounts.delete(uname);
+    socket.emit('account:deleted', { ok: true });
+    console.log(`[ACCOUNT] Deleted: ${username}`);
   });
 
   // ── DISCONNECT ────────────────────────────────────────
@@ -638,8 +705,10 @@ setInterval(() => {
 const PORT    = process.env.PORT || 3000;
 const localIP = getLocalIP();
 
-server.listen(PORT, () => {
-  console.log(`
+// Connect to MongoDB then start server
+connectDB().then(() => {
+  server.listen(PORT, () => {
+    console.log(`
 ╔══════════════════════════════════════════════╗
 ║        AETHERION — Multiplayer Server        ║
 ╠══════════════════════════════════════════════╣
@@ -654,4 +723,5 @@ server.listen(PORT, () => {
 ║                                              ║
 ╚══════════════════════════════════════════════╝
 `);
+  });
 });
