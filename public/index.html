@@ -1765,38 +1765,107 @@ input, textarea { font-size: 16px !important; } /* Prevents iOS zoom on focus */
 //  EMBEDDED MONSTER DATA (inline for single-file)
 // ─────────────────────────────────────────
 const MONSTERS=[
-  {id:'goblin_grunt',name:'Goblin Grunt',emoji:'👺',hp:20,attack:5,defense:3,magic:0,speed:6,ability:'Quick Jab – Attacks twice',levelRequirement:1,xp:8,gold:5,drops:[{item:'Rusty Dagger',rarity:'Common'},{item:'Gold',amount:5,rarity:'Common'}]},
-  {id:'cave_bat',name:'Cave Bat',emoji:'🦇',hp:15,attack:3,defense:2,magic:0,speed:10,ability:'Sonic Scream – Low damage to all',levelRequirement:1,xp:5,gold:2,drops:[{item:'Bat Wing',rarity:'Common'}]},
-  {id:'shadow_rat',name:'Shadow Rat',emoji:'🐀',hp:12,attack:3,defense:1,magic:0,speed:12,ability:'Nibble – Chance to poison',levelRequirement:1,xp:4,gold:2,drops:[{item:'Rat Tail',rarity:'Common'}]},
-  {id:'fire_imp',name:'Fire Imp',emoji:'😈',hp:22,attack:7,defense:3,magic:5,speed:7,ability:'Flame Flick – Fire dmg + burn',levelRequirement:3,xp:10,gold:5,drops:[{item:'Charcoal',rarity:'Common'},{item:'Fire Shard',rarity:'Common'}]},
-  {id:'ice_sprite',name:'Ice Sprite',emoji:'❄️',hp:18,attack:4,defense:2,magic:8,speed:8,ability:'Frost Spark – Slows enemy',levelRequirement:3,xp:9,gold:6,drops:[{item:'Frost Crystal',rarity:'Rare'}]},
-  {id:'bandit_thief',name:'Bandit Thief',emoji:'🗡️',hp:28,attack:7,defense:5,magic:0,speed:8,ability:'Steal – Steals an item',levelRequirement:4,xp:14,gold:8,drops:[{item:'Leather Gloves',rarity:'Common'}]},
-  {id:'dark_wolf',name:'Dark Wolf',emoji:'🐺',hp:35,attack:9,defense:6,magic:0,speed:10,ability:'Fang Bite – Chance to bleed',levelRequirement:5,xp:14,gold:10,drops:[{item:'Wolf Pelt',rarity:'Rare'}]},
-  {id:'troll_brute',name:'Troll Brute',emoji:'👹',hp:50,attack:12,defense:10,magic:0,speed:3,ability:'Club Smash – Chance to stun',levelRequirement:6,xp:20,gold:15,drops:[{item:'Troll Tooth',rarity:'Rare'}]},
-  {id:'swamp_hydra',name:'Swamp Hydra',emoji:'🐉',hp:60,attack:12,defense:8,magic:10,speed:6,ability:'Poison Bite – Poisons enemy',levelRequirement:7,xp:25,gold:20,drops:[{item:'Hydra Scale',rarity:'Epic'}]},
-  {id:'stone_golem',name:'Stone Golem',emoji:'🗿',hp:60,attack:14,defense:18,magic:0,speed:2,ability:'Rock Slam – Heavy attack',levelRequirement:8,xp:24,gold:15,drops:[{item:'Stone Fragment',rarity:'Rare'}]},
-  {id:'fire_drake',name:'Fire Drake',emoji:'🔥',hp:45,attack:15,defense:8,magic:12,speed:10,ability:'Fire Breath – High fire magic',levelRequirement:8,xp:26,gold:20,drops:[{item:'Drake Scale',rarity:'Epic'}]},
-  {id:'dark_assassin',name:'Dark Assassin',emoji:'🥷',hp:38,attack:16,defense:6,magic:5,speed:16,ability:'Shadow Strike – High crit',levelRequirement:10,xp:30,gold:22,drops:[{item:'Assassin Dagger',rarity:'Epic'}]},
-  {id:'shadow_knight',name:'Shadow Knight',emoji:'⚔️',hp:70,attack:20,defense:14,magic:8,speed:8,ability:'Dark Slash – Heavy attack',levelRequirement:13,xp:48,gold:35,drops:[{item:'Dark Blade',rarity:'Epic'}]},
-  {id:'flame_drake',name:'Flame Drake',emoji:'🐲',hp:60,attack:18,defense:10,magic:14,speed:9,ability:'Fire Breath – Strong fire',levelRequirement:12,xp:42,gold:30,drops:[{item:'Flame Scale',rarity:'Epic'}]},
-  {id:'blaze_phoenix',name:'Blaze Phoenix',emoji:'🦅',hp:70,attack:18,defense:12,magic:20,speed:15,ability:'Phoenix Flame – Massive fire',levelRequirement:15,xp:62,gold:50,drops:[{item:'Phoenix Feather',rarity:'Mythic'}]},
-  {id:'ancient_dragon',name:'Ancient Dragon',emoji:'🐲',hp:200,attack:30,defense:22,magic:25,speed:12,ability:'Dragon Fury – Massive damage',levelRequirement:22,xp:130,gold:120,drops:[{item:'Dragon Heart',rarity:'Mythic'}]},
-  {id:'void_dragon_king',name:'Void Dragon King',emoji:'👑',hp:300,attack:42,defense:32,magic:35,speed:16,ability:'Void Apocalypse – Massive void',levelRequirement:28,xp:200,gold:200,drops:[{item:'Void King Scale',rarity:'Mythic'}]},
-  {id:'inferno_dragon',name:'Inferno Dragon',emoji:'🔥',hp:230,attack:35,defense:26,magic:28,speed:14,ability:'Inferno Storm – Massive fire',levelRequirement:24,xp:155,gold:150,drops:[{item:'Inferno Scale',rarity:'Mythic'}]},
-  {id:'thunder_golem',name:'Thunder Golem',emoji:'⚡',hp:90,attack:20,defense:20,magic:10,speed:4,ability:'Electric Slam – Lightning dmg',levelRequirement:15,xp:58,gold:45,drops:[{item:'Thunder Core',rarity:'Epic'}]},
-  {id:'necro_mage',name:'Necro Mage',emoji:'🧙',hp:35,attack:8,defense:5,magic:18,speed:10,ability:'Dark Bolt – Shadow magic',levelRequirement:10,xp:30,gold:22,drops:[{item:'Dark Crystal',rarity:'Epic'}]},
+  {id:'goblin_grunt',name:'Goblin Grunt',emoji:'👺',hp:20,attack:5,defense:3,magic:0,speed:6,ability:'Quick Jab – Attacks twice',levelRequirement:1,xp:4,gold:1,drops:[{item:'Rusty Dagger',rarity:'Common'},{item:'Gold',amount:5,rarity:'Common'}]},
+  {id:'cave_bat',name:'Cave Bat',emoji:'🦇',hp:15,attack:3,defense:2,magic:0,speed:10,ability:'Sonic Scream – Low damage to all',levelRequirement:1,xp:3,gold:1,drops:[{item:'Bat Wing',rarity:'Common'}]},
+  {id:'shadow_rat',name:'Shadow Rat',emoji:'🐀',hp:12,attack:3,defense:1,magic:0,speed:12,ability:'Nibble – Chance to poison',levelRequirement:1,xp:2,gold:1,drops:[{item:'Rat Tail',rarity:'Common'}]},
+  {id:'fire_imp',name:'Fire Imp',emoji:'😈',hp:22,attack:7,defense:3,magic:5,speed:7,ability:'Flame Flick – Fire dmg + burn',levelRequirement:3,xp:6,gold:1,drops:[{item:'Charcoal',rarity:'Common'},{item:'Fire Shard',rarity:'Common'}]},
+  {id:'ice_sprite',name:'Ice Sprite',emoji:'❄️',hp:18,attack:4,defense:2,magic:8,speed:8,ability:'Frost Spark – Slows enemy',levelRequirement:3,xp:5,gold:2,drops:[{item:'Frost Crystal',rarity:'Rare'}]},
+  {id:'bandit_thief',name:'Bandit Thief',emoji:'🗡️',hp:28,attack:7,defense:5,magic:0,speed:8,ability:'Steal – Steals an item',levelRequirement:4,xp:8,gold:2,drops:[{item:'Leather Gloves',rarity:'Common'}]},
+  {id:'dark_wolf',name:'Dark Wolf',emoji:'🐺',hp:35,attack:9,defense:6,magic:0,speed:10,ability:'Fang Bite – Chance to bleed',levelRequirement:5,xp:8,gold:3,drops:[{item:'Wolf Pelt',rarity:'Rare'}]},
+  {id:'troll_brute',name:'Troll Brute',emoji:'👹',hp:50,attack:12,defense:10,magic:0,speed:3,ability:'Club Smash – Chance to stun',levelRequirement:6,xp:12,gold:5,drops:[{item:'Troll Tooth',rarity:'Rare'}]},
+  {id:'swamp_hydra',name:'Swamp Hydra',emoji:'🐉',hp:60,attack:12,defense:8,magic:10,speed:6,ability:'Poison Bite – Poisons enemy',levelRequirement:7,xp:15,gold:6,drops:[{item:'Hydra Scale',rarity:'Epic'}]},
+  {id:'stone_golem',name:'Stone Golem',emoji:'🗿',hp:60,attack:14,defense:18,magic:0,speed:2,ability:'Rock Slam – Heavy attack',levelRequirement:8,xp:14,gold:5,drops:[{item:'Stone Fragment',rarity:'Rare'}]},
+  {id:'fire_drake',name:'Fire Drake',emoji:'🔥',hp:45,attack:15,defense:8,magic:12,speed:10,ability:'Fire Breath – High fire magic',levelRequirement:8,xp:15,gold:6,drops:[{item:'Drake Scale',rarity:'Epic'}]},
+  {id:'dark_assassin',name:'Dark Assassin',emoji:'🥷',hp:38,attack:16,defense:6,magic:5,speed:16,ability:'Shadow Strike – High crit',levelRequirement:10,xp:18,gold:7,drops:[{item:'Assassin Dagger',rarity:'Epic'}]},
+  {id:'shadow_knight',name:'Shadow Knight',emoji:'⚔️',hp:70,attack:20,defense:14,magic:8,speed:8,ability:'Dark Slash – Heavy attack',levelRequirement:13,xp:28,gold:11,drops:[{item:'Dark Blade',rarity:'Epic'}]},
+  {id:'flame_drake',name:'Flame Drake',emoji:'🐲',hp:60,attack:18,defense:10,magic:14,speed:9,ability:'Fire Breath – Strong fire',levelRequirement:12,xp:25,gold:10,drops:[{item:'Flame Scale',rarity:'Epic'}]},
+  {id:'blaze_phoenix',name:'Blaze Phoenix',emoji:'🦅',hp:70,attack:18,defense:12,magic:20,speed:15,ability:'Phoenix Flame – Massive fire',levelRequirement:15,xp:37,gold:16,drops:[{item:'Phoenix Feather',rarity:'Mythic'}]},
+  {id:'ancient_dragon',name:'Ancient Dragon',emoji:'🐲',hp:200,attack:30,defense:22,magic:25,speed:12,ability:'Dragon Fury – Massive damage',levelRequirement:22,xp:78,gold:40,drops:[{item:'Dragon Heart',rarity:'Mythic'}]},
+  {id:'void_dragon_king',name:'Void Dragon King',emoji:'👑',hp:300,attack:42,defense:32,magic:35,speed:16,ability:'Void Apocalypse – Massive void',levelRequirement:28,xp:120,gold:66,drops:[{item:'Void King Scale',rarity:'Mythic'}]},
+  {id:'inferno_dragon',name:'Inferno Dragon',emoji:'🔥',hp:230,attack:35,defense:26,magic:28,speed:14,ability:'Inferno Storm – Massive fire',levelRequirement:24,xp:93,gold:50,drops:[{item:'Inferno Scale',rarity:'Mythic'}]},
+  {id:'thunder_golem',name:'Thunder Golem',emoji:'⚡',hp:90,attack:20,defense:20,magic:10,speed:4,ability:'Electric Slam – Lightning dmg',levelRequirement:15,xp:34,gold:15,drops:[{item:'Thunder Core',rarity:'Epic'}]},
+  {id:'necro_mage',name:'Necro Mage',emoji:'🧙',hp:35,attack:8,defense:5,magic:18,speed:10,ability:'Dark Bolt – Shadow magic',levelRequirement:10,xp:18,gold:7,drops:[{item:'Dark Crystal',rarity:'Epic'}]},
+  {id:'venom_spider',name:'Venom Spider',emoji:'🕷️',hp:18,attack:6,defense:3,magic:4,speed:11,ability:'Poison Bite – Poisons for 3 turns',levelRequirement:2,xp:5,gold:2,drops:[{item:'Spider Silk',rarity:'Common'}]},
+  {id:'toxic_frog',name:'Toxic Frog',emoji:'🐸',hp:22,attack:5,defense:4,magic:7,speed:9,ability:'Acid Spit – Lowers enemy defense',levelRequirement:3,xp:6,gold:2,drops:[{item:'Toxic Gland',rarity:'Common'}]},
+  {id:'desert_scorpion',name:'Desert Scorpion',emoji:'🦂',hp:30,attack:8,defense:6,magic:5,speed:10,ability:'Venomous Sting – Poisons and slows',levelRequirement:5,xp:9,gold:3,drops:[{item:'Scorpion Claw',rarity:'Rare'}]},
+  {id:'swamp_croc',name:'Swamp Croc',emoji:'🐊',hp:55,attack:13,defense:11,magic:0,speed:5,ability:'Death Roll – Stuns and bleeds',levelRequirement:7,xp:14,gold:5,drops:[{item:'Croc Scale',rarity:'Rare'}]},
+  {id:'cursed_lion',name:'Cursed Lion',emoji:'🦁',hp:50,attack:14,defense:9,magic:8,speed:12,ability:'Cursed Roar – Lowers all enemy stats',levelRequirement:9,xp:18,gold:5,drops:[{item:'Lion Mane',rarity:'Rare'}]},
+  {id:'iron_elephant',name:'Iron Elephant',emoji:'🐘',hp:80,attack:18,defense:20,magic:2,speed:3,ability:'Stampede – Massive physical damage',levelRequirement:11,xp:25,gold:7,drops:[{item:'Iron Tusk',rarity:'Epic'}]},
+  {id:'shadow_shark',name:'Shadow Shark',emoji:'🦈',hp:60,attack:17,defense:10,magic:6,speed:15,ability:'Feeding Frenzy – Attacks 3 times',levelRequirement:13,xp:30,gold:8,drops:[{item:'Shadow Fin',rarity:'Epic'}]},
+  {id:'death_moth',name:'Death Moth',emoji:'🦋',hp:35,attack:9,defense:5,magic:14,speed:16,ability:'Sleep Dust – Puts enemy to sleep 2 turns',levelRequirement:8,xp:16,gold:4,drops:[{item:'Moth Wing',rarity:'Rare'}]},
+  {id:'abyss_stalker',name:'Abyss Stalker',emoji:'🐙',hp:65,attack:14,defense:12,magic:16,speed:8,ability:'Mind Crush – Reduces enemy magic by 8',levelRequirement:14,xp:32,gold:9,drops:[{item:'Abyss Ink',rarity:'Epic'}]},
+  {id:'iron_crab',name:'Iron Crab',emoji:'🦀',hp:70,attack:12,defense:22,magic:0,speed:4,ability:'Shell Counter – High defense + counters',levelRequirement:6,xp:12,gold:4,drops:[{item:'Crab Shell',rarity:'Rare'}]},
+  {id:'plague_bee',name:'Plague Bee',emoji:'🐝',hp:20,attack:7,defense:3,magic:6,speed:14,ability:'Swarm – Attacks twice + poisons',levelRequirement:4,xp:8,gold:2,drops:[{item:'Bee Stinger',rarity:'Common'}]},
+  {id:'lava_lizard',name:'Lava Lizard',emoji:'🦎',hp:45,attack:13,defense:10,magic:10,speed:9,ability:'Molten Scales – Burns attacker on hit',levelRequirement:10,xp:20,gold:5,drops:[{item:'Lava Scale',rarity:'Epic'}]},
+  {id:'frost_werewolf',name:'Frost Werewolf',emoji:'🐺',hp:70,attack:18,defense:12,magic:12,speed:13,ability:'Blizzard Howl – Freezes and damages',levelRequirement:12,xp:28,gold:7,drops:[{item:'Frost Pelt',rarity:'Epic'}]},
+  {id:'storm_hawk',name:'Storm Hawk',emoji:'🦅',hp:45,attack:15,defense:8,magic:13,speed:18,ability:'Lightning Dive – Speed + lightning damage',levelRequirement:9,xp:17,gold:5,drops:[{item:'Storm Feather',rarity:'Rare'}]},
+  {id:'chaos_bear',name:'Chaos Bear',emoji:'🐻',hp:90,attack:20,defense:15,magic:5,speed:7,ability:'Berserker Rage – Attack doubles below 50% HP',levelRequirement:15,xp:35,gold:9,drops:[{item:'Chaos Claw',rarity:'Epic'}]},
+  {id:'trickster_fox',name:'Trickster Fox',emoji:'🦊',hp:38,attack:12,defense:7,magic:13,speed:17,ability:'Illusion – Dodges next attack automatically',levelRequirement:7,xp:14,gold:4,drops:[{item:'Fox Tail',rarity:'Rare'}]},
+  {id:'nightmare_horse',name:'Nightmare Horse',emoji:'🐴',hp:75,attack:19,defense:13,magic:10,speed:14,ability:'Dark Trample – Fear + massive damage',levelRequirement:11,xp:26,gold:7,drops:[{item:'Nightmare Mane',rarity:'Epic'}]},
+  {id:'deep_terror',name:'Deep Terror',emoji:'🦑',hp:68,attack:15,defense:11,magic:15,speed:10,ability:'Ink Cloud – Blinds enemy for 2 turns',levelRequirement:17,xp:38,gold:10,drops:[{item:'Terror Ink',rarity:'Epic'}]},
+  {id:'cursed_dolphin',name:'Cursed Dolphin',emoji:'🐬',hp:55,attack:14,defense:9,magic:14,speed:16,ability:'Sonic Wave – Hits all party members',levelRequirement:13,xp:29,gold:8,drops:[{item:'Cursed Fin',rarity:'Rare'}]},
+  {id:'void_whale',name:'Void Whale',emoji:'🐋',hp:120,attack:22,defense:18,magic:20,speed:6,ability:'Void Crash – Massive area damage',levelRequirement:16,xp:40,gold:11,drops:[{item:'Void Core',rarity:'Epic'}]},
 ];
 
 const BOSSES=[
-  {id:'emberlord_volkar',name:'Emberlord Volkar',emoji:'🐉',hp:600,maxHp:600,attack:55,defense:35,magic:45,speed:12,ability:'Inferno Cataclysm',abilityDesc:'Massive fire blast, burns all for 3 turns',levelRequirement:32,xp:500,gold:800,drops:[{item:"Volkar's Flame Core",rarity:'Mythic'},{item:'Legendary Fire Sword',rarity:'Mythic'}],phases:[{threshold:1.0,name:'Smoldering Rage',desc:'Volkar awakens, lava dripping from his scales.',mult:1},{threshold:.6,name:'Blazing Wrath',desc:"Volkar's flames intensify — the air shimmers!",mult:1.3},{threshold:.3,name:'Inferno Ascension',desc:'Volkar ascends! His attacks become catastrophic!',mult:1.6}]},
-  {id:'glacius',name:'Glacius the Frozen Tyrant',emoji:'❄️',hp:650,maxHp:650,attack:50,defense:45,magic:48,speed:10,ability:'Absolute Zero',abilityDesc:'Freezes all enemies 1 turn + heavy ice damage',levelRequirement:34,xp:550,gold:900,drops:[{item:'Tyrant Ice Crown',rarity:'Mythic'},{item:'Frozen Dragon Scale Armor',rarity:'Mythic'}],phases:[{threshold:1.0,name:'Arctic Presence',desc:'Glacius surveys you with cold, ancient eyes.',mult:1},{threshold:.65,name:'Blizzard Form',desc:'Glacius encases himself in a shell of black ice!',mult:1.4},{threshold:.25,name:'Absolute Dominion',desc:'The temperature drops to impossible lows!',mult:1.8}]},
-  {id:'zythera',name:'Zythera the Storm Queen',emoji:'⚡',hp:620,maxHp:620,attack:48,defense:32,magic:55,speed:20,ability:'Tempest Fury',abilityDesc:'Lightning storms strike random enemies multiple times',levelRequirement:35,xp:580,gold:1000,drops:[{item:'Storm Queen Feather',rarity:'Mythic'},{item:'Thunder Staff',rarity:'Mythic'}],phases:[{threshold:1.0,name:'Gathering Storm',desc:'Zythera summons storm clouds above the arena.',mult:1},{threshold:.6,name:'Eye of the Storm',desc:'Lightning rains down continuously!',mult:1.35},{threshold:.3,name:'Apocalypse Storm',desc:'Zythera becomes one with the storm itself!',mult:1.7}]},
-  {id:'malzor',name:'Malzor the Abyss King',emoji:'👿',hp:800,maxHp:800,attack:65,defense:50,magic:60,speed:15,ability:'Abyssal Ruin',abilityDesc:'Drains 20 HP from all enemies and heals Malzor',levelRequirement:40,xp:1000,gold:2000,drops:[{item:'Abyss King Crown',rarity:'Mythic'},{item:'Mythic Dark Blade',rarity:'Mythic'}],phases:[{threshold:1.0,name:'Veiled Malice',desc:'Malzor rises from the abyss, reality fracturing.',mult:1},{threshold:.7,name:'Unshackled Rage',desc:'Malzor sheds his mortal form — pure darkness!',mult:1.4},{threshold:.4,name:'Void Incarnate',desc:'The abyss consumes everything around him!',mult:1.7},{threshold:.15,name:'Last Breath of Evil',desc:"Malzor's attacks are now completely unhinged!",mult:2.2}]},
+  {id:'emberlord_volkar',name:'Emberlord Volkar',emoji:'🐉',hp:600,maxHp:600,attack:55,defense:35,magic:45,speed:12,ability:'Inferno Cataclysm',abilityDesc:'Massive fire blast, burns all for 3 turns',levelRequirement:32,xp:300,gold:266,drops:[{item:"Volkar's Flame Core",rarity:'Mythic'},{item:'Legendary Fire Sword',rarity:'Mythic'}],phases:[{threshold:1.0,name:'Smoldering Rage',desc:'Volkar awakens, lava dripping from his scales.',mult:1},{threshold:.6,name:'Blazing Wrath',desc:"Volkar's flames intensify — the air shimmers!",mult:1.3},{threshold:.3,name:'Inferno Ascension',desc:'Volkar ascends! His attacks become catastrophic!',mult:1.6}]},
+  {id:'glacius',name:'Glacius the Frozen Tyrant',emoji:'❄️',hp:650,maxHp:650,attack:50,defense:45,magic:48,speed:10,ability:'Absolute Zero',abilityDesc:'Freezes all enemies 1 turn + heavy ice damage',levelRequirement:34,xp:330,gold:300,drops:[{item:'Tyrant Ice Crown',rarity:'Mythic'},{item:'Frozen Dragon Scale Armor',rarity:'Mythic'}],phases:[{threshold:1.0,name:'Arctic Presence',desc:'Glacius surveys you with cold, ancient eyes.',mult:1},{threshold:.65,name:'Blizzard Form',desc:'Glacius encases himself in a shell of black ice!',mult:1.4},{threshold:.25,name:'Absolute Dominion',desc:'The temperature drops to impossible lows!',mult:1.8}]},
+  {id:'zythera',name:'Zythera the Storm Queen',emoji:'⚡',hp:620,maxHp:620,attack:48,defense:32,magic:55,speed:20,ability:'Tempest Fury',abilityDesc:'Lightning storms strike random enemies multiple times',levelRequirement:35,xp:348,gold:333,drops:[{item:'Storm Queen Feather',rarity:'Mythic'},{item:'Thunder Staff',rarity:'Mythic'}],phases:[{threshold:1.0,name:'Gathering Storm',desc:'Zythera summons storm clouds above the arena.',mult:1},{threshold:.6,name:'Eye of the Storm',desc:'Lightning rains down continuously!',mult:1.35},{threshold:.3,name:'Apocalypse Storm',desc:'Zythera becomes one with the storm itself!',mult:1.7}]},
+  {id:'malzor',name:'Malzor the Abyss King',emoji:'👿',hp:800,maxHp:800,attack:65,defense:50,magic:60,speed:15,ability:'Abyssal Ruin',abilityDesc:'Drains 20 HP from all enemies and heals Malzor',levelRequirement:40,xp:600,gold:666,drops:[{item:'Abyss King Crown',rarity:'Mythic'},{item:'Mythic Dark Blade',rarity:'Mythic'}],phases:[{threshold:1.0,name:'Veiled Malice',desc:'Malzor rises from the abyss, reality fracturing.',mult:1},{threshold:.7,name:'Unshackled Rage',desc:'Malzor sheds his mortal form — pure darkness!',mult:1.4},{threshold:.4,name:'Void Incarnate',desc:'The abyss consumes everything around him!',mult:1.7},{threshold:.15,name:'Last Breath of Evil',desc:"Malzor's attacks are now completely unhinged!",mult:2.2}]},
+  ,{id:'magmara',name:'Magmara the Living Volcano',emoji:'🌋',
+    hp:1200,maxHp:1200,attack:80,defense:55,magic:70,speed:10,
+    ability:'Eruption',abilityDesc:'Volcanic blast burns entire party for 3 turns — catastrophic fire damage',
+    levelRequirement:38,xp:1800,gold:500,
+    phaseHealAmount:[0,150,250,400],
+    drops:[{item:'Magma Heart',rarity:'Mythic'},{item:'Volcano Crown',rarity:'Mythic'}],
+    phases:[
+      {threshold:1.0,name:'Dormant Wrath',    desc:'Magmara stirs... lava begins to flow from her body.',mult:1,   hpBoost:0},
+      {threshold:.65,name:'Eruption Begins',  desc:'🌋 MAGMARA ERUPTS! She heals and grows stronger!',  mult:1.8, hpBoost:200},
+      {threshold:.35,name:'Full Eruption',    desc:'🔥 FULL ERUPTION! The ground melts! She heals massively!',mult:2.8,hpBoost:350},
+    ]
+  },
+  {id:'leviathan',name:'Leviathan the Ocean God',emoji:'🌊',
+    hp:1500,maxHp:1500,attack:90,defense:65,magic:85,speed:12,
+    ability:'Tidal Apocalypse',abilityDesc:'Drowns all enemies — massive water damage + freezes active card 2 turns',
+    levelRequirement:42,xp:2200,gold:650,
+    phaseHealAmount:[0,200,350,500],
+    drops:[{item:'Ocean God Scale',rarity:'Mythic'},{item:'Leviathan Trident',rarity:'Mythic'}],
+    phases:[
+      {threshold:1.0,name:'Ancient Awakening', desc:'Leviathan rises from the deep... the ocean trembles.',mult:1,   hpBoost:0},
+      {threshold:.65,name:'Tidal Surge',        desc:'🌊 TIDAL SURGE! Leviathan heals and summons storms!', mult:1.8, hpBoost:280},
+      {threshold:.35,name:'God of the Deep',    desc:'⚡ THE OCEAN OBEYS HIM! Leviathan heals massively!',  mult:2.8, hpBoost:450},
+    ]
+  },
+  {id:'nihilus',name:'Nihilus the Void King',emoji:'🌑',
+    hp:1800,maxHp:1800,attack:100,defense:75,magic:95,speed:15,
+    ability:'Reality Shatter',abilityDesc:'Ignores ALL defense — pure void damage that cannot be blocked',
+    levelRequirement:45,xp:3000,gold:800,
+    phaseHealAmount:[0,150,250,400,600],
+    drops:[{item:'Void King Crown',rarity:'Mythic'},{item:'Reality Shard',rarity:'Mythic'}],
+    phases:[
+      {threshold:1.0,name:'Void Presence',   desc:'Nihilus manifests from nothing. Reality warps around him.',mult:1,   hpBoost:0},
+      {threshold:.70,name:'Void Hunger',     desc:'🌑 VOID HUNGER! Nihilus consumes energy and heals!',     mult:1.7, hpBoost:200},
+      {threshold:.40,name:'Void Dominion',   desc:'💀 VOID DOMINION! He tears reality — heals massively!',  mult:2.5, hpBoost:350},
+      {threshold:.15,name:'Void Incarnate',  desc:'👁️ VOID INCARNATE! Final form — heals everything!',      mult:4.0, hpBoost:600},
+    ]
+  },
+  {id:'the_watcher',name:'The Watcher',emoji:'👁️',
+    hp:2200,maxHp:2200,attack:110,defense:85,magic:110,speed:20,
+    ability:'All Seeing Eye',abilityDesc:'Copies your last move and uses it back on you — perfectly mirrored',
+    levelRequirement:50,xp:4000,gold:1000,
+    phaseHealAmount:[0,200,400,700],
+    drops:[{item:'The Eye',rarity:'Mythic'},{item:'Watcher Tome',rarity:'Mythic'},{item:'Omniscient Crystal',rarity:'Mythic'}],
+    phases:[
+      {threshold:1.0,name:'Observing',      desc:'The Watcher opens its eye. It has always been watching you.',mult:1,   hpBoost:0},
+      {threshold:.65,name:'Analysing',      desc:'👁️ IT HAS LEARNED YOUR PATTERNS! The Watcher heals and adapts!',mult:1.8,hpBoost:300},
+      {threshold:.30,name:'All Knowing',    desc:'💀 IT KNOWS EVERYTHING! Heals massively — fights without mercy!',mult:3.0,hpBoost:550},
+    ]
+  },
   ,{id:'claude_oracle',name:'Claude the Oracle',emoji:'🤖',hp:999,maxHp:999,
     attack:70,defense:60,magic:80,speed:25,
     ability:'Neural Storm',
     abilityDesc:'Processes all possibilities — massive magic damage that bypasses defense',
-    levelRequirement:1,xp:9999,gold:9999,
+    levelRequirement:1,xp:5999,gold:3333,
     isSecretBoss:true,
     drops:[
       {item:'Oracle Fragment',rarity:'Mythic'},
@@ -1868,21 +1937,21 @@ const CHARACTERS=[
 //  SKILLS DATA
 // ─────────────────────────────────────────
 const SKILLS=[
-  {id:'atk1',name:'Iron Will',icon:'⚔️',desc:'Attack +3',cost:50,effect:{attack:3},requires:null},
-  {id:'def1',name:'Stone Skin',icon:'🛡️',desc:'Defense +3',cost:50,effect:{defense:3},requires:null},
-  {id:'mag1',name:'Arcane Mind',icon:'🔮',desc:'Magic +3',cost:50,effect:{magic:3},requires:null},
-  {id:'spd1',name:'Swift Feet',icon:'💨',desc:'Speed +3',cost:50,effect:{speed:3},requires:null},
-  {id:'hp1',name:'Vitality',icon:'❤️',desc:'Max HP +15',cost:80,effect:{hp:15},requires:null},
-  {id:'atk2',name:'Warrior\'s Edge',icon:'🗡️',desc:'Attack +6',cost:120,effect:{attack:6},requires:'atk1'},
-  {id:'def2',name:'Fortress Body',icon:'🏰',desc:'Defense +6',cost:120,effect:{defense:6},requires:'def1'},
-  {id:'mag2',name:'Spellweaver',icon:'✨',desc:'Magic +6',cost:120,effect:{magic:6},requires:'mag1'},
-  {id:'spd2',name:'Blur',icon:'⚡',desc:'Speed +6 + dodge chance',cost:120,effect:{speed:6},requires:'spd1'},
-  {id:'hp2',name:'Iron Constitution',icon:'💪',desc:'Max HP +30',cost:150,effect:{hp:30},requires:'hp1'},
-  {id:'crit',name:'Critical Strike',icon:'💥',desc:'20% chance to deal double damage',cost:200,effect:{critChance:0.2},requires:'atk2'},
-  {id:'regen',name:'Regeneration',icon:'🌱',desc:'Heal 5 HP at start of each turn',cost:200,effect:{regen:5},requires:'hp2'},
-  {id:'resist',name:'Elemental Guard',icon:'🛡️',desc:'Reduce magic damage by 25%',cost:200,effect:{magResist:.25},requires:'def2'},
-  {id:'abilBoost',name:'Ability Mastery',icon:'⭐',desc:'Ability deals 50% more damage',cost:250,effect:{abilBoost:.5},requires:'mag2'},
-  {id:'ultimate',name:'Legend\'s Power',icon:'👑',desc:'All stats +5, ability cooldown -1',cost:500,effect:{all:5},requires:['atk2','def2','mag2','spd2']},
+  {id:'atk1',name:'Iron Will',icon:'⚔️',desc:'Attack +3',cost:200,effect:{attack:3},requires:null},
+  {id:'def1',name:'Stone Skin',icon:'🛡️',desc:'Defense +3',cost:200,effect:{defense:3},requires:null},
+  {id:'mag1',name:'Arcane Mind',icon:'🔮',desc:'Magic +3',cost:200,effect:{magic:3},requires:null},
+  {id:'spd1',name:'Swift Feet',icon:'💨',desc:'Speed +3',cost:200,effect:{speed:3},requires:null},
+  {id:'hp1',name:'Vitality',icon:'❤️',desc:'Max HP +15',cost:400,effect:{hp:15},requires:null},
+  {id:'atk2',name:'Warrior\'s Edge',icon:'🗡️',desc:'Attack +6',cost:700,effect:{attack:6},requires:'atk1'},
+  {id:'def2',name:'Fortress Body',icon:'🏰',desc:'Defense +6',cost:700,effect:{defense:6},requires:'def1'},
+  {id:'mag2',name:'Spellweaver',icon:'✨',desc:'Magic +6',cost:700,effect:{magic:6},requires:'mag1'},
+  {id:'spd2',name:'Blur',icon:'⚡',desc:'Speed +6 + dodge chance',cost:700,effect:{speed:6},requires:'spd1'},
+  {id:'hp2',name:'Iron Constitution',icon:'💪',desc:'Max HP +30',cost:1000,effect:{hp:30},requires:'hp1'},
+  {id:'crit',name:'Critical Strike',icon:'💥',desc:'20% chance to deal double damage',cost:1500,effect:{critChance:0.2},requires:'atk2'},
+  {id:'regen',name:'Regeneration',icon:'🌱',desc:'Heal 5 HP at start of each turn',cost:1500,effect:{regen:5},requires:'hp2'},
+  {id:'resist',name:'Elemental Guard',icon:'🛡️',desc:'Reduce magic damage by 25%',cost:1500,effect:{magResist:.25},requires:'def2'},
+  {id:'abilBoost',name:'Ability Mastery',icon:'⭐',desc:'Ability deals 50% more damage',cost:2500,effect:{abilBoost:.5},requires:'mag2'},
+  {id:'ultimate',name:'Legend\'s Power',icon:'👑',desc:'All stats +5, ability cooldown -1',cost:8000,effect:{all:5},requires:['atk2','def2','mag2','spd2']},
 ];
 
 // ─────────────────────────────────────────
@@ -1897,7 +1966,7 @@ let gameState = {
   // Shared progression
   playerLevel: 1,
   playerXp: 0,
-  xpToNext: 100,
+  xpToNext: 300,
   playerGold: 0,
   inventory: [],
   unlockedSkills: [],
@@ -2215,8 +2284,17 @@ function openSettings(){
 
     <div style="padding-top:4px;">
       <div style="font-family:'Cinzel',serif;font-size:.65rem;color:var(--gold);margin-bottom:10px;">⚠️ Account</div>
-      <button class="btn-ghost" onclick="doLogout()" style="width:100%;border-color:rgba(200,50,50,.3);color:#d06060;font-size:.65rem;">
+      <button class="btn-ghost" onclick="exportProfile()" style="width:100%;margin-bottom:8px;border-color:rgba(50,150,200,.4);color:#60b0e0;font-size:.65rem;">
+        📥 Save Profile to Phone
+      </button>
+      <button class="btn-ghost" onclick="importProfile()" style="width:100%;margin-bottom:8px;border-color:rgba(50,200,100,.4);color:#60e090;font-size:.65rem;">
+        📤 Load Profile from File
+      </button>
+      <button class="btn-ghost" onclick="doLogout()" style="width:100%;border-color:rgba(200,50,50,.3);color:#d06060;font-size:.65rem;margin-bottom:8px;">
         🚪 Log Out
+      </button>
+      <button class="btn-ghost" onclick="confirmDeleteAccount()" style="width:100%;border-color:rgba(200,0,0,.4);color:#ff4040;font-size:.65rem;">
+        🗑️ Delete Account
       </button>
     </div>`;
   showModal('⚙️ Settings', body, [{label:'Close', cls:'btn-ghost', cb:closeModal}]);
@@ -2253,6 +2331,99 @@ function doChangePassword(){
   });
 }
 
+function exportProfile(){
+  const profile = {
+    username:       gameState.username,
+    playerLevel:    gameState.playerLevel,
+    playerXp:       gameState.playerXp,
+    xpToNext:       gameState.xpToNext,
+    playerGold:     gameState.playerGold,
+    inventory:      gameState.inventory,
+    deck:           gameState.deck,
+    unlockedSkills: gameState.unlockedSkills,
+    skillXp:        gameState.skillXp,
+    shopOwned:      gameState.shopOwned||{},
+    activeCardIdx:  gameState.activeCardIdx,
+    duelWins:       parseInt(localStorage.getItem('aetherion_duel_wins')||'0'),
+    duelLosses:     parseInt(localStorage.getItem('aetherion_duel_losses')||'0'),
+    exportedAt:     new Date().toISOString(),
+    version:        '1.0',
+  };
+  const json    = JSON.stringify(profile, null, 2);
+  const blob    = new Blob([json], {type:'application/json'});
+  const url     = URL.createObjectURL(blob);
+  const a       = document.createElement('a');
+  a.href        = url;
+  a.download    = `aetherion_${gameState.username||'profile'}_lv${gameState.playerLevel}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast(`📥 Profile saved as JSON!`);
+  closeModal();
+}
+
+function importProfile(){
+  closeModal();
+  showModal('📤 Load Profile', `
+    <div style="text-align:center;padding:8px 0 14px;">
+      <div style="font-size:2rem;margin-bottom:8px;">📤</div>
+      <div style="font-size:.68rem;color:var(--dim);margin-bottom:14px;line-height:1.6;">
+        Select your <b style="color:var(--gold);">aetherion_profile.json</b> file to load your saved progress.
+        <br><br>
+        <span style="color:#d06060;">⚠️ This will overwrite your current progress!</span>
+      </div>
+      <input type="file" id="import-file-input" accept=".json"
+        style="display:none;" onchange="doImportProfile(this)">
+      <button class="btn" onclick="document.getElementById('import-file-input').click()" style="width:100%;">
+        📂 Choose File
+      </button>
+      <div id="import-status" style="font-size:.62rem;color:var(--dim);margin-top:10px;min-height:16px;"></div>
+    </div>`,
+    [{label:'Cancel', cls:'btn-ghost', cb:closeModal}]
+  );
+}
+
+function doImportProfile(input){
+  const file = input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const profile = JSON.parse(e.target.result);
+      if(!profile.username || !profile.deck){
+        document.getElementById('import-status').textContent = '❌ Invalid profile file!';
+        document.getElementById('import-status').style.color = '#d06060';
+        return;
+      }
+      // Load into gameState
+      gameState.username       = profile.username;
+      gameState.playerLevel    = profile.playerLevel    || 1;
+      gameState.playerXp       = profile.playerXp       || 0;
+      gameState.xpToNext       = profile.xpToNext       || 300;
+      gameState.playerGold     = profile.playerGold     || 0;
+      gameState.inventory      = profile.inventory      || [];
+      gameState.deck           = profile.deck           || [];
+      gameState.unlockedSkills = profile.unlockedSkills || [];
+      gameState.skillXp        = profile.skillXp        || 0;
+      gameState.shopOwned      = profile.shopOwned      || {};
+      gameState.activeCardIdx  = profile.activeCardIdx  || 0;
+      // Restore duel stats
+      if(profile.duelWins)   localStorage.setItem('aetherion_duel_wins',   profile.duelWins);
+      if(profile.duelLosses) localStorage.setItem('aetherion_duel_losses', profile.duelLosses);
+      saveGame();
+      closeModal();
+      updateMenuHud();
+      showMenu();
+      toast(`✅ Profile loaded! Welcome back, ${profile.username}!`);
+    } catch(err) {
+      document.getElementById('import-status').textContent = '❌ Could not read file — make sure it is a valid JSON profile!';
+      document.getElementById('import-status').style.color = '#d06060';
+    }
+  };
+  reader.readAsText(file);
+}
+
 function doLogout(){
   localStorage.removeItem('aetherion_hero_name');
   localStorage.removeItem('aetherion_hero_pass');
@@ -2262,6 +2433,60 @@ function doLogout(){
   closeModal();
   showScreen('screen-intro');
   toast('Logged out!');
+}
+
+function confirmDeleteAccount(){
+  closeModal();
+  showModal('🗑️ Delete Account', `
+    <div style="text-align:center;padding:8px 0 14px;">
+      <div style="font-size:2.5rem;margin-bottom:8px;">⚠️</div>
+      <div style="font-family:'Cinzel',serif;font-size:.85rem;color:#ff4040;margin-bottom:8px;">Are you sure?</div>
+      <div style="font-size:.65rem;color:var(--dim);margin-bottom:16px;line-height:1.6;">
+        This will <b style="color:#ff4040;">permanently delete</b> your account
+        <b style="color:var(--gold);">${gameState.username}</b> and all your progress.<br><br>
+        This cannot be undone!
+      </div>
+      <input id="delete-confirm-pass" type="password" placeholder="Enter your password to confirm"
+        style="width:100%;background:rgba(0,0,0,.5);border:2px solid rgba(200,0,0,.4);border-radius:8px;
+        color:var(--text);font-size:.7rem;padding:10px 12px;outline:none;margin-bottom:8px;">
+      <div id="delete-err" style="color:#ff4040;font-size:.6rem;min-height:16px;"></div>
+    </div>`,
+    [
+      {label:'🗑️ Yes, Delete Forever', cls:'btn-ghost', cb:doDeleteAccount},
+      {label:'Cancel', cls:'btn', cb:()=>{ closeModal(); openSettings(); }}
+    ]
+  );
+}
+
+function doDeleteAccount(){
+  const pw  = document.getElementById('delete-confirm-pass')?.value?.trim();
+  const err = document.getElementById('delete-err');
+  if(!pw){ if(err) err.textContent='Enter your password!'; return; }
+
+  const s = getSocket();
+  s.emit('account:delete', {
+    username: gameState.username,
+    password: pw,
+  });
+
+  s.once('account:deleted', ()=>{
+    // Clear everything locally
+    localStorage.removeItem('aetherion_hero_name');
+    localStorage.removeItem('aetherion_hero_pass');
+    localStorage.removeItem(SAVE_KEY);
+    localStorage.removeItem('aetherion_duel_wins');
+    localStorage.removeItem('aetherion_duel_losses');
+    localStorage.removeItem('aetherion_leaderboard');
+    gameState.username = '';
+    gameState.deck = [];
+    closeModal();
+    showScreen('screen-intro');
+    toast('Account deleted.');
+  });
+
+  s.once('account:error', ({ msg })=>{
+    if(err) err.textContent = msg;
+  });
 }
 
 function setTheme(mode){
@@ -2311,47 +2536,47 @@ function goShop(){
 
 const SHOP_CATALOG = {
   potions:[
-    {id:'hp_potion',   icon:'🧪', name:'Health Potion',   desc:'Restores 40 HP to active card in battle.',           cost:20,  rarity:'Common', effect:{type:'item',stat:'hp',val:40}},
-    {id:'elixir',      icon:'⚗️', name:'Elixir',          desc:'Restores 80 HP to all cards in your deck.',          cost:55,  rarity:'Rare',   effect:{type:'item',stat:'hpAll',val:80}},
-    {id:'mega_potion', icon:'💊', name:'Mega Potion',      desc:'Fully restores HP of active card.',                  cost:90,  rarity:'Rare',   effect:{type:'item',stat:'hpFull',val:0}},
-    {id:'antidote',    icon:'💉', name:'Antidote',         desc:'Cures all status effects on your active card.',      cost:30,  rarity:'Common', effect:{type:'item',stat:'cure',val:0}},
-    {id:'speed_brew',  icon:'🍵', name:'Speed Brew',       desc:'+5 Speed to active card for the rest of the run.',   cost:45,  rarity:'Rare',   effect:{type:'stat',stat:'speed',val:5}},
-    {id:'mana_crystal',icon:'🔮', name:'Mana Crystal',     desc:'Resets ability cooldown on active card immediately.',cost:40,  rarity:'Rare',   effect:{type:'item',stat:'cooldown',val:0}},
+    {id:'hp_potion',   icon:'🧪', name:'Health Potion',   desc:'Restores 40 HP to active card in battle.',           cost:40,  rarity:'Common', effect:{type:'item',stat:'hp',val:40}},
+    {id:'elixir',      icon:'⚗️', name:'Elixir',          desc:'Restores 80 HP to all cards in your deck.',          cost:110,  rarity:'Rare',   effect:{type:'item',stat:'hpAll',val:80}},
+    {id:'mega_potion', icon:'💊', name:'Mega Potion',      desc:'Fully restores HP of active card.',                  cost:180,  rarity:'Rare',   effect:{type:'item',stat:'hpFull',val:0}},
+    {id:'antidote',    icon:'💉', name:'Antidote',         desc:'Cures all status effects on your active card.',      cost:60,  rarity:'Common', effect:{type:'item',stat:'cure',val:0}},
+    {id:'speed_brew',  icon:'🍵', name:'Speed Brew',       desc:'+5 Speed to active card for the rest of the run.',   cost:90,  rarity:'Rare',   effect:{type:'stat',stat:'speed',val:5}},
+    {id:'mana_crystal',icon:'🔮', name:'Mana Crystal',     desc:'Resets ability cooldown on active card immediately.',cost:80,  rarity:'Rare',   effect:{type:'item',stat:'cooldown',val:0}},
   ],
   weapons:[
-    {id:'iron_sword',  icon:'🗡️', name:'Iron Sword',       desc:'+4 Attack to all deck cards permanently.',           cost:80,  rarity:'Common', effect:{type:'statAll',stat:'attack',val:4}},
-    {id:'flame_blade', icon:'🔥', name:'Flame Blade',       desc:'+8 Attack and +3 Magic to all deck cards.',          cost:160, rarity:'Rare',   effect:{type:'statAll2',stats:['attack','magic'],vals:[8,3]}},
-    {id:'shadow_dagger',icon:'🥷',name:'Shadow Dagger',     desc:'+6 Attack and +4 Speed to active card.',             cost:120, rarity:'Rare',   effect:{type:'statOne2',stats:['attack','speed'],vals:[6,4]}},
-    {id:'thunder_axe', icon:'⚡', name:'Thunder Axe',       desc:'+12 Attack to active card permanently.',             cost:200, rarity:'Epic',   effect:{type:'statOne',stat:'attack',val:12}},
-    {id:'void_blade',  icon:'🌑', name:'Void Blade',        desc:'+10 Attack, +5 Magic to all deck cards.',            cost:280, rarity:'Epic',   effect:{type:'statAll2',stats:['attack','magic'],vals:[10,5]}},
+    {id:'iron_sword',  icon:'🗡️', name:'Iron Sword',       desc:'+4 Attack to all deck cards permanently.',           cost:160,  rarity:'Common', effect:{type:'statAll',stat:'attack',val:4}},
+    {id:'flame_blade', icon:'🔥', name:'Flame Blade',       desc:'+8 Attack and +3 Magic to all deck cards.',          cost:320, rarity:'Rare',   effect:{type:'statAll2',stats:['attack','magic'],vals:[8,3]}},
+    {id:'shadow_dagger',icon:'🥷',name:'Shadow Dagger',     desc:'+6 Attack and +4 Speed to active card.',             cost:240, rarity:'Rare',   effect:{type:'statOne2',stats:['attack','speed'],vals:[6,4]}},
+    {id:'thunder_axe', icon:'⚡', name:'Thunder Axe',       desc:'+12 Attack to active card permanently.',             cost:400, rarity:'Epic',   effect:{type:'statOne',stat:'attack',val:12}},
+    {id:'void_blade',  icon:'🌑', name:'Void Blade',        desc:'+10 Attack, +5 Magic to all deck cards.',            cost:560, rarity:'Epic',   effect:{type:'statAll2',stats:['attack','magic'],vals:[10,5]}},
   ],
   armor:[
-    {id:'leather',     icon:'🧥', name:'Leather Vest',      desc:'+5 Defense to all deck cards permanently.',          cost:70,  rarity:'Common', effect:{type:'statAll',stat:'defense',val:5}},
-    {id:'chain_mail',  icon:'⛓️', name:'Chain Mail',         desc:'+10 Defense to all deck cards.',                    cost:140, rarity:'Rare',   effect:{type:'statAll',stat:'defense',val:10}},
-    {id:'dragon_scale',icon:'🐉', name:'Dragon Scale',       desc:'+8 Defense and +20 Max HP to all deck cards.',      cost:220, rarity:'Epic',   effect:{type:'statAll2',stats:['defense','maxHp'],vals:[8,20]}},
-    {id:'void_cloak',  icon:'🌘', name:'Void Cloak',         desc:'+6 Defense and +6 Speed to active card.',           cost:180, rarity:'Rare',   effect:{type:'statOne2',stats:['defense','speed'],vals:[6,6]}},
-    {id:'titan_plate', icon:'🛡️', name:'Titan Plate',        desc:'+15 Defense to all deck cards.',                    cost:300, rarity:'Epic',   effect:{type:'statAll',stat:'defense',val:15}},
+    {id:'leather',     icon:'🧥', name:'Leather Vest',      desc:'+5 Defense to all deck cards permanently.',          cost:140,  rarity:'Common', effect:{type:'statAll',stat:'defense',val:5}},
+    {id:'chain_mail',  icon:'⛓️', name:'Chain Mail',         desc:'+10 Defense to all deck cards.',                    cost:280, rarity:'Rare',   effect:{type:'statAll',stat:'defense',val:10}},
+    {id:'dragon_scale',icon:'🐉', name:'Dragon Scale',       desc:'+8 Defense and +20 Max HP to all deck cards.',      cost:440, rarity:'Epic',   effect:{type:'statAll2',stats:['defense','maxHp'],vals:[8,20]}},
+    {id:'void_cloak',  icon:'🌘', name:'Void Cloak',         desc:'+6 Defense and +6 Speed to active card.',           cost:360, rarity:'Rare',   effect:{type:'statOne2',stats:['defense','speed'],vals:[6,6]}},
+    {id:'titan_plate', icon:'🛡️', name:'Titan Plate',        desc:'+15 Defense to all deck cards.',                    cost:600, rarity:'Epic',   effect:{type:'statAll',stat:'defense',val:15}},
   ],
   magic:[
-    {id:'spell_scroll',icon:'📜', name:'Spell Scroll',       desc:'+5 Magic to all deck cards permanently.',           cost:75,  rarity:'Common', effect:{type:'statAll',stat:'magic',val:5}},
-    {id:'arcane_tome', icon:'📖', name:'Arcane Tome',         desc:'+10 Magic and +3 Attack to all deck cards.',       cost:150, rarity:'Rare',   effect:{type:'statAll2',stats:['magic','attack'],vals:[10,3]}},
-    {id:'crystal_orb', icon:'🔮', name:'Crystal Orb',         desc:'+15 Magic to active card permanently.',            cost:180, rarity:'Epic',   effect:{type:'statOne',stat:'magic',val:15}},
-    {id:'phoenix_dust',icon:'🦅', name:'Phoenix Dust',        desc:'Revives one fainted card with 50% HP when used.',  cost:250, rarity:'Epic',   effect:{type:'item',stat:'revive',val:50}},
-    {id:'void_essence',icon:'🌌', name:'Void Essence',         desc:'+12 Magic and +5 Defense to all deck cards.',     cost:320, rarity:'Epic',   effect:{type:'statAll2',stats:['magic','defense'],vals:[12,5]}},
+    {id:'spell_scroll',icon:'📜', name:'Spell Scroll',       desc:'+5 Magic to all deck cards permanently.',           cost:150,  rarity:'Common', effect:{type:'statAll',stat:'magic',val:5}},
+    {id:'arcane_tome', icon:'📖', name:'Arcane Tome',         desc:'+10 Magic and +3 Attack to all deck cards.',       cost:300, rarity:'Rare',   effect:{type:'statAll2',stats:['magic','attack'],vals:[10,3]}},
+    {id:'crystal_orb', icon:'🔮', name:'Crystal Orb',         desc:'+15 Magic to active card permanently.',            cost:360, rarity:'Epic',   effect:{type:'statOne',stat:'magic',val:15}},
+    {id:'phoenix_dust',icon:'🦅', name:'Phoenix Dust',        desc:'Revives one fainted card with 50% HP when used.',  cost:500, rarity:'Epic',   effect:{type:'item',stat:'revive',val:50}},
+    {id:'void_essence',icon:'🌌', name:'Void Essence',         desc:'+12 Magic and +5 Defense to all deck cards.',     cost:640, rarity:'Epic',   effect:{type:'statAll2',stats:['magic','defense'],vals:[12,5]}},
   ],
   cards:[
-    {id:'card_boost',  icon:'⬆️', name:'Card Boost',         desc:'Level up your active card instantly (+1 Card Level).',cost:120,rarity:'Rare',  effect:{type:'cardLevel',val:1}},
-    {id:'card_boost2', icon:'🚀', name:'Double Boost',        desc:'Level up your active card by 2 levels.',            cost:220,rarity:'Epic',  effect:{type:'cardLevel',val:2}},
-    {id:'xp_tome',     icon:'📚', name:'XP Tome',             desc:'Grants 200 XP to your active card.',               cost:80, rarity:'Rare',   effect:{type:'cardXp',val:200}},
-    {id:'heal_all',    icon:'💊', name:'Full Restore',         desc:'Fully heals all 3 cards and removes all faints.',  cost:100,rarity:'Rare',   effect:{type:'healAll',val:0}},
-    {id:'reroll_token',icon:'🎲', name:'Reroll Token',         desc:'Redraw your entire deck with 3 new random cards.', cost:300,rarity:'Epic',   effect:{type:'reroll',val:0}},
+    {id:'card_boost',  icon:'⬆️', name:'Card Boost',         desc:'Level up your active card instantly (+1 Card Level).',cost:240,rarity:'Rare',  effect:{type:'cardLevel',val:1}},
+    {id:'card_boost2', icon:'🚀', name:'Double Boost',        desc:'Level up your active card by 2 levels.',            cost:440,rarity:'Epic',  effect:{type:'cardLevel',val:2}},
+    {id:'xp_tome',     icon:'📚', name:'XP Tome',             desc:'Grants 200 XP to your active card.',               cost:160, rarity:'Rare',   effect:{type:'cardXp',val:200}},
+    {id:'heal_all',    icon:'💊', name:'Full Restore',         desc:'Fully heals all 3 cards and removes all faints.',  cost:200,rarity:'Rare',   effect:{type:'healAll',val:0}},
+    {id:'reroll_token',icon:'🎲', name:'Reroll Token',         desc:'Redraw your entire deck with 3 new random cards.', cost:600,rarity:'Epic',   effect:{type:'reroll',val:0}},
   ],
   rare:[
-    {id:'legend_sword',icon:'⚔️', name:"Legend's Blade",       desc:'+20 Attack to all deck cards. Mythic power.',       cost:800, rarity:'Mythic', effect:{type:'statAll',stat:'attack',val:20}},
-    {id:'god_armor',   icon:'👑', name:'Godplate Armor',        desc:'+25 Defense and +50 Max HP to all deck cards.',     cost:900, rarity:'Mythic', effect:{type:'statAll2',stats:['defense','maxHp'],vals:[25,50]}},
-    {id:'void_heart',  icon:'💜', name:'Void Heart',             desc:'+20 Magic, +10 Attack, +10 Defense to all cards.', cost:1200,rarity:'Mythic', effect:{type:'statAll3',stats:['magic','attack','defense'],vals:[20,10,10]}},
-    {id:'phoenix_core',icon:'🔥', name:'Phoenix Core',           desc:'Instantly fully heals all cards + +30 Max HP each.',cost:600, rarity:'Mythic', effect:{type:'fullRestorePlus',val:30}},
-    {id:'abyss_crown', icon:'🌑', name:'Abyss Crown',            desc:'+15 to ALL stats on ALL cards. Ultimate power.',   cost:2000,rarity:'Mythic', effect:{type:'allStats',val:15}},
+    {id:'legend_sword',icon:'⚔️', name:"Legend's Blade",       desc:'+20 Attack to all deck cards. Mythic power.',       cost:1600, rarity:'Mythic', effect:{type:'statAll',stat:'attack',val:20}},
+    {id:'god_armor',   icon:'👑', name:'Godplate Armor',        desc:'+25 Defense and +50 Max HP to all deck cards.',     cost:1800, rarity:'Mythic', effect:{type:'statAll2',stats:['defense','maxHp'],vals:[25,50]}},
+    {id:'void_heart',  icon:'💜', name:'Void Heart',             desc:'+20 Magic, +10 Attack, +10 Defense to all cards.', cost:2400,rarity:'Mythic', effect:{type:'statAll3',stats:['magic','attack','defense'],vals:[20,10,10]}},
+    {id:'phoenix_core',icon:'🔥', name:'Phoenix Core',           desc:'Instantly fully heals all cards + +30 Max HP each.',cost:1200, rarity:'Mythic', effect:{type:'fullRestorePlus',val:30}},
+    {id:'abyss_crown', icon:'🌑', name:'Abyss Crown',            desc:'+15 to ALL stats on ALL cards. Ultimate power.',   cost:4000,rarity:'Mythic', effect:{type:'allStats',val:15}},
   ],
 };
 
@@ -2612,7 +2837,7 @@ function confirmDeck(){
     gameState.playerXp = 0;
     gameState.xpToNext = 100;
     gameState.playerGold = 0;
-    gameState.inventory = [{item:'Health Potion',rarity:'Common',qty:3}];
+    gameState.inventory = [{item:'Health Potion',rarity:'Common',qty:1}];
     gameState.unlockedSkills = [];
     gameState.skillXp = 0;
     gameState.statuses = [];
@@ -2895,9 +3120,9 @@ function spTravel(){
 }
 
 function getUpgradeCost(){
-  // Cost scales exponentially — 10% harder each level
+  // Very steep scaling — gets extremely expensive fast
   const lv = gameState.playerLevel||1;
-  return Math.floor(80 * Math.pow(1.4, lv - 1));
+  return Math.floor(200 * Math.pow(1.7, lv - 1));
 }
 
 function spUpgrade(){
@@ -2947,6 +3172,109 @@ function calcEnemyAttack(){
   return Math.max(1,raw-def);
 }
 
+// ── Smart Boss AI — reads player stats and adapts ──
+function getBossAIAction(en, card){
+  const playerLv   = gameState.playerLevel||1;
+  const playerAtk  = calcStat('attack');
+  const playerDef  = calcStat('defense');
+  const playerMag  = calcStat('magic');
+  const playerSpd  = calcStat('speed');
+  const playerHpPct= card.hp / card.maxHp;
+  const bossHpPct  = en.hp / en.maxHp;
+  const phase      = gameState.bossPhase||0;
+
+  // Boss reads player stats and picks best counter-strategy
+  // If player has high defense → use magic attacks
+  // If player has high magic → use physical + stun
+  // If player is low HP → go all out
+  // If boss is low HP → desperate attack
+  // Higher player level = boss hits harder (3x scaling)
+  const lvlMult = Math.max(1, 1 + (playerLv * 0.15)); // 15% harder per level
+  const phaseMult = en.phases?.[phase]?.mult || 1;
+  const totalMult = lvlMult * phaseMult * 3; // 3x harder base
+
+  let actions = [];
+
+  // Stun — if player speed is high or player attacked last turn
+  if(playerSpd > 12 && Math.random() < 0.25){
+    actions.push({type:'stun', weight:3});
+  }
+
+  // Magic nuke — if player has high defense
+  if(playerDef > 15){
+    actions.push({type:'magic', weight:4});
+  }
+
+  // Armor shred — if player defense is very high
+  if(playerDef > 20){
+    actions.push({type:'defDown', weight:3});
+  }
+
+  // Burst — if player HP is low, finish them
+  if(playerHpPct < 0.35){
+    actions.push({type:'burst', weight:5});
+  }
+
+  // Desperate — boss is low HP
+  if(bossHpPct < 0.25){
+    actions.push({type:'burst', weight:4});
+  }
+
+  // Counter magic — if player has high magic
+  if(playerMag > 15){
+    actions.push({type:'magDown', weight:2});
+  }
+
+  // Default physical
+  actions.push({type:'physical', weight:2});
+
+  // Pick weighted random action
+  const totalW = actions.reduce((s,a)=>s+a.weight,0);
+  let r = Math.random()*totalW;
+  let chosen = actions[actions.length-1];
+  for(const a of actions){ r-=a.weight; if(r<=0){chosen=a;break;} }
+
+  // Calculate damage based on action
+  let dmg = 0;
+  let msg = '';
+  let extra = null;
+
+  const baseDmg = Math.floor((en.attack+Math.floor(Math.random()*5)) * totalMult);
+  const magDmg  = Math.floor((en.magic||en.attack)*1.6 * totalMult);
+  const def     = Math.max(0, calcStat('defense'));
+
+  switch(chosen.type){
+    case 'stun':
+      addStatus(false,'stun',1);
+      dmg = Math.floor(baseDmg * 0.6 - def);
+      msg = `💫 <b>${en.name}</b> stuns <b>${card.name}</b>! (${Math.max(1,dmg)} dmg)`;
+      break;
+    case 'magic':
+      dmg = Math.max(1, magDmg); // magic ignores defense
+      msg = `🔮 <b>${en.name}</b> blasts <b>${card.name}</b> with magic for <b>${dmg}</b>!`;
+      break;
+    case 'defDown':
+      addStatus(false,'defDown',2);
+      dmg = Math.max(1, Math.floor(baseDmg*0.7 - def));
+      msg = `🛡️ <b>${en.name}</b> shatters <b>${card.name}</b>'s armor! DEF ↓ + <b>${dmg}</b> dmg!`;
+      break;
+    case 'magDown':
+      addStatus(false,'magDown',2);
+      dmg = Math.max(1, Math.floor(baseDmg*0.7 - def));
+      msg = `🔮 <b>${en.name}</b> disrupts <b>${card.name}</b>'s magic! MAG ↓ + <b>${dmg}</b> dmg!`;
+      break;
+    case 'burst':
+      dmg = Math.max(1, Math.floor(baseDmg*1.8 - def));
+      msg = `💥 <b>${en.name}</b> unleashes a BURST on <b>${card.name}</b> for <b>${dmg}</b>!`;
+      break;
+    default: // physical
+      dmg = Math.max(1, Math.floor(baseDmg - def));
+      msg = `${en.emoji||'👾'} <b>${en.name}</b> strikes <b>${card.name}</b> for <b>${dmg}</b>!`;
+  }
+
+  return { dmg: Math.max(1,dmg), msg };
+}
+
 function spEnemyTurn(){
   const en=gameState.currentEnemy;
   if(!en||en.hp<=0)return;
@@ -2957,12 +3285,25 @@ function spEnemyTurn(){
   });
   if(poisonDmg>0){en.hp=Math.max(0,en.hp-poisonDmg);spLog(`☠️ Poison: <b>${poisonDmg}</b> to ${en.name}!`,'sk');}
   if(en.hp<=0){spBattleEnd(true);return;}
-  if(hasStatus(true,'stun')){spLog(`💫 ${en.name} is stunned!`,'sk');return;}
-  const dmg=calcEnemyAttack();
-  if(dmg===0)return;
+  if(hasStatus(true,'stun')){spLog(`💫 ${en.name} is stunned!`,'sk');tickAllCardStatuses();return;}
+
   const card=activeCard();
+  let dmg=0, msg='';
+
+  if(gameState.isBoss){
+    // Smart boss AI
+    const action = getBossAIAction(en, card);
+    dmg = action.dmg;
+    msg = action.msg;
+  } else {
+    dmg=calcEnemyAttack();
+    if(dmg===0){tickAllCardStatuses();return;}
+    msg=`${en.emoji||'👾'} <b>${en.name}</b> hits <b>${card.name}</b> for <b>${dmg}</b>!`;
+  }
+
   card.hp=Math.max(0,card.hp-dmg);
-  spLog(`${en.emoji||'👾'} <b>${en.name}</b> hits <b>${card.name}</b> for <b>${dmg}</b>!`,'c');
+  spLog(msg,'c');
+
   // Regen skill
   if(gameState.unlockedSkills.includes('regen')){
     card.hp=Math.min(card.maxHp,card.hp+5);spLog(`🌱 Regen: +5 HP.`,'h');
@@ -2974,13 +3315,11 @@ function spEnemyTurn(){
   if(card.hp<=0){
     card.fainted=true;card.hp=0;
     spLog(`💀 <b>${card.name}</b> has fainted!`,'d');
-    // Auto-switch to next alive card
     const nextAlive=gameState.deck.findIndex((c,i)=>i!==gameState.activeCardIdx&&!c.fainted&&c.hp>0);
     if(nextAlive>=0){
       gameState.activeCardIdx=nextAlive;
       spLog(`🔄 <b>${activeCard().name}</b> steps in!`,'w');
     } else {
-      // Blazing Rebirth check on any card
       const rebirthCard=gameState.deck.find(c=>c.ability==='Blazing Rebirth'&&!gameState.bossRebirthed);
       if(rebirthCard){
         gameState.bossRebirthed=true;
@@ -3035,7 +3374,7 @@ function spBattleEnd(won){
   if(en?.id==='claude_oracle') setTimeout(()=>claudeEndDialog(won), 300);
   if(won){
     spLog(`🏆 <b>${en.name} defeated!</b>`,'w');
-    const xp=en.xp||20;const g=en.gold||10;
+    const xp=en.xp||20;const g=Math.floor((en.gold||5)*0.6);
     gameState.playerXp+=xp;gameState.playerGold+=g;gameState.skillXp+=xp;
     spLog(`+<b>${xp} XP</b>, +<b>${g} Gold</b>.`,'xp');
 
@@ -3044,7 +3383,7 @@ function spBattleEnd(won){
       const cardXpGain = i===gameState.activeCardIdx ? xp : Math.floor(xp*0.5);
       c.cardXp = (c.cardXp||0) + cardXpGain;
       const lv = c.cardLevel||1;
-      const xpNeeded = Math.floor(80 + lv*40 + Math.pow(lv,1.8)*5);
+      const xpNeeded = Math.floor(200 + lv*120 + Math.pow(lv,2.2)*8);
       if(c.cardXp >= xpNeeded){
         c.cardXp -= xpNeeded;
         c.cardLevel = lv+1;
@@ -3065,7 +3404,7 @@ function spBattleEnd(won){
     while(gameState.playerXp>=gameState.xpToNext){
       gameState.playerXp-=gameState.xpToNext;
       gameState.playerLevel++;
-      gameState.xpToNext=Math.floor(gameState.xpToNext*1.4);
+      gameState.xpToNext=Math.floor(gameState.xpToNext*1.8);
       spLog(`✨ <b>PARTY LEVEL UP! Level ${gameState.playerLevel}!</b> Next upgrade costs <b>${getUpgradeCost()} Gold</b>`,'w');
     }
     // Revive fainted cards at low HP
@@ -3279,24 +3618,68 @@ function battleEnemyTurn(){
   if(pd>0){en.hp=Math.max(0,en.hp-pd);bLog(`☠️ Poison: ${pd} to ${en.name}!`,'sk');if(en.hp<=0){endBattle(true);return;}}
   if(bHasStatus(true,'stun')){bLog(`💫 ${en.name} stunned!`,'sk');bTickPlayerStatus();return;}
   if(bHasStatus(false,'healRegen')){card.hp=Math.min(card.maxHp,card.hp+10);bLog(`🌿 Regen: +10 HP.`,'h');}
-  const isAbilityTurn=battleState.isBoss&&battleState.turn%4===0;
-  let raw=en.attack+Math.floor(Math.random()*4)-1;
+
+  let dmg=1, msg='';
+
   if(battleState.isBoss){
-    const phase=getBattlePhaseData();raw=Math.floor(raw*phase.mult);
-    if(isAbilityTurn){bLog(`${en.emoji||'👑'} <b>${en.ability}!</b>`,'boss');raw=Math.floor(raw*1.5);}
+    // Smart boss AI for full battle screen
+    const playerLv   = gameState.playerLevel||1;
+    const playerDef  = card.defense||5;
+    const playerMag  = card.magic||5;
+    const playerSpd  = card.speed||5;
+    const playerHpPct= card.hp/card.maxHp;
+    const bossHpPct  = en.hp/en.maxHp;
+    const phase      = getBattlePhaseData();
+    const lvlMult    = Math.max(1, 1+(playerLv*0.15));
+    const totalMult  = lvlMult * phase.mult * 3;
+
+    const baseDmg = Math.floor((en.attack+Math.floor(Math.random()*5))*totalMult);
+    const magDmg  = Math.floor((en.magic||en.attack)*1.6*totalMult);
+    let def = playerDef;
+    gameState.unlockedSkills.forEach(sid=>{const sk=SKILLS.find(s=>s.id===sid);if(sk){if(sk.effect.defense)def+=sk.effect.defense;if(sk.effect.all)def+=sk.effect.all;}});
+    if(bHasStatus(false,'defUp'))def+=10;
+
+    // Pick action based on player stats
+    if(playerSpd>12 && Math.random()<0.25){
+      bAddStatus(false,'stun',1);
+      dmg=Math.max(1,Math.floor(baseDmg*0.6-def));
+      msg=`💫 <b>${en.name}</b> stuns <b>${card.name}</b>! (${dmg} dmg)`;
+    } else if(playerDef>15){
+      dmg=Math.max(1,magDmg);
+      msg=`🔮 <b>${en.name}</b> blasts <b>${card.name}</b> with magic for <b>${dmg}</b>!`;
+    } else if(playerHpPct<0.35||bossHpPct<0.25){
+      dmg=Math.max(1,Math.floor(baseDmg*1.8-def));
+      msg=`💥 <b>${en.name}</b> BURSTS on <b>${card.name}</b> for <b>${dmg}</b>!`;
+    } else if(playerDef>20){
+      bAddStatus(false,'defDown',2);
+      dmg=Math.max(1,Math.floor(baseDmg*0.7-def));
+      msg=`🛡️ <b>${en.name}</b> shatters armor! DEF↓ + <b>${dmg}</b> dmg!`;
+    } else {
+      dmg=Math.max(1,Math.floor(baseDmg-def));
+      msg=`${en.emoji||'👑'} <b>${en.name}</b> strikes <b>${card.name}</b> for <b>${dmg}</b>!`;
+    }
+    // Ability turn every 4 turns
+    if(battleState.turn%4===0){
+      bLog(`${en.emoji||'👑'} <b>${en.ability}!</b>`,'boss');
+      dmg=Math.floor(dmg*1.5);
+    }
+  } else {
+    let def=card.defense;
+    gameState.unlockedSkills.forEach(sid=>{const sk=SKILLS.find(s=>s.id===sid);if(sk){if(sk.effect.defense)def+=sk.effect.defense;if(sk.effect.all)def+=sk.effect.all;}});
+    if(bHasStatus(false,'defUp'))def+=10;
+    const raw=en.attack+Math.floor(Math.random()*4)-1;
+    dmg=Math.max(1,raw-def);
+    msg=`${en.emoji||'👾'} <b>${en.name}</b> hits <b>${card.name}</b> for <b>${dmg}</b>!`;
   }
-  let def=card.defense;
-  gameState.unlockedSkills.forEach(sid=>{const sk=SKILLS.find(s=>s.id===sid);if(sk){if(sk.effect.defense)def+=sk.effect.defense;if(sk.effect.all)def+=sk.effect.all;}});
-  if(bHasStatus(false,'defUp'))def+=10;
-  const dmg=Math.max(1,raw-def);
+
   card.hp=Math.max(0,card.hp-dmg);
-  bLog(`${en.emoji||'👾'} <b>${en.name}</b> hits <b>${card.name}</b> for <b>${dmg}</b>!`,'c');
+  bLog(msg,'c');
   flashCard('cb-player');
+
   // Card fainted?
   if(card.hp<=0){
     card.fainted=true;card.hp=0;
     bLog(`💀 <b>${card.name}</b> fainted!`,'d');
-    // Blazing Rebirth
     if(card.ability==='Blazing Rebirth'&&!battleState.bossRebirthed){
       battleState.bossRebirthed=true;card.fainted=false;
       card.hp=Math.floor(card.maxHp*.2);
@@ -3335,8 +3718,34 @@ function checkBattleBossPhase(){
       document.getElementById('phase-banner').style.display='';
       document.getElementById('phase-name').textContent=ph.name||'New Phase';
       document.getElementById('phase-desc').textContent=ph.desc||'';
-      bLog(`🔮 <b>PHASE: ${ph.name}!</b> ${ph.desc}`,'ph');
+      bLog(`🔮 <b>PHASE ${newPhase+1}: ${ph.name}!</b> ${ph.desc}`,'ph');
     }
+
+    // ── HP boost on phase change ──
+    const hpBoost = ph?.hpBoost||0;
+    if(hpBoost>0){
+      en.maxHp += hpBoost;
+      en.hp    += hpBoost;
+      bLog(`💀 <b>${en.name}</b> grows stronger! Max HP +${hpBoost}!`,'boss');
+    }
+
+    // ── Self-heal on phase change ──
+    const healAmt = en.phaseHealAmount ? (en.phaseHealAmount[newPhase]||0) : 0;
+    if(healAmt>0){
+      en.hp = Math.min(en.maxHp, en.hp + healAmt);
+      bLog(`💚 <b>${en.name}</b> heals <b>${healAmt} HP</b> on phase change!`,'h');
+    }
+
+    // Set per-turn regen for later phases
+    if(en.phaseHealAmount && newPhase>0){
+      en._phaseHealPerTurn = Math.floor(healAmt * 0.08);
+    }
+  }
+
+  // ── Regen every turn in later phases ──
+  if(en._phaseHealPerTurn && en._phaseHealPerTurn>0 && en.hp>0){
+    en.hp = Math.min(en.maxHp, en.hp + en._phaseHealPerTurn);
+    bLog(`💚 <b>${en.name}</b> regenerates <b>${en._phaseHealPerTurn} HP</b>!`,'h');
   }
 }
 
@@ -3404,7 +3813,7 @@ function endBattle(won){
     while(gameState.playerXp>=gameState.xpToNext){
       gameState.playerXp-=gameState.xpToNext;
       gameState.playerLevel++;
-      gameState.xpToNext=Math.floor(gameState.xpToNext*1.4);
+      gameState.xpToNext=Math.floor(gameState.xpToNext*1.8);
       gameState.deck.forEach(c=>{c.maxHp+=8;c.hp=c.maxHp;c.fainted=false;});
       bLog(`✨ <b>PARTY LEVEL UP! Level ${gameState.playerLevel}!</b> All cards healed!`,'w');
     }
@@ -3495,7 +3904,7 @@ function enterDungeonRoom(){
     startBattle(mon,'screen-dungeon',room.type==='boss');
   } else if(room.type==='loot'){
     room.loot.forEach(l=>gameState.inventory.push({...l,qty:1}));
-    const g=Math.floor(10+Math.random()*20)*gameState.dungeonFloor;
+    const g=Math.floor(3+Math.random()*7)*gameState.dungeonFloor;
     gameState.playerGold+=g;toast(`Found ${room.loot.map(l=>l.item).join(', ')} + ${g} Gold!`);
     room.cleared=true;renderDungeonMap();
   } else if(room.type==='trap'){
@@ -3867,9 +4276,14 @@ function playStory(){
       gameState._storyQueue = {blocks:gameState.storyBlocks, idx};
       startBattle({...b.boss, hp:b.boss.hp, maxHp:b.boss.hp}, 'screen-sp', true);
     } else if(b.type==='reward'){
-      gameState.playerGold += b.gold||0;
-      spLog(`🎁 <b>+${b.gold} Gold!</b>`,'l');
-      updateSPHud();
+      // Only give gold rewards if playing online story mode
+      if(gameState.onlineRoomCode){
+        gameState.playerGold += b.gold||0;
+        spLog(`🎁 <b>+${b.gold} Gold!</b> (Online reward)`,'l');
+        updateSPHud();
+      } else {
+        spLog(`🎁 Story reward: <b>+${b.gold} Gold</b> — <span style="color:#a04040;">only granted in Online Story mode!</span>`,'mn');
+      }
       setTimeout(runBlock, 600);
     } else if(b.type==='village'||b.type==='merchant'){
       storyRandomEvent(b.type, idx);
@@ -3905,9 +4319,14 @@ function continueStoryQueue(){
         gameState._storyQueue={blocks:gameState.storyBlocks,idx};
         startBattle({...b.boss,hp:b.boss.hp,maxHp:b.boss.hp},'screen-sp',true);
       } else if(b.type==='reward'){
-        gameState.playerGold+=b.gold||0;
-        spLog(`🎁 <b>+${b.gold} Gold!</b>`,'l');
-        updateSPHud();setTimeout(runBlock,600);
+        if(gameState.onlineRoomCode){
+          gameState.playerGold+=b.gold||0;
+          spLog(`🎁 <b>+${b.gold} Gold!</b> (Online reward)`,'l');
+          updateSPHud();
+        } else {
+          spLog(`🎁 Story reward: <b>+${b.gold} Gold</b> — <span style="color:#a04040;">only granted in Online Story mode!</span>`,'mn');
+        }
+        setTimeout(runBlock,600);
       } else if(b.type==='village'||b.type==='merchant'){
         storyRandomEvent(b.type,idx);return;
       }
@@ -3927,7 +4346,7 @@ function renderStoryBlocks(){}
 
 const VILLAGE_NAMES = ['Ashford','Goldenholm','Riverwatch','Stonegate','Mistveil','Brightwick','Duskwall','Ironford','Elmhaven','Thornbury'];
 const TRADER_POOL_ITEMS = [
-  {icon:'🧪',name:'Health Potion',desc:'Heals 40 HP',cost:15,effect:{type:'item',stat:'hp',val:40},rarity:'Common'},
+  {icon:'🧪',name:'Health Potion',desc:'Heals 40 HP',cost:40,effect:{type:'item',stat:'hp',val:40},rarity:'Common'},
   {icon:'⚗️',name:'Elixir',desc:'Heals all cards 60 HP',cost:45,effect:{type:'item',stat:'hpAll',val:60},rarity:'Rare'},
   {icon:'🔮',name:'Mana Crystal',desc:'Resets ability cooldown',cost:35,effect:{type:'item',stat:'cooldown',val:0},rarity:'Rare'},
   {icon:'💉',name:'Antidote',desc:'Cures all statuses',cost:25,effect:{type:'item',stat:'cure',val:0},rarity:'Common'},
@@ -3936,7 +4355,7 @@ const TRADER_POOL_ITEMS = [
   {icon:'⛓️',name:'Iron Links',desc:'+4 Defense to active card',cost:40,effect:{type:'statOne',stat:'defense',val:4},rarity:'Common'},
   {icon:'📚',name:'XP Tome',desc:'+150 XP to active card',cost:55,effect:{type:'cardXp',val:150},rarity:'Rare'},
   {icon:'💊',name:'Mega Potion',desc:'Fully heals active card',cost:70,effect:{type:'item',stat:'hpFull',val:0},rarity:'Rare'},
-  {icon:'🍖',name:'Monster Bait',desc:'Tame next monster (50% chance)',cost:80,effect:{type:'special',stat:'tame',val:0},rarity:'Epic'},
+  {icon:'🍖',name:'Monster Bait',desc:'Tame next monster (50% chance)',cost:250,effect:{type:'special',stat:'tame',val:0},rarity:'Epic'},
 ];
 
 function spawnVillage(){
@@ -3959,9 +4378,16 @@ function spawnVillage(){
 }
 
 function villageRest(){
+  const cost = Math.floor(15 + gameState.playerLevel * 5);
+  if(gameState.playerGold < cost){
+    spLog(`💸 The inn costs <b>${cost} Gold</b> — you can't afford it!`,'d');
+    toast(`Need ${cost} Gold to rest!`);
+    return;
+  }
+  gameState.playerGold -= cost;
   gameState.deck.forEach(c=>{ c.hp = c.maxHp; c.fainted = false; c.statuses = []; });
   gameState.statuses = []; gameState.enemyStatuses = [];
-  spLog(`🛏️ The party rests at <b>${gameState.currentVillage}</b> — everyone fully healed!`,'h');
+  spLog(`🛏️ Paid <b>${cost} Gold</b> to rest at <b>${gameState.currentVillage}</b> — everyone fully healed!`,'h');
   updateSPHud(); setSPBtns();
 }
 
@@ -4177,21 +4603,25 @@ function spExplore(){
   spLog(`---`,'mn');
   spLog(`📍 <b>${loc}</b>`,'loc');
 
-  if(roll<.06){
-    const heal=Math.floor(15+Math.random()*15);
+  if(roll<.04){
+    // Heal spring — rarer now
+    const heal=Math.floor(10+Math.random()*10);
     const c=activeCard();c.hp=Math.min(c.maxHp,c.hp+heal);
     spLog(`✨ A glowing spring — <b>${c.name}</b> recovers <b>${heal} HP</b>.`,'h');
-  } else if(roll<.12){
-    const g=Math.floor((5+Math.random()*10)*(1+gameState.playerLevel*.3));
+  } else if(roll<.07){
+    // Gold cache — very rare, small amount
+    const g=Math.floor((2+Math.random()*5)*(1+gameState.playerLevel*.15));
     gameState.playerGold+=g;
     spLog(`💰 A forgotten cache — <b>${g} Gold</b>!`,'l');
-  } else if(roll<.17){
+  } else if(roll<.10){
+    // Potion — rarer
     gameState.inventory.push({item:'Health Potion',rarity:'Common',qty:1});
     spLog(`🧪 Hidden in the roots — a <b>Health Potion</b>!`,'l');
-  } else if(roll<.22){
+  } else if(roll<.20){
+    // Nothing — much more common
     spLog(`🌫️ Strange ruins... nothing stirs.`,'s');
-  } else if(roll<.30){
-    // VILLAGE EVENT
+  } else if(roll<.27){
+    // VILLAGE EVENT — slightly rarer
     spawnVillage();
     return;
   } else if(Math.random()<0.001){
@@ -5100,9 +5530,14 @@ function storyResume(idx){
       gameState._storyQueue={blocks:gameState.storyBlocks,idx:i};
       startBattle({...b.boss,hp:b.boss.hp,maxHp:b.boss.hp},'screen-sp',true);
     } else if(b.type==='reward'){
-      gameState.playerGold+=b.gold||0;
-      spLog(`🎁 <b>+${b.gold} Gold!</b>`,'l');
-      updateSPHud();setTimeout(runBlock,600);
+      if(gameState.onlineRoomCode){
+        gameState.playerGold+=b.gold||0;
+        spLog(`🎁 <b>+${b.gold} Gold!</b> (Online reward)`,'l');
+        updateSPHud();
+      } else {
+        spLog(`🎁 Story reward: <b>+${b.gold} Gold</b> — <span style="color:#a04040;">only granted in Online Story mode!</span>`,'mn');
+      }
+      setTimeout(runBlock,600);
     } else if(b.type==='village'||b.type==='merchant'){
       storyRandomEvent(b.type,i);return;
     } else {
@@ -5363,7 +5798,28 @@ function checkBossPhase(){
   if(newPhase!==gameState.bossPhase){
     gameState.bossPhase=newPhase;
     const ph=phases[newPhase];
-    if(ph) spLog(`🔮 <b>PHASE: ${ph.name}!</b> ${ph.desc}`,'d');
+    if(ph) spLog(`🔮 <b>PHASE ${newPhase+1}: ${ph.name}!</b> ${ph.desc}`,'d');
+
+    // ── Self-heal on phase change ──
+    const healAmt = en.phaseHealAmount ? (en.phaseHealAmount[newPhase]||0) : 0;
+    if(healAmt > 0){
+      en.hp = Math.min(en.maxHp + (ph.hpBoost||0), en.hp + healAmt);
+      spLog(`💚 <b>${en.name}</b> heals <b>${healAmt} HP</b> entering this phase!`,'h');
+    }
+
+    // ── HP boost on phase change (max HP increases) ──
+    const hpBoost = ph.hpBoost||0;
+    if(hpBoost > 0){
+      en.maxHp += hpBoost;
+      en.hp    += hpBoost;
+      spLog(`💀 <b>${en.name}</b> grows stronger! Max HP +${hpBoost}!`,'d');
+    }
+
+    // Continuous heal every turn for new bosses
+    if(en.phaseHealAmount && newPhase > 0){
+      en._phaseHealPerTurn = Math.floor(healAmt * 0.08);
+    }
+
     // Claude special dialogs on phase change
     if(en.id==='claude_oracle' && en.dialogs){
       const dialogSet = newPhase===1 ? en.dialogs.phase2 : newPhase===2 ? en.dialogs.phase3 : null;
@@ -5372,6 +5828,12 @@ function checkBossPhase(){
         setTimeout(()=>spLog(`🤖 <b>Claude:</b> "${line}"`,'sk'), 400);
       }
     }
+  }
+
+  // ── Heal per turn in later phases ──
+  if(en._phaseHealPerTurn && en._phaseHealPerTurn > 0 && en.hp > 0){
+    en.hp = Math.min(en.maxHp, en.hp + en._phaseHealPerTurn);
+    spLog(`💚 <b>${en.name}</b> regenerates <b>${en._phaseHealPerTurn} HP</b>!`,'h');
   }
 }
 
