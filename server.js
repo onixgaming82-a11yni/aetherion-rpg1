@@ -73,6 +73,21 @@ const socketToRoom  = new Map(); // socket.id → room code
 const onlinePlayers = new Map(); // socket.id → player info (global lobby)
 const trades        = new Map(); // tradeId → trade object
 
+// ── Account system ────────────────────────────────────────
+// accounts[username] = { username, password, save, createdAt, lastLogin }
+const accounts = new Map();
+const DEFAULT_PASSWORD = '12345';
+
+function hashPassword(pw) {
+  // Simple hash — in production use bcrypt but this is fine for a game
+  let hash = 0;
+  for(let i = 0; i < pw.length; i++){
+    hash = ((hash << 5) - hash) + pw.charCodeAt(i);
+    hash |= 0;
+  }
+  return hash.toString(36);
+}
+
 // ─────────────────────────────────────────────────────────
 //  HELPERS
 // ─────────────────────────────────────────────────────────
@@ -219,24 +234,44 @@ io.on('connection', (socket) => {
 
     if (mode === 'duel') {
       const [p1, p2] = room.players;
-      const makeCard = (p) => ({
-        id:              p.id,
-        name:            p.username,
-        emoji:           p.deck?.[0]?.emoji  || '⚔️',
-        cardName:        p.deck?.[0]?.name   || p.username,
-        hp:              p.deck?.[0]?.hp     || 80,
-        maxHp:           p.deck?.[0]?.hp     || 80,
-        atk:             p.deck?.[0]?.attack  || 12,
-        def:             p.deck?.[0]?.defense || 6,
-        mag:             p.deck?.[0]?.magic   || 8,
-        ability:         p.deck?.[0]?.ability || 'Strike',
-        abilityCooldown: 0,
-      });
+      const makeCombatant = (p) => {
+        const activeCard = p.deck?.[0] || {};
+        return {
+          id:              p.id,
+          name:            p.username,
+          // Full deck stored so player can switch cards
+          deck:            (p.deck||[]).map(c=>({
+            name:     c.name,
+            emoji:    c.emoji||'⚔️',
+            hp:       c.hp,
+            maxHp:    c.maxHp||c.hp,
+            atk:      c.attack||10,
+            def:      c.defense||5,
+            mag:      c.magic||8,
+            spd:      c.speed||8,
+            ability:  c.ability||'Strike',
+            title:    c.title||'',
+            fainted:  c.fainted||false,
+          })),
+          activeIdx:       0,
+          // Current active card stats (mirrored from deck[activeIdx])
+          emoji:           activeCard.emoji  || '⚔️',
+          cardName:        activeCard.name   || p.username,
+          hp:              activeCard.hp     || 80,
+          maxHp:           activeCard.maxHp  || activeCard.hp || 80,
+          atk:             activeCard.attack  || 12,
+          def:             activeCard.defense || 6,
+          mag:             activeCard.magic   || 8,
+          ability:         activeCard.ability || 'Strike',
+          abilityCooldown: 0,
+        };
+      };
       room.battleState = {
         turn:         0,
         activePlayer: p1.id,
-        combatants:   [makeCard(p1), makeCard(p2)],
+        combatants:   [makeCombatant(p1), makeCombatant(p2)],
         log:          [`⚔️ Duel begins! ${p1.username} vs ${p2.username}`],
+        chatLog:      [],
         over:         false,
         winner:       null,
       };
@@ -249,7 +284,8 @@ io.on('connection', (socket) => {
 
   // ── BATTLE ACTION ─────────────────────────────────────
   // Payload: { action: 'attack'|'ability'|'heal'|'flee' }
-  socket.on('battle:action', ({ action } = {}) => {
+  socket.on('battle:action', (data = {}) => {
+    const { action } = data;
     const room = getRoomOf(socket.id);
     if (!room?.battleState) { socket.emit('error', { msg: 'No active battle' }); return; }
     const bs = room.battleState;
@@ -262,6 +298,30 @@ io.on('connection', (socket) => {
       : [bs.combatants[1], bs.combatants[0]];
 
     let msg = '';
+
+    // Handle card switch separately
+    if(action === 'switch') {
+      const { cardIdx } = data || {};
+      if(cardIdx !== undefined && me.deck && me.deck[cardIdx] && !me.deck[cardIdx].fainted){
+        const newCard = me.deck[cardIdx];
+        me.activeIdx   = cardIdx;
+        me.emoji       = newCard.emoji;
+        me.cardName    = newCard.name;
+        me.hp          = newCard.hp;
+        me.maxHp       = newCard.maxHp;
+        me.atk         = newCard.atk;
+        me.def         = newCard.def;
+        me.mag         = newCard.mag;
+        me.ability     = newCard.ability;
+        me.abilityCooldown = 0;
+        const switchMsg = `🔄 ${me.name} switches to <b>${newCard.emoji} ${newCard.name}</b>!`;
+        bs.log.push(switchMsg);
+        bs.turn++;
+        bs.activePlayer = opp.id;
+        io.to(room.code).emit('battle:update', { battleState: bs, message: switchMsg });
+      }
+      return;
+    }
 
     switch (action) {
       case 'attack': {
@@ -422,6 +482,116 @@ io.on('connection', (socket) => {
       inRoom:   !!socketToRoom.get(p.id),
     }));
     socket.emit('lobby:players', list);
+  });
+
+  // ── DUEL CHAT ─────────────────────────────────────────
+  socket.on('duel:chat', ({ message } = {}) => {
+    const room = getRoomOf(socket.id);
+    if(!room?.battleState) return;
+    const player = onlinePlayers.get(socket.id);
+    const from = player?.username || 'Unknown';
+    const msg = message?.substring(0,200)?.trim();
+    if(!msg) return;
+    room.battleState.chatLog = room.battleState.chatLog || [];
+    room.battleState.chatLog.push({ from, msg, time: Date.now() });
+    io.to(room.code).emit('duel:chat', { from, message: msg, time: Date.now() });
+  });
+
+  // ── ACCOUNT: REGISTER ────────────────────────────────
+  // Payload: { username, password? }
+  socket.on('account:register', ({ username, password } = {}) => {
+    if (!username?.trim()) { socket.emit('account:error', { msg: 'Username required' }); return; }
+
+    let base  = username.trim();
+    let uname = base.toLowerCase();
+
+    // If taken, find next available number (onix → onix2 → onix3 etc)
+    if (accounts.has(uname)) {
+      let counter = 2;
+      while (accounts.has((base + counter).toLowerCase())) counter++;
+      base  = base + counter;
+      uname = base.toLowerCase();
+      // Tell the client the new auto-assigned name
+      socket.emit('account:renamed', { suggestedName: base });
+    }
+
+    const pw = password?.trim() || DEFAULT_PASSWORD;
+    accounts.set(uname, {
+      username:  base,
+      password:  hashPassword(pw),
+      save:      null,
+      createdAt: Date.now(),
+      lastLogin: Date.now(),
+    });
+    socket.emit('account:registered', { username: base, isNew: true });
+    console.log(`[ACCOUNT] Registered: ${base}`);
+  });
+
+  // ── ACCOUNT: LOGIN ────────────────────────────────────
+  // Payload: { username, password }
+  socket.on('account:login', ({ username, password } = {}) => {
+    if (!username?.trim()) { socket.emit('account:error', { msg: 'Username required' }); return; }
+    const uname = username.trim().toLowerCase();
+    const acc   = accounts.get(uname);
+
+    if (!acc) {
+      // Auto-create account if first time
+      const pw = password?.trim() || DEFAULT_PASSWORD;
+      accounts.set(uname, {
+        username:  username.trim(),
+        password:  hashPassword(pw),
+        save:      null,
+        createdAt: Date.now(),
+        lastLogin: Date.now(),
+      });
+      socket.emit('account:loggedin', { username: username.trim(), save: null, isNew: true });
+      console.log(`[ACCOUNT] Auto-created: ${username}`);
+      return;
+    }
+
+    const pw = password?.trim() || DEFAULT_PASSWORD;
+    if (acc.password !== hashPassword(pw)) {
+      socket.emit('account:error', { msg: 'Wrong password! Try again.' });
+      return;
+    }
+    acc.lastLogin = Date.now();
+    socket.emit('account:loggedin', { username: acc.username, save: acc.save, isNew: false });
+    console.log(`[ACCOUNT] Login: ${username}`);
+  });
+
+  // ── ACCOUNT: SAVE GAME ────────────────────────────────
+  // Payload: { username, password, save }
+  socket.on('account:save', ({ username, password, save } = {}) => {
+    if (!username?.trim()) return;
+    const uname = username.trim().toLowerCase();
+    const acc   = accounts.get(uname);
+    if (!acc) return;
+    const pw = password?.trim() || DEFAULT_PASSWORD;
+    if (acc.password !== hashPassword(pw)) return;
+    acc.save = save;
+    socket.emit('account:saved', { ok: true });
+  });
+
+  // ── ACCOUNT: CHANGE PASSWORD ──────────────────────────
+  // Payload: { username, oldPassword, newPassword }
+  socket.on('account:changepass', ({ username, oldPassword, newPassword } = {}) => {
+    if (!username?.trim()) { socket.emit('account:error', { msg: 'Not logged in' }); return; }
+    const uname = username.trim().toLowerCase();
+    const acc   = accounts.get(uname);
+    if (!acc) { socket.emit('account:error', { msg: 'Account not found' }); return; }
+    const oldPw = oldPassword?.trim() || DEFAULT_PASSWORD;
+    if (acc.password !== hashPassword(oldPw)) {
+      socket.emit('account:error', { msg: 'Current password is wrong!' });
+      return;
+    }
+    const newPw = newPassword?.trim();
+    if (!newPw || newPw.length < 3) {
+      socket.emit('account:error', { msg: 'New password must be at least 3 characters' });
+      return;
+    }
+    acc.password = hashPassword(newPw);
+    socket.emit('account:passchanged', { ok: true });
+    console.log(`[ACCOUNT] Password changed: ${username}`);
   });
 
   // ── DISCONNECT ────────────────────────────────────────
