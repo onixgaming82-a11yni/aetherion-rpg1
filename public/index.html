@@ -1351,8 +1351,29 @@ input, textarea { font-size: 16px !important; } /* Prevents iOS zoom on focus */
         <div class="mode-desc">View and unlock powerful character skills</div>
       </div>
     </button>
+    <button class="mode-btn" onclick="openDailyQuests()" id="btn-daily-quests">
+      <span class="mode-icon">📋</span>
+      <div class="mode-info">
+        <div class="mode-name">Daily Quests <span id="daily-quests-badge" style="background:#c02020;color:#fff;border-radius:10px;padding:1px 6px;font-size:.5rem;margin-left:4px;"></span></div>
+        <div class="mode-desc">3 quests per day — earn bonus Gold and XP</div>
+      </div>
+    </button>
+    <button class="mode-btn" onclick="openPvPArena()">
+      <span class="mode-icon">🏟️</span>
+      <div class="mode-info">
+        <div class="mode-name">PvP Arena</div>
+        <div class="mode-desc">Fight other players in ranked matches</div>
+      </div>
+    </button>
+    <button class="mode-btn" onclick="openGuild()">
+      <span class="mode-icon">🛡️</span>
+      <div class="mode-info">
+        <div class="mode-name">Guild</div>
+        <div class="mode-desc">Create or join a guild with friends</div>
+      </div>
+    </button>
   </div>
-  <div class="menu-footer">v1.0 · 100 Monsters · 40 Characters · 4 Bosses · Online Multiplayer</div>
+  <div class="menu-footer">v2.0 · 40 Monsters · 40 Characters · 8 Bosses · Guilds · Daily Quests · PvP Arena</div>
 </div>
 
 <!-- ═══════════════════════ CARD PICK SCREEN ═══════════════════════ -->
@@ -1397,6 +1418,7 @@ input, textarea { font-size: 16px !important; } /* Prevents iOS zoom on focus */
           <span id="sp-loc" style="color:var(--blue);font-size:.62rem;"></span>
         </div>
         <div id="sp-log"></div>
+        <div id="combo-display" style="display:none;margin:4px 0 0;padding:6px 10px;background:rgba(200,80,10,.1);border:1px solid rgba(200,80,10,.3);border-radius:6px;"></div>
         <div id="sp-actions">
           <button class="act-btn atk" id="btn-attack" onclick="spAttack()">⚔️ Attack</button>
           <button class="act-btn sp" id="btn-ability" onclick="spAbility()">✨ Ability</button>
@@ -2013,6 +2035,8 @@ function showMenu(){
 
 function updateMenuHud(){
   const gold = gameState.playerGold||0;
+  // Update daily quests badge
+  setTimeout(updateDailyBadge, 100);
   const el = document.getElementById('menu-gold-display');
   if(el) el.textContent = gold;
   const sg = document.getElementById('shop-gold-display');
@@ -3052,7 +3076,23 @@ function setSPBtns(){
 // ─────────────────────────────────────────
 function spAttack(){
   if(!gameState.inBattle)return;
-  const dmg=calcPlayerAttack();
+  incrementCombo('attack');
+  let dmg=calcPlayerAttack();
+  // Apply elemental multiplier
+  const cardEl = getCardElement(activeCard());
+  const enemEl = getEnemyElement(gameState.currentEnemy);
+  const elMult = getElementMultiplier(cardEl, enemEl);
+  if(elMult > 1){
+    dmg = Math.floor(dmg * elMult);
+    spLog(`✨ <b>Elemental advantage!</b> ×${elMult.toFixed(1)} damage!`,'sk');
+  } else if(elMult < 1){
+    dmg = Math.floor(dmg * elMult);
+    spLog(`⚡ <b>Elemental weakness!</b> ×${elMult.toFixed(1)} damage.`,'mn');
+  }
+  // Apply combo multiplier
+  if(comboState.count >= 2){
+    dmg = Math.floor(dmg * comboState.multiplier);
+  }
   spLog(`⚔️ <b>${activeCard().name}</b> strikes <b>${gameState.currentEnemy.name}</b> for <b>${dmg}</b>!`,'c');
   gameState.currentEnemy.hp=Math.max(0,gameState.currentEnemy.hp-dmg);
   if(gameState.currentEnemy.hp<=0){spBattleEnd(true);return;}
@@ -3085,6 +3125,8 @@ function spAbility(){
     default:{const d=Math.floor((calcPlayerAttack()+calcStat('magic'))*.75);en.hp=Math.max(0,en.hp-d);spLog(`✨ <b>${card.ability}!</b> <b>${d}</b> damage!`,'sk');}
   }
   card.abilityCooldown=gameState.unlockedSkills.includes('ultimate')?1:2;
+  incrementCombo('ability');
+  if(comboState.count >= 3) trackQuestProgress('combo', comboState.count);
   if(gameState.currentEnemy&&gameState.currentEnemy.hp<=0){spBattleEnd(true);return;}
   if(!handled) spEnemyTurn();
   updateSPHud();setSPBtns();
@@ -3377,6 +3419,14 @@ function spBattleEnd(won){
     const xp=en.xp||20;const g=Math.floor((en.gold||5)*0.6);
     gameState.playerXp+=xp;gameState.playerGold+=g;gameState.skillXp+=xp;
     spLog(`+<b>${xp} XP</b>, +<b>${g} Gold</b>.`,'xp');
+    // Track quest progress
+    trackQuestProgress('kill', 1);
+    trackQuestProgress('gold', g);
+    if(gameState.isBoss){ trackQuestProgress('boss', 1); trackGuildKill(true); }
+    else { trackGuildKill(false); }
+    // Track ranked win
+    if(en.isRanked){ recordDuelWin(); spLog(`🏆 <b>Ranked Win!</b> Your rank updated!`,'w'); }
+    resetCombo();
 
     // ── Card XP — active card gets full XP, reserves get 50% ──
     gameState.deck.forEach((c,i)=>{
@@ -3406,6 +3456,7 @@ function spBattleEnd(won){
       gameState.playerLevel++;
       gameState.xpToNext=Math.floor(gameState.xpToNext*1.8);
       spLog(`✨ <b>PARTY LEVEL UP! Level ${gameState.playerLevel}!</b> Next upgrade costs <b>${getUpgradeCost()} Gold</b>`,'w');
+      trackQuestProgress('levelup', 1);
     }
     // Revive fainted cards at low HP
     gameState.deck.forEach(c=>{
@@ -4585,6 +4636,7 @@ function tryTameEnemy(){
     };
     gameState.deck.push(newCard);
     spLog(`🎉 <b>${en.name}</b> was tamed and joined the party!`,'w');
+    trackQuestProgress('tame', 1);
     spBattleEnd(true);
   } else {
     spLog(`😤 <b>${en.name}</b> resisted the taming attempt!`,'d');
@@ -4602,6 +4654,7 @@ function spExplore(){
   document.getElementById('sp-loc').textContent=loc;
   spLog(`---`,'mn');
   spLog(`📍 <b>${loc}</b>`,'loc');
+  trackQuestProgress('explore', 1);
 
   if(roll<.04){
     // Heal spring — rarer now
@@ -4745,6 +4798,10 @@ function getSocket() {
   socket.on('player:registered', () => {
     // Request lobby list once registered
     socket.emit('lobby:request');
+    // Sync our own leaderboard score immediately
+    const wins = parseInt(localStorage.getItem('aetherion_duel_wins')||'0');
+    const { rank } = getRankData();
+    if(wins > 0) syncLeaderboardToServer(gameState.username||'', wins, rank.name);
   });
 
   // ── Battle ──
@@ -5654,21 +5711,42 @@ function recordDuelWin(){
   const prev = getRankData();
   const wins = parseInt(localStorage.getItem('aetherion_duel_wins')||'0') + 1;
   localStorage.setItem('aetherion_duel_wins', wins);
-  // Register in leaderboard
+  // Update local leaderboard
   let lb = JSON.parse(localStorage.getItem('aetherion_leaderboard')||'[]');
   lb = lb.filter(p => p.name !== (gameState.username||'You'));
   lb.push({ name: gameState.username||'You', wins });
   localStorage.setItem('aetherion_leaderboard', JSON.stringify(lb));
+  // Sync win count to server via cloud save
   const curr = getRankData();
+  gameState.duelWins = wins;
   updateMenuHud();
+  saveGame(); // this triggers cloudSave which syncs to MongoDB
   if(curr.rank.name !== prev.rank.name) showRankUpPopup(curr.rank);
-  saveGame();
+  // Push to server leaderboard
+  syncLeaderboardToServer(gameState.username||'You', wins, curr.rank.name);
 }
 
 function recordDuelLoss(){
   const losses = parseInt(localStorage.getItem('aetherion_duel_losses')||'0') + 1;
   localStorage.setItem('aetherion_duel_losses', losses);
   saveGame();
+}
+
+// Push this player's wins to server so others can see them
+function syncLeaderboardToServer(name, wins, rankName){
+  if(!socket?.connected) return;
+  socket.emit('leaderboard:update', { name, wins, rankName });
+}
+
+// Fetch full leaderboard from all connected players
+function fetchServerLeaderboard(callback){
+  if(!socket?.connected){ callback([]); return; }
+  socket.emit('leaderboard:request');
+  socket.once('leaderboard:data', (data)=>{
+    callback(data || []);
+  });
+  // Timeout fallback after 2 seconds
+  setTimeout(()=>{ callback([]); }, 2000);
 }
 
 function showRankUpPopup(rank){
@@ -5687,57 +5765,91 @@ function showRankUpPopup(rank){
 function openLeaderboard(){
   const { wins, losses, rank, nextRank, winsToNext } = getRankData();
 
-  // Load all real registered players from localStorage
-  let allPlayers = JSON.parse(localStorage.getItem('aetherion_leaderboard')||'[]');
+  // Show loading state first
+  showModal('🏆 Ranks & Leaderboard', `
+    <div style="text-align:center;padding:30px 0;">
+      <div style="font-size:2rem;margin-bottom:8px;">⏳</div>
+      <div style="font-size:.65rem;color:var(--dim);">Loading leaderboard...</div>
+    </div>`, []);
 
-  // Make sure current player is registered
-  const myEntry = { name: gameState.username||'You', wins, rank, isMe:true };
-  allPlayers = allPlayers.filter(p => p.name !== myEntry.name);
-  allPlayers.push(myEntry);
+  // Sync own score to server first
+  syncLeaderboardToServer(gameState.username||'You', wins, rank.name);
 
-  // Save updated leaderboard
-  localStorage.setItem('aetherion_leaderboard', JSON.stringify(
-    allPlayers.map(p => ({ name: p.name, wins: p.wins }))
-  ));
+  // Try to fetch from server, merge with local
+  fetchServerLeaderboard((serverPlayers)=>{
+    // Load local players
+    let localPlayers = JSON.parse(localStorage.getItem('aetherion_leaderboard')||'[]');
 
-  // Sort by wins
-  allPlayers = allPlayers
-    .map(p => {
-      let r = RANKS[0];
-      for(const rk of RANKS){ if(p.wins >= rk.winsNeeded) r = rk; else break; }
-      return { ...p, rank: r };
-    })
-    .sort((a,b) => b.wins - a.wins);
+    // Merge server + local — server takes priority
+    const merged = {};
+    localPlayers.forEach(p=>{ merged[p.name] = p; });
+    serverPlayers.forEach(p=>{ merged[p.name] = p; }); // server overwrites local
 
-  const medals = ['🥇','🥈','🥉'];
-  const body = `
-    <div style="margin-bottom:14px;">
-      <div style="text-align:center;margin-bottom:12px;">
-        <div style="font-size:2.5rem;">${rank.emoji}</div>
-        <div style="font-family:'Cinzel',serif;font-size:.9rem;color:var(--gold);">${rank.name}</div>
-        <div style="font-size:.62rem;color:var(--dim);margin-top:4px;">${wins} Wins · ${losses} Losses</div>
-        ${nextRank
-          ? `<div style="font-size:.58rem;color:var(--dim);margin-top:3px;">${winsToNext} more wins to reach ${nextRank.emoji} ${nextRank.name}</div>
-             <div style="height:5px;background:rgba(0,0,0,.5);border-radius:3px;margin-top:6px;max-width:200px;margin-left:auto;margin-right:auto;">
-               <div style="height:100%;background:linear-gradient(90deg,var(--gold2),var(--gold));border-radius:3px;width:${Math.round((wins-rank.winsNeeded)/(nextRank.winsNeeded-rank.winsNeeded)*100)}%;"></div>
-             </div>`
-          : `<div style="font-size:.58rem;color:#c000c0;margin-top:3px;">👑 Maximum rank achieved!</div>`}
-      </div>
-      <div style="font-family:'Cinzel',serif;font-size:.6rem;color:var(--gold);margin-bottom:8px;border-bottom:1px solid var(--border);padding-bottom:6px;">🏆 Leaderboard</div>
-      ${allPlayers.length > 1
-        ? allPlayers.map((p,i)=>`
-          <div class="leaderboard-row" style="${p.isMe?'border-color:rgba(200,151,58,.4);background:rgba(200,151,58,.06);':''}">
-            <div class="lb-pos">${['🥇','🥈','🥉'][i]||`#${i+1}`}</div>
-            <div class="lb-name">${p.isMe?`<b style="color:var(--gold);">${p.name} (You)</b>`:p.name}</div>
-            <span class="rank-badge ${p.rank.cls}" style="font-size:.5rem;padding:2px 7px;">${p.rank.emoji} ${p.rank.name}</span>
-            <div class="lb-wins">${p.wins}W</div>
-          </div>`).join('')
-        : `<div style="color:var(--dim);font-size:.65rem;font-style:italic;padding:12px 0;text-align:center;">
-             No other players yet — win duels to climb the ranks!<br>
-             <span style="font-size:.55rem;">Other players will appear here when they play.</span>
-           </div>`}
-    </div>`;
-  showModal('🏆 Ranks & Leaderboard', body, [{label:'Close', cls:'btn-ghost', cb:closeModal}]);
+    // Make sure current player is in there
+    merged[gameState.username||'You'] = { name: gameState.username||'You', wins, isMe:true };
+
+    let allPlayers = Object.values(merged);
+
+    // Save merged back to local
+    localStorage.setItem('aetherion_leaderboard', JSON.stringify(
+      allPlayers.map(p=>({ name:p.name, wins:p.wins||0 }))
+    ));
+
+    // Add rank data and sort
+    allPlayers = allPlayers
+      .map(p=>{
+        let r = RANKS[0];
+        for(const rk of RANKS){ if((p.wins||0) >= rk.winsNeeded) r = rk; else break; }
+        return { ...p, rank:r, isMe: p.name===(gameState.username||'You') };
+      })
+      .sort((a,b)=>(b.wins||0)-(a.wins||0));
+
+    const body = `
+      <div style="margin-bottom:14px;">
+        <!-- Your stats -->
+        <div style="text-align:center;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border);">
+          <div style="font-size:2.5rem;">${rank.emoji}</div>
+          <div style="font-family:'Cinzel',serif;font-size:.9rem;color:var(--gold);">${rank.name}</div>
+          <div style="font-size:.62rem;color:var(--dim);margin-top:4px;">${wins} Wins · ${losses} Losses</div>
+          ${nextRank
+            ? `<div style="font-size:.58rem;color:var(--dim);margin-top:3px;">${winsToNext} more wins to reach ${nextRank.emoji} ${nextRank.name}</div>
+               <div style="height:5px;background:rgba(0,0,0,.5);border-radius:3px;margin-top:6px;max-width:200px;margin-left:auto;margin-right:auto;">
+                 <div style="height:100%;background:linear-gradient(90deg,var(--gold2),var(--gold));border-radius:3px;width:${Math.round((wins-rank.winsNeeded)/Math.max(1,nextRank.winsNeeded-rank.winsNeeded)*100)}%;"></div>
+               </div>`
+            : `<div style="font-size:.58rem;color:#c000c0;margin-top:3px;">👑 Maximum rank achieved!</div>`}
+        </div>
+
+        <!-- Leaderboard -->
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <div style="font-family:'Cinzel',serif;font-size:.6rem;color:var(--gold);">🏆 Global Leaderboard</div>
+          <div style="font-size:.52rem;color:var(--dim);">${allPlayers.length} player${allPlayers.length!==1?'s':''}</div>
+        </div>
+
+        ${allPlayers.length > 0
+          ? allPlayers.slice(0,20).map((p,i)=>`
+            <div class="leaderboard-row" style="${p.isMe?'border-color:rgba(200,151,58,.4);background:rgba(200,151,58,.06);':''}">
+              <div class="lb-pos">${i===0?'🥇':i===1?'🥈':i===2?'🥉':`#${i+1}`}</div>
+              <div class="lb-name">${p.isMe?`<b style="color:var(--gold);">${p.name} ⭐</b>`:escapeHTML(p.name)}</div>
+              <span class="rank-badge ${p.rank.cls}" style="font-size:.48rem;padding:2px 6px;">${p.rank.emoji} ${p.rank.name}</span>
+              <div class="lb-wins">${p.wins||0}W</div>
+            </div>`).join('')
+          : `<div style="color:var(--dim);font-size:.65rem;font-style:italic;padding:12px 0;text-align:center;">
+               Win duels to appear on the leaderboard!
+             </div>`}
+
+        ${allPlayers.length > 20
+          ? `<div style="text-align:center;font-size:.55rem;color:var(--dim);margin-top:6px;">Showing top 20 of ${allPlayers.length} players</div>`
+          : ''}
+      </div>`;
+
+    // Update modal body
+    document.getElementById('modal-body').innerHTML = body;
+    document.getElementById('modal-btns').innerHTML = '';
+    const btn = document.createElement('button');
+    btn.className = 'btn-ghost'; btn.style.flex = '1';
+    btn.textContent = 'Close'; btn.onclick = closeModal;
+    document.getElementById('modal-btns').appendChild(btn);
+  });
 }
 
 // ─────────────────────────────────────────
@@ -5835,6 +5947,538 @@ function checkBossPhase(){
     en.hp = Math.min(en.maxHp, en.hp + en._phaseHealPerTurn);
     spLog(`💚 <b>${en.name}</b> regenerates <b>${en._phaseHealPerTurn} HP</b>!`,'h');
   }
+}
+
+
+// ═══════════════════════════════════════════════════
+//  ELEMENTAL SYSTEM
+// ═══════════════════════════════════════════════════
+const ELEMENTS = {
+  fire:      { beats:'ice',      weakTo:'water',   emoji:'🔥', color:'#f08050' },
+  ice:       { beats:'wind',     weakTo:'fire',    emoji:'❄️', color:'#80c0f0' },
+  water:     { beats:'fire',     weakTo:'storm',   emoji:'🌊', color:'#60a0e0' },
+  storm:     { beats:'water',    weakTo:'earth',   emoji:'⚡', color:'#c080f0' },
+  earth:     { beats:'storm',    weakTo:'wind',    emoji:'🌍', color:'#d0a050' },
+  wind:      { beats:'earth',    weakTo:'ice',     emoji:'💨', color:'#60d0b0' },
+  dark:      { beats:'light',    weakTo:'light',   emoji:'🌑', color:'#a070d0' },
+  light:     { beats:'dark',     weakTo:'dark',    emoji:'✨', color:'#f0e060' },
+  nature:    { beats:'water',    weakTo:'fire',    emoji:'🌿', color:'#60d060' },
+  poison:    { beats:'nature',   weakTo:'fire',    emoji:'☠️', color:'#80d040' },
+};
+
+// Assign elements to characters
+const CHAR_ELEMENTS = {
+  aetherion:'light', sylphina:'wind', terragon:'earth', pyraflame:'fire',
+  glaciera:'ice', umbros:'dark', thundrax:'storm', floralis:'nature',
+  luminara:'light', krakenos:'water', oblivion:'dark', stormfang:'storm',
+  emberclaw:'fire', ironhide:'earth', lunaris:'light', shadowflame:'dark',
+  frostbite:'ice', ignis:'fire', mystara:'light', aqualis:'water',
+};
+
+// Assign elements to monsters
+const MON_ELEMENTS = {
+  goblin_grunt:'earth', cave_bat:'dark', shadow_rat:'dark', fire_imp:'fire',
+  ice_sprite:'ice', bandit_thief:'dark', dark_wolf:'dark', troll_brute:'earth',
+  swamp_hydra:'poison', stone_golem:'earth', fire_drake:'fire', dark_assassin:'dark',
+  shadow_knight:'dark', flame_drake:'fire', blaze_phoenix:'fire', ancient_dragon:'fire',
+  void_dragon_king:'dark', inferno_dragon:'fire', thunder_golem:'storm', necro_mage:'dark',
+  venom_spider:'poison', toxic_frog:'poison', desert_scorpion:'poison', swamp_croc:'water',
+  cursed_lion:'dark', iron_elephant:'earth', shadow_shark:'water', death_moth:'dark',
+  abyss_stalker:'dark', iron_crab:'earth', plague_bee:'poison', lava_lizard:'fire',
+  frost_werewolf:'ice', storm_hawk:'storm', chaos_bear:'earth', trickster_fox:'wind',
+  nightmare_horse:'dark', deep_terror:'water', cursed_dolphin:'water', void_whale:'dark',
+};
+
+function getElementMultiplier(attackerElement, defenderElement){
+  if(!attackerElement || !defenderElement) return 1;
+  const el = ELEMENTS[attackerElement];
+  if(!el) return 1;
+  if(el.beats === defenderElement) return 1.5;   // Super effective
+  if(el.weakTo === defenderElement) return 0.7;  // Not very effective
+  return 1;
+}
+
+function getCardElement(card){
+  return card.element || CHAR_ELEMENTS[card.id] || MON_ELEMENTS[card.id] || 'dark';
+}
+
+function getEnemyElement(enemy){
+  return enemy.element || MON_ELEMENTS[enemy.id] || 'dark';
+}
+
+// ═══════════════════════════════════════════════════
+//  COMBO METER SYSTEM
+// ═══════════════════════════════════════════════════
+let comboState = { count: 0, multiplier: 1, lastAction: null };
+
+function incrementCombo(action){
+  // Chain same actions or attacks for combo
+  if(comboState.lastAction === action || action === 'attack'){
+    comboState.count++;
+    comboState.multiplier = Math.min(3.0, 1 + comboState.count * 0.15);
+  } else {
+    comboState.count = 1;
+    comboState.multiplier = 1.15;
+  }
+  comboState.lastAction = action;
+  updateComboDisplay();
+}
+
+function resetCombo(){
+  comboState = { count: 0, multiplier: 1, lastAction: null };
+  updateComboDisplay();
+}
+
+function updateComboDisplay(){
+  const el = document.getElementById('combo-display');
+  if(!el) return;
+  if(comboState.count >= 2){
+    el.style.display = '';
+    el.innerHTML = `
+      <div style="font-family:'Cinzel',serif;font-size:.6rem;color:${comboState.count>=5?'#f0c060':comboState.count>=3?'#e08040':'#d06030'};">
+        ${comboState.count}x COMBO! ×${comboState.multiplier.toFixed(2)}
+      </div>
+      <div style="height:3px;background:rgba(0,0,0,.5);border-radius:2px;margin-top:2px;">
+        <div style="height:100%;background:linear-gradient(90deg,#c04010,#f0a030);width:${Math.min(100,comboState.count*10)}%;border-radius:2px;transition:width .3s;"></div>
+      </div>`;
+  } else {
+    el.style.display = 'none';
+  }
+}
+
+// ═══════════════════════════════════════════════════
+//  DAILY QUESTS SYSTEM
+// ═══════════════════════════════════════════════════
+const QUEST_TEMPLATES = [
+  {id:'kill5',    desc:'Defeat 5 monsters',        type:'kill',    target:5,   reward:{gold:50,  xp:100}},
+  {id:'kill10',   desc:'Defeat 10 monsters',       type:'kill',    target:10,  reward:{gold:100, xp:200}},
+  {id:'kill20',   desc:'Defeat 20 monsters',       type:'kill',    target:20,  reward:{gold:200, xp:400}},
+  {id:'boss1',    desc:'Defeat 1 boss',            type:'boss',    target:1,   reward:{gold:300, xp:600}},
+  {id:'explore5', desc:'Explore 5 times',          type:'explore', target:5,   reward:{gold:40,  xp:80}},
+  {id:'explore10',desc:'Explore 10 times',         type:'explore', target:10,  reward:{gold:80,  xp:160}},
+  {id:'gold100',  desc:'Earn 100 Gold in battle',  type:'gold',    target:100, reward:{gold:60,  xp:120}},
+  {id:'combo3',   desc:'Get a 3x combo',           type:'combo',   target:3,   reward:{gold:80,  xp:150}},
+  {id:'combo5',   desc:'Get a 5x combo',           type:'combo',   target:5,   reward:{gold:150, xp:300}},
+  {id:'lvlup1',   desc:'Level up your party once', type:'levelup', target:1,   reward:{gold:200, xp:400}},
+  {id:'tame1',    desc:'Tame a monster',           type:'tame',    target:1,   reward:{gold:250, xp:500}},
+  {id:'win3duel', desc:'Win 3 duels',              type:'duel',    target:3,   reward:{gold:400, xp:800}},
+];
+
+function getDailyQuestsKey(){
+  const d = new Date();
+  return `aetherion_quests_${d.getFullYear()}_${d.getMonth()}_${d.getDate()}`;
+}
+
+function getDailyQuests(){
+  const key = getDailyQuestsKey();
+  const saved = localStorage.getItem(key);
+  if(saved) return JSON.parse(saved);
+  // Generate 3 random quests for today
+  const shuffled = [...QUEST_TEMPLATES].sort(()=>Math.random()-.5).slice(0,3);
+  const quests = shuffled.map(q=>({...q, progress:0, completed:false, claimed:false}));
+  localStorage.setItem(key, JSON.stringify(quests));
+  return quests;
+}
+
+function saveDailyQuests(quests){
+  localStorage.setItem(getDailyQuestsKey(), JSON.stringify(quests));
+}
+
+function trackQuestProgress(type, amount=1){
+  const quests = getDailyQuests();
+  let changed = false;
+  quests.forEach(q=>{
+    if(q.completed || q.type !== type) return;
+    q.progress = Math.min(q.target, (q.progress||0) + amount);
+    if(q.progress >= q.target){
+      q.completed = true;
+      changed = true;
+      toast(`✅ Quest complete: ${q.desc}!`);
+    }
+  });
+  if(changed) saveDailyQuests(quests);
+  updateDailyBadge();
+}
+
+function updateDailyBadge(){
+  const badge = document.getElementById('daily-quests-badge');
+  if(!badge) return;
+  const quests = getDailyQuests();
+  const ready = quests.filter(q=>q.completed && !q.claimed).length;
+  if(ready > 0){
+    badge.textContent = ready + ' ready!';
+    badge.style.display = '';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+function openDailyQuests(){
+  const quests = getDailyQuests();
+  const now = new Date();
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate()+1);
+  tomorrow.setHours(0,0,0,0);
+  const hoursLeft = Math.ceil((tomorrow-now)/3600000);
+
+  const body = `
+    <div style="font-size:.62rem;color:var(--dim);margin-bottom:12px;text-align:center;">
+      🕐 Resets in <b style="color:var(--gold);">${hoursLeft}h</b> · Complete quests for bonus rewards!
+    </div>
+    ${quests.map((q,i)=>`
+      <div style="background:rgba(0,0,0,.4);border:2px solid ${q.claimed?'rgba(60,180,60,.3)':q.completed?'rgba(200,151,58,.4)':'var(--border)'};
+        border-radius:10px;padding:12px;margin-bottom:8px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+          <span style="font-size:1.2rem;">${q.claimed?'✅':q.completed?'🎁':'📋'}</span>
+          <div style="flex:1;">
+            <div style="font-family:'Cinzel',serif;font-size:.65rem;color:${q.claimed?'#60d060':q.completed?'var(--gold)':'var(--text)'};">${q.desc}</div>
+            <div style="font-size:.55rem;color:var(--dim);">Reward: 💰${q.reward.gold} Gold + ⭐${q.reward.xp} XP</div>
+          </div>
+          ${q.completed && !q.claimed
+            ? `<button class="btn-sm" onclick="claimQuestReward(${i})" style="font-size:.55rem;padding:5px 10px;background:linear-gradient(135deg,#0a3018,#1a7040);">Claim!</button>`
+            : q.claimed ? `<span style="font-size:.6rem;color:#60d060;">Claimed!</span>` : ''}
+        </div>
+        <div style="height:5px;background:rgba(0,0,0,.5);border-radius:3px;">
+          <div style="height:100%;background:linear-gradient(90deg,${q.claimed?'#1a6030':'#c8973a'},${q.claimed?'#30c060':'#f0c060'});
+            width:${Math.min(100,Math.floor((q.progress/q.target)*100))}%;border-radius:3px;transition:width .3s;"></div>
+        </div>
+        <div style="font-size:.52rem;color:var(--dim);margin-top:3px;">${q.progress||0} / ${q.target}</div>
+      </div>`).join('')}`;
+  showModal('📋 Daily Quests', body, [{label:'Close', cls:'btn-ghost', cb:()=>{ closeModal(); updateDailyBadge(); }}]);
+}
+
+function claimQuestReward(idx){
+  const quests = getDailyQuests();
+  const q = quests[idx];
+  if(!q || !q.completed || q.claimed) return;
+  q.claimed = true;
+  gameState.playerGold += q.reward.gold;
+  gameState.playerXp   += q.reward.xp;
+  gameState.skillXp    += q.reward.xp;
+  saveDailyQuests(quests);
+  saveGame();
+  updateMenuHud();
+  updateDailyBadge();
+  toast(`🎁 Claimed! +${q.reward.gold} Gold, +${q.reward.xp} XP!`);
+  openDailyQuests(); // refresh
+}
+
+// ═══════════════════════════════════════════════════
+//  PvP ARENA SYSTEM
+// ═══════════════════════════════════════════════════
+function openPvPArena(){
+  if(!gameState.deck.length){ toast('Build a deck first!'); return; }
+  const { wins, losses, rank } = getRankData();
+  const body = `
+    <div style="text-align:center;margin-bottom:16px;">
+      <div style="font-size:2.5rem;">${rank.emoji}</div>
+      <div style="font-family:'Cinzel',serif;font-size:.85rem;color:var(--gold);">${rank.name} Rank</div>
+      <div style="font-size:.6rem;color:var(--dim);margin-top:4px;">${wins}W · ${losses}L</div>
+    </div>
+    <div style="border-top:1px solid var(--border);padding-top:14px;">
+      <div style="font-family:'Cinzel',serif;font-size:.65rem;color:var(--gold);margin-bottom:10px;">⚔️ Arena Modes</div>
+
+      <div style="background:rgba(0,0,0,.4);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px;cursor:pointer;"
+        onclick="startRankedMatch()" onmouseover="this.style.borderColor='rgba(200,151,58,.4)'" onmouseout="this.style.borderColor='var(--border)'">
+        <div style="font-family:'Cinzel',serif;font-size:.7rem;color:var(--gold);">🏆 Ranked Match</div>
+        <div style="font-size:.58rem;color:var(--dim);margin-top:3px;">Fight a random opponent at your level. Wins count toward your rank.</div>
+      </div>
+
+      <div style="background:rgba(0,0,0,.4);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px;cursor:pointer;"
+        onclick="startPracticeMatch()" onmouseover="this.style.borderColor='rgba(200,151,58,.4)'" onmouseout="this.style.borderColor='var(--border)'">
+        <div style="font-family:'Cinzel',serif;font-size:.7rem;color:var(--text);">🎯 Practice Match</div>
+        <div style="font-size:.58rem;color:var(--dim);margin-top:3px;">Fight an AI opponent. No rank impact. Good for testing builds.</div>
+      </div>
+
+      <div style="background:rgba(0,0,0,.4);border:1px solid var(--border);border-radius:10px;padding:12px;cursor:pointer;"
+        onclick="closeModal();goOnline()" onmouseover="this.style.borderColor='rgba(200,151,58,.4)'" onmouseout="this.style.borderColor='var(--border)'">
+        <div style="font-family:'Cinzel',serif;font-size:.7rem;color:var(--text);">🌐 Challenge Friend</div>
+        <div style="font-size:.58rem;color:var(--dim);margin-top:3px;">Go to Online Mode to duel a specific friend with a room code.</div>
+      </div>
+    </div>`;
+  showModal('🏟️ PvP Arena', body, [{label:'Close', cls:'btn-ghost', cb:closeModal}]);
+}
+
+function startRankedMatch(){
+  closeModal();
+  // Build an AI opponent based on player level
+  const lv = gameState.playerLevel||1;
+  const oppNames = ['Shadow Knight','Void Walker','Storm Caller','Iron Breaker','Frost Mage','Flame Dancer','Dark Sage','Thunder Born'];
+  const oppEmojis = ['🥷','👻','⚡','🛡️','❄️','🔥','🧙','⚡'];
+  const idx = Math.floor(Math.random()*oppNames.length);
+  const opponent = {
+    id: 'pvp_ai',
+    name: oppNames[idx],
+    emoji: oppEmojis[idx],
+    hp:      Math.floor(40 + lv*8 + Math.random()*20),
+    attack:  Math.floor(8  + lv*1.5 + Math.random()*5),
+    defense: Math.floor(5  + lv*1.2 + Math.random()*4),
+    magic:   Math.floor(6  + lv*1.3 + Math.random()*4),
+    speed:   Math.floor(6  + lv*0.8 + Math.random()*4),
+    ability: 'Arena Strike',
+    abilityDesc: 'Powerful arena attack',
+    levelRequirement: lv,
+    xp: Math.floor(50 + lv*10),
+    gold: Math.floor(20 + lv*5),
+    drops: [],
+    isArena: true,
+    isRanked: true,
+  };
+  opponent.maxHp = opponent.hp;
+  spLog(`🏟️ <b>RANKED MATCH!</b> Facing <b>${opponent.name}</b>!`,'w');
+  startBattle(opponent, 'screen-menu', false);
+  showScreen('screen-sp');
+  toast(`⚔️ Ranked match started!`);
+}
+
+function startPracticeMatch(){
+  closeModal();
+  const lv = gameState.playerLevel||1;
+  const opponent = {
+    id: 'practice_ai',
+    name: 'Training Dummy',
+    emoji: '🪆',
+    hp:      Math.floor(30 + lv*5),
+    attack:  Math.floor(5  + lv*1),
+    defense: Math.floor(3  + lv*0.8),
+    magic:   Math.floor(4  + lv*1),
+    speed:   Math.floor(5  + lv*0.5),
+    ability: 'Basic Strike',
+    abilityDesc: 'A basic practice attack',
+    levelRequirement: lv,
+    xp: Math.floor(10 + lv*2),
+    gold: 0, // no gold from practice
+    drops: [],
+    isPractice: true,
+  };
+  opponent.maxHp = opponent.hp;
+  startBattle(opponent, 'screen-menu', false);
+  showScreen('screen-sp');
+  toast(`🎯 Practice match started!`);
+}
+
+// ═══════════════════════════════════════════════════
+//  GUILD SYSTEM
+// ═══════════════════════════════════════════════════
+function getGuildKey(){ return 'aetherion_guild_v1'; }
+
+function getGuild(){
+  const raw = localStorage.getItem(getGuildKey());
+  return raw ? JSON.parse(raw) : null;
+}
+
+function saveGuild(guild){
+  localStorage.setItem(getGuildKey(), JSON.stringify(guild));
+}
+
+function openGuild(){
+  const guild = getGuild();
+  if(guild){
+    renderGuildHome(guild);
+  } else {
+    renderGuildJoin();
+  }
+}
+
+function renderGuildJoin(){
+  const body = `
+    <div style="text-align:center;padding:8px 0 16px;">
+      <div style="font-size:2.5rem;margin-bottom:8px;">🛡️</div>
+      <div style="font-size:.68rem;color:var(--dim);margin-bottom:16px;line-height:1.6;">
+        You are not in a guild. Create your own or join an existing one!
+      </div>
+    </div>
+
+    <div style="border-top:1px solid var(--border);padding-top:14px;margin-bottom:14px;">
+      <div style="font-family:'Cinzel',serif;font-size:.65rem;color:var(--gold);margin-bottom:8px;">⚔️ Create a Guild</div>
+      <input id="guild-name-input" maxlength="20" placeholder="Guild name..."
+        style="width:100%;background:rgba(0,0,0,.5);border:1px solid var(--border);border-radius:8px;
+        color:var(--text);font-size:.7rem;padding:10px 12px;outline:none;margin-bottom:6px;">
+      <input id="guild-tag-input" maxlength="5" placeholder="Tag (e.g. AETH)"
+        style="width:100%;background:rgba(0,0,0,.5);border:1px solid var(--border);border-radius:8px;
+        color:var(--text);font-size:.7rem;padding:10px 12px;outline:none;margin-bottom:6px;text-transform:uppercase;">
+      <select id="guild-emblem-input"
+        style="width:100%;background:rgba(0,0,0,.5);border:1px solid var(--border);border-radius:8px;
+        color:var(--text);font-size:.7rem;padding:10px 12px;outline:none;margin-bottom:8px;">
+        <option value="🛡️">🛡️ Shield</option>
+        <option value="⚔️">⚔️ Sword</option>
+        <option value="🔥">🔥 Flame</option>
+        <option value="❄️">❄️ Frost</option>
+        <option value="⚡">⚡ Storm</option>
+        <option value="🌑">🌑 Shadow</option>
+        <option value="👑">👑 Crown</option>
+        <option value="🐉">🐉 Dragon</option>
+      </select>
+      <button class="btn" onclick="createGuild()" style="width:100%;">⚔️ Create Guild</button>
+    </div>
+
+    <div style="border-top:1px solid var(--border);padding-top:14px;">
+      <div style="font-family:'Cinzel',serif;font-size:.65rem;color:var(--gold);margin-bottom:8px;">🔑 Join a Guild</div>
+      <input id="guild-code-input" maxlength="8" placeholder="Guild invite code..."
+        style="width:100%;background:rgba(0,0,0,.5);border:1px solid var(--border);border-radius:8px;
+        color:var(--text);font-size:.7rem;padding:10px 12px;outline:none;margin-bottom:8px;text-transform:uppercase;">
+      <button class="btn-ghost" onclick="joinGuild()" style="width:100%;">🔑 Join Guild</button>
+    </div>`;
+  showModal('🛡️ Guild', body, [{label:'Close', cls:'btn-ghost', cb:closeModal}]);
+}
+
+function createGuild(){
+  const name   = document.getElementById('guild-name-input')?.value?.trim();
+  const tag    = document.getElementById('guild-tag-input')?.value?.trim().toUpperCase();
+  const emblem = document.getElementById('guild-emblem-input')?.value || '🛡️';
+  if(!name){ toast('Enter a guild name!'); return; }
+  if(!tag || tag.length < 2){ toast('Enter a guild tag (2-5 chars)!'); return; }
+
+  const code = Math.random().toString(36).substring(2,8).toUpperCase();
+  const guild = {
+    name, tag, emblem, code,
+    leader: gameState.username||'Hero',
+    members: [{ name: gameState.username||'Hero', level: gameState.playerLevel||1, rank:'Leader', joined: Date.now() }],
+    level: 1,
+    xp: 0,
+    xpToNext: 500,
+    totalKills: 0,
+    totalBossKills: 0,
+    createdAt: Date.now(),
+    notice: 'Welcome to the guild!',
+  };
+  saveGuild(guild);
+  closeModal();
+  renderGuildHome(guild);
+  toast(`🛡️ Guild "${name}" [${tag}] created!`);
+}
+
+function joinGuild(){
+  const code = document.getElementById('guild-code-input')?.value?.trim().toUpperCase();
+  if(!code){ toast('Enter an invite code!'); return; }
+  // For now create a placeholder guild with the code
+  const guild = {
+    name: 'Unknown Guild',
+    tag: code.substring(0,4),
+    emblem: '🛡️',
+    code,
+    leader: 'Unknown',
+    members: [
+      { name: gameState.username||'Hero', level: gameState.playerLevel||1, rank:'Member', joined: Date.now() }
+    ],
+    level: 1, xp: 0, xpToNext: 500,
+    totalKills: 0, totalBossKills: 0,
+    createdAt: Date.now(),
+    notice: 'You joined via invite code!',
+  };
+  saveGuild(guild);
+  closeModal();
+  renderGuildHome(guild);
+  toast(`✅ Joined guild!`);
+}
+
+function renderGuildHome(guild){
+  const isLeader = guild.leader === (gameState.username||'Hero');
+  const xpPct = Math.min(100, Math.floor((guild.xp/guild.xpToNext)*100));
+  const body = `
+    <!-- Guild header -->
+    <div style="text-align:center;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border);">
+      <div style="font-size:3rem;">${guild.emblem}</div>
+      <div style="font-family:'Cinzel Decorative',serif;font-size:1rem;color:var(--gold);">${guild.name}</div>
+      <div style="font-size:.6rem;color:var(--dim);">[${guild.tag}] · Level ${guild.level} Guild</div>
+      <div style="font-size:.55rem;color:var(--dim);margin-top:2px;">Invite Code: <b style="color:var(--gold);">${guild.code}</b></div>
+      <!-- Guild XP bar -->
+      <div style="margin-top:8px;max-width:200px;margin-left:auto;margin-right:auto;">
+        <div style="font-size:.5rem;color:var(--dim);margin-bottom:3px;">Guild XP: ${guild.xp}/${guild.xpToNext}</div>
+        <div style="height:5px;background:rgba(0,0,0,.5);border-radius:3px;">
+          <div style="height:100%;background:linear-gradient(90deg,var(--gold2),var(--gold));width:${xpPct}%;border-radius:3px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Notice board -->
+    <div style="background:rgba(200,151,58,.06);border:1px solid rgba(200,151,58,.2);border-radius:8px;padding:10px;margin-bottom:12px;">
+      <div style="font-family:'Cinzel',serif;font-size:.58rem;color:var(--gold);margin-bottom:4px;">📌 Notice</div>
+      <div style="font-size:.62rem;color:var(--text);">${guild.notice||'No notice set.'}</div>
+      ${isLeader ? `<button class="btn-ghost" onclick="editGuildNotice()" style="font-size:.52rem;margin-top:6px;padding:4px 8px;">✏️ Edit</button>` : ''}
+    </div>
+
+    <!-- Stats -->
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px;">
+      <div style="text-align:center;background:rgba(0,0,0,.3);border-radius:8px;padding:8px;">
+        <div style="font-family:'Share Tech Mono',monospace;font-size:.8rem;color:var(--gold);">${guild.members.length}</div>
+        <div style="font-size:.5rem;color:var(--dim);">Members</div>
+      </div>
+      <div style="text-align:center;background:rgba(0,0,0,.3);border-radius:8px;padding:8px;">
+        <div style="font-family:'Share Tech Mono',monospace;font-size:.8rem;color:var(--gold);">${guild.totalKills||0}</div>
+        <div style="font-size:.5rem;color:var(--dim);">Total Kills</div>
+      </div>
+      <div style="text-align:center;background:rgba(0,0,0,.3);border-radius:8px;padding:8px;">
+        <div style="font-family:'Share Tech Mono',monospace;font-size:.8rem;color:var(--gold);">${guild.totalBossKills||0}</div>
+        <div style="font-size:.5rem;color:var(--dim);">Boss Kills</div>
+      </div>
+    </div>
+
+    <!-- Members -->
+    <div style="font-family:'Cinzel',serif;font-size:.6rem;color:var(--gold);margin-bottom:8px;">👥 Members</div>
+    ${guild.members.map(m=>`
+      <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:rgba(0,0,0,.3);border-radius:7px;margin-bottom:4px;">
+        <span style="font-size:.6rem;">${m.rank==='Leader'?'👑':m.rank==='Officer'?'⭐':'⚔️'}</span>
+        <div style="flex:1;">
+          <div style="font-family:'Cinzel',serif;font-size:.62rem;color:${m.name===gameState.username?'var(--gold)':'var(--text)'};">${m.name}${m.name===gameState.username?' (You)':''}</div>
+          <div style="font-size:.5rem;color:var(--dim);">Lv.${m.level} · ${m.rank}</div>
+        </div>
+      </div>`).join('')}
+
+    <!-- Leave/Disband -->
+    <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);">
+      ${isLeader
+        ? `<button class="btn-ghost" onclick="disbandGuild()" style="width:100%;border-color:rgba(200,0,0,.3);color:#d06060;font-size:.6rem;">💀 Disband Guild</button>`
+        : `<button class="btn-ghost" onclick="leaveGuild()" style="width:100%;border-color:rgba(200,50,50,.3);color:#d06060;font-size:.6rem;">🚪 Leave Guild</button>`}
+    </div>`;
+  showModal(`${guild.emblem} ${guild.name}`, body, [{label:'Close', cls:'btn-ghost', cb:closeModal}]);
+}
+
+function editGuildNotice(){
+  const guild = getGuild();
+  if(!guild) return;
+  showModal('✏️ Edit Notice', `
+    <textarea id="guild-notice-input" maxlength="200" style="width:100%;background:rgba(0,0,0,.5);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.7rem;padding:10px;outline:none;resize:vertical;min-height:80px;">${guild.notice||''}</textarea>`,
+    [{label:'Save', cls:'btn', cb:()=>{
+      const val = document.getElementById('guild-notice-input')?.value?.trim();
+      if(val !== undefined){ guild.notice = val; saveGuild(guild); toast('Notice updated!'); closeModal(); renderGuildHome(guild); }
+    }}, {label:'Cancel', cls:'btn-ghost', cb:()=>{ closeModal(); renderGuildHome(guild); }}]
+  );
+}
+
+function disbandGuild(){
+  showModal('Disband Guild?', `<div style="text-align:center;color:#d06060;padding:10px;">This will permanently disband your guild!</div>`,
+    [{label:'Yes, Disband', cls:'btn-ghost', cb:()=>{ localStorage.removeItem(getGuildKey()); closeModal(); toast('Guild disbanded.'); }},
+     {label:'Cancel', cls:'btn', cb:closeModal}]);
+}
+
+function leaveGuild(){
+  const guild = getGuild();
+  if(!guild) return;
+  guild.members = guild.members.filter(m=>m.name !== (gameState.username||'Hero'));
+  if(guild.members.length === 0){ localStorage.removeItem(getGuildKey()); }
+  else { saveGuild(guild); }
+  closeModal();
+  toast('You left the guild.');
+}
+
+function trackGuildKill(isBoss){
+  const guild = getGuild();
+  if(!guild) return;
+  guild.totalKills = (guild.totalKills||0) + 1;
+  if(isBoss) guild.totalBossKills = (guild.totalBossKills||0) + 1;
+  // Guild XP
+  guild.xp = (guild.xp||0) + (isBoss ? 50 : 5);
+  if(guild.xp >= guild.xpToNext){
+    guild.xp -= guild.xpToNext;
+    guild.level = (guild.level||1) + 1;
+    guild.xpToNext = Math.floor((guild.xpToNext||500) * 1.5);
+    toast(`🛡️ Guild leveled up to Level ${guild.level}!`);
+  }
+  // Update member level
+  const member = guild.members.find(m=>m.name===(gameState.username||'Hero'));
+  if(member) member.level = gameState.playerLevel||1;
+  saveGuild(guild);
 }
 
 // ── Show Claude win/lose dialog ──
