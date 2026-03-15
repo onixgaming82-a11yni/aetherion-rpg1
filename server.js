@@ -73,6 +73,7 @@ const rooms         = new Map(); // code → room object
 const socketToRoom  = new Map(); // socket.id → room code
 const onlinePlayers = new Map(); // socket.id → player info (global lobby)
 const trades        = new Map(); // tradeId → trade object
+const leaderboard   = new Map(); // username → { name, wins, rankName, updatedAt }
 
 // ── Account system ────────────────────────────────────────
 const DEFAULT_PASSWORD = '12345';
@@ -659,6 +660,25 @@ io.on('connection', (socket) => {
     accounts.delete(uname);
     socket.emit('account:deleted', { ok: true });
     console.log(`[ACCOUNT] Deleted: ${username}`);
+  });
+
+  // ── LEADERBOARD ───────────────────────────────────
+  socket.on('leaderboard:update', ({ name, wins, rankName } = {}) => {
+    if (!name?.trim() || wins === undefined) return;
+    leaderboard.set(name.trim().toLowerCase(), {
+      name: name.trim(),
+      wins: parseInt(wins)||0,
+      rankName: rankName||'Stone',
+      updatedAt: Date.now(),
+    });
+    console.log(`[LB] ${name}: ${wins} wins`);
+  });
+
+  socket.on('leaderboard:request', () => {
+    const data = [...leaderboard.values()]
+      .sort((a,b) => b.wins - a.wins)
+      .slice(0, 100); // top 100
+    socket.emit('leaderboard:data', data);
   });
 
   // ── DISCONNECT ────────────────────────────────────────
