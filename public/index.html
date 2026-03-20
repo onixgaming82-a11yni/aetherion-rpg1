@@ -1369,11 +1369,25 @@ input, textarea { font-size: 16px !important; } /* Prevents iOS zoom on focus */
       <span class="mode-icon">🛡️</span>
       <div class="mode-info">
         <div class="mode-name">Guild</div>
-        <div class="mode-desc">Create or join a guild with friends</div>
+        <div class="mode-desc">Create or join a guild, fight other guilds</div>
+      </div>
+    </button>
+    <button class="mode-btn" onclick="goRoguelike()">
+      <span class="mode-icon">💀</span>
+      <div class="mode-info">
+        <div class="mode-name">Roguelike Run</div>
+        <div class="mode-desc">One life. One card. How far can you go?</div>
+      </div>
+    </button>
+    <button class="mode-btn" onclick="openCoopRaid()">
+      <span class="mode-icon">🤝</span>
+      <div class="mode-info">
+        <div class="mode-name">Co-op Raid</div>
+        <div class="mode-desc">2 players vs 1 giant boss together</div>
       </div>
     </button>
   </div>
-  <div class="menu-footer">v2.0 · 40 Monsters · 40 Characters · 8 Bosses · Guilds · Daily Quests · PvP Arena</div>
+  <div class="menu-footer">v2.1 · 40 Monsters · 40 Characters · 8 Bosses · Guilds · Roguelike · Co-op Raids</div>
 </div>
 
 <!-- ═══════════════════════ CARD PICK SCREEN ═══════════════════════ -->
@@ -2372,6 +2386,8 @@ function exportProfile(){
     duelLosses:     parseInt(localStorage.getItem('aetherion_duel_losses')||'0'),
     exportedAt:     new Date().toISOString(),
     version:        '1.0',
+    // Signature — server validates this to detect banned accounts
+    sig:            btoa(gameState.username + ':aetherion:' + Date.now()),
   };
   const json    = JSON.stringify(profile, null, 2);
   const blob    = new Blob([json], {type:'application/json'});
@@ -2411,41 +2427,107 @@ function importProfile(){
 function doImportProfile(input){
   const file = input.files[0];
   if(!file) return;
+  const statusEl = document.getElementById('import-status');
+  if(statusEl){ statusEl.textContent = 'Validating profile...'; statusEl.style.color = 'var(--dim)'; }
+
   const reader = new FileReader();
   reader.onload = (e) => {
     try {
       const profile = JSON.parse(e.target.result);
+
       if(!profile.username || !profile.deck){
-        document.getElementById('import-status').textContent = '❌ Invalid profile file!';
-        document.getElementById('import-status').style.color = '#d06060';
+        if(statusEl){ statusEl.textContent = '❌ Invalid profile file!'; statusEl.style.color = '#d06060'; }
         return;
       }
-      // Load into gameState
-      gameState.username       = profile.username;
-      gameState.playerLevel    = profile.playerLevel    || 1;
-      gameState.playerXp       = profile.playerXp       || 0;
-      gameState.xpToNext       = profile.xpToNext       || 300;
-      gameState.playerGold     = profile.playerGold     || 0;
-      gameState.inventory      = profile.inventory      || [];
-      gameState.deck           = profile.deck           || [];
-      gameState.unlockedSkills = profile.unlockedSkills || [];
-      gameState.skillXp        = profile.skillXp        || 0;
-      gameState.shopOwned      = profile.shopOwned      || {};
-      gameState.activeCardIdx  = profile.activeCardIdx  || 0;
-      // Restore duel stats
-      if(profile.duelWins)   localStorage.setItem('aetherion_duel_wins',   profile.duelWins);
-      if(profile.duelLosses) localStorage.setItem('aetherion_duel_losses', profile.duelLosses);
-      saveGame();
-      closeModal();
-      updateMenuHud();
-      showMenu();
-      toast(`✅ Profile loaded! Welcome back, ${profile.username}!`);
+
+      // Check version
+      if(!profile.version){
+        if(statusEl){ statusEl.textContent = '❌ Outdated profile format — not compatible.'; statusEl.style.color = '#d06060'; }
+        return;
+      }
+
+      // Validate with server — checks if account is banned/suspended
+      if(socket?.connected){
+        if(statusEl){ statusEl.textContent = '🔍 Checking account status...'; statusEl.style.color = 'var(--dim)'; }
+
+        socket.emit('profile:validate', { username: profile.username });
+
+        socket.once('profile:valid', () => {
+          applyImportedProfile(profile);
+        });
+
+        socket.once('profile:invalid', ({ reason, message, daysLeft }) => {
+          if(reason === 'banned'){
+            if(statusEl){ statusEl.textContent = ''; }
+            // Show Veylor banned screen — this profile is dead
+            showModal('⚖️ Profile Invalidated', `
+              <div style="text-align:center;padding:10px 0 16px;">
+                <div style="font-size:3rem;margin-bottom:10px;
+                  filter:drop-shadow(0 0 20px rgba(200,0,200,.8));">⚖️</div>
+                <div style="font-family:'Cinzel Decorative',serif;font-size:.85rem;
+                  color:#e040e0;margin-bottom:10px;">PROFILE INVALIDATED</div>
+                <div style="font-size:.65rem;color:var(--dim);line-height:1.8;margin-bottom:14px;">
+                  This profile belongs to a <b style="color:#e040e0;">banned account</b>.<br>
+                  <b>Veylor, the Eternal Judge</b>, has permanently<br>
+                  invalidated this save file.<br><br>
+                  This file cannot be loaded on any device.
+                </div>
+                <div style="font-size:.55rem;color:rgba(200,150,200,.4);font-style:italic;">
+                  "No save file survives my judgement."
+                </div>
+              </div>`,
+              [{label:'Close', cls:'btn-ghost', cb:closeModal}]
+            );
+          } else if(reason === 'suspended'){
+            if(statusEl){
+              statusEl.textContent = `⚖️ Account suspended for ${daysLeft} more day${daysLeft!==1?'s':''}. Cannot load profile.`;
+              statusEl.style.color = '#e040e0';
+            }
+          } else {
+            if(statusEl){ statusEl.textContent = `❌ ${message||'Profile validation failed.'}`; statusEl.style.color = '#d06060'; }
+          }
+        });
+
+        // Timeout — if server doesn't respond in 3s, allow load anyway
+        setTimeout(()=>{
+          socket.off('profile:valid');
+          socket.off('profile:invalid');
+          // Fallback — load but warn
+          applyImportedProfile(profile);
+        }, 3000);
+
+      } else {
+        // Offline — load without server check but warn
+        applyImportedProfile(profile);
+        toast('⚠️ Loaded offline — ban status not checked.');
+      }
+
     } catch(err) {
-      document.getElementById('import-status').textContent = '❌ Could not read file — make sure it is a valid JSON profile!';
-      document.getElementById('import-status').style.color = '#d06060';
+      if(statusEl){ statusEl.textContent = '❌ Could not read file — make sure it is a valid JSON profile!'; statusEl.style.color = '#d06060'; }
     }
   };
   reader.readAsText(file);
+}
+
+function applyImportedProfile(profile){
+  gameState.username       = profile.username;
+  gameState.playerLevel    = profile.playerLevel    || 1;
+  gameState.playerXp       = profile.playerXp       || 0;
+  gameState.xpToNext       = profile.xpToNext       || 300;
+  gameState.playerGold     = profile.playerGold     || 0;
+  gameState.inventory      = profile.inventory      || [];
+  gameState.deck           = profile.deck           || [];
+  gameState.unlockedSkills = profile.unlockedSkills || [];
+  gameState.skillXp        = profile.skillXp        || 0;
+  gameState.shopOwned      = profile.shopOwned      || {};
+  gameState.activeCardIdx  = profile.activeCardIdx  || 0;
+  if(profile.duelWins)   localStorage.setItem('aetherion_duel_wins',   profile.duelWins);
+  if(profile.duelLosses) localStorage.setItem('aetherion_duel_losses', profile.duelLosses);
+  saveGame();
+  closeModal();
+  updateMenuHud();
+  showMenu();
+  toast(`✅ Profile loaded! Welcome back, ${profile.username}!`);
 }
 
 function doLogout(){
@@ -2613,26 +2695,42 @@ function shopTab(cat, btn){
 
   // ── SELL TAB ──
   if(cat==='sell'){
-    const sellPrices={'Health Potion':8,'Elixir':25,'Phoenix Feather':80,'Mana Crystal':15,'Antidote':10,'Spell Scroll':28,'Sharp Stone':18,'Iron Links':18,'XP Tome':22,'Mega Potion':30,'Monster Bait':35};
-    const itemIcons={'Health Potion':'🧪','Elixir':'⚗️','Phoenix Feather':'🪶','Mana Crystal':'🔮','Antidote':'💉','Spell Scroll':'📜','Sharp Stone':'🗡️','Iron Links':'⛓️','XP Tome':'📚','Mega Potion':'💊','Monster Bait':'🪤'};
+    const sellPrices=getSellPrices();
+    const itemIcons={'Health Potion':'🧪','Elixir':'⚗️','Phoenix Feather':'🪶','Mana Crystal':'🔮','Antidote':'💉','Spell Scroll':'📜','Sharp Stone':'🗡️','Iron Links':'⛓️','XP Tome':'📚','Mega Potion':'💊','Monster Bait':'🪤',
+      'Rusty Dagger':'🗡️','Bat Wing':'🪶','Rat Tail':'🐀','Charcoal':'🪨','Fire Shard':'🔥','Frost Crystal':'❄️','Leather Gloves':'🧤','Wolf Pelt':'🐺','Troll Tooth':'🦷','Hydra Scale':'🐉','Stone Fragment':'🪨','Drake Scale':'🔥','Assassin Dagger':'🗡️','Dark Blade':'⚔️','Flame Scale':'🔥','Dragon Heart':'💜','Void King Scale':'👑','Inferno Scale':'🔥','Thunder Core':'⚡','Dark Crystal':'🔮',
+      'Spider Silk':'🕷️','Toxic Gland':'🐸','Scorpion Claw':'🦂','Croc Scale':'🐊','Lion Mane':'🦁','Iron Tusk':'🐘','Shadow Fin':'🦈','Moth Wing':'🦋','Abyss Ink':'🐙','Crab Shell':'🦀','Bee Stinger':'🐝','Lava Scale':'🦎','Frost Pelt':'🐺','Storm Feather':'🦅','Chaos Claw':'🐻','Fox Tail':'🦊','Nightmare Mane':'🐴','Terror Ink':'🦑','Cursed Fin':'🐬','Void Core':'🐋'};
     const grouped={};
     gameState.inventory.forEach(i=>{grouped[i.item]=(grouped[i.item]||0)+(i.qty||1);});
+    // Group inventory with rarity info
+    const grouped2={};
+    gameState.inventory.forEach(i=>{
+      if(!grouped2[i.item]) grouped2[i.item]={qty:0, rarity:i.rarity||'Common'};
+      grouped2[i.item].qty += (i.qty||1);
+    });
+    const rarityColor={'Common':'#aaa','Rare':'#60a0e0','Epic':'#b060f0','Mythic':'#f0a020'};
+    const rarityBorder={'Common':'rgba(170,170,170,.2)','Rare':'rgba(96,160,224,.3)','Epic':'rgba(176,96,240,.3)','Mythic':'rgba(240,160,32,.4)'};
+
     panel.innerHTML = `<div class="shop-section-title">💰 Sell Items</div>
-      <div style="font-size:.62rem;color:var(--dim);margin:0 0 10px;">Sell items from your bag to the shop.</div>
-      ${Object.keys(grouped).length
-        ? `<div class="shop-grid">${Object.entries(grouped).map(([name,qty])=>{
-            const sp=sellPrices[name]||5;const icon=itemIcons[name]||'📦';
-            return `<div class="shop-item">
+      <div style="font-size:.62rem;color:var(--dim);margin:0 0 10px;">Prices vary by rarity. Higher rarity = more gold!</div>
+      ${Object.keys(grouped2).length
+        ? `<div class="shop-grid">${Object.entries(grouped2).map(([name,data])=>{
+            const {qty, rarity} = data;
+            const sp = sellPrices[name] || getSellPriceForItem({rarity});
+            const icon = itemIcons[name]||'📦';
+            const rc = rarityColor[rarity]||'#aaa';
+            const rb = rarityBorder[rarity]||'rgba(170,170,170,.2)';
+            return `<div class="shop-item" style="border-color:${rb};">
               <div class="shop-item-icon">${icon}</div>
               <div class="shop-item-name">${name}</div>
-              <div style="font-size:.55rem;color:var(--dim);margin:2px 0;">x${qty} in bag</div>
-              <div style="display:flex;gap:4px;margin-top:4px;">
-                <button class="shop-buy-btn" onclick="sellItemFromBag('${name}',${sp});shopTab('sell',document.querySelector('.active-cat'));" style="font-size:.55rem;padding:5px;background:rgba(60,40,0,.8);">
-                  💰${sp} (×1)
+              <div style="font-size:.5rem;color:${rc};margin:2px 0;font-family:'Cinzel',serif;">${rarity}</div>
+              <div style="font-size:.55rem;color:var(--dim);margin:1px 0;">x${qty} in bag</div>
+              <div style="display:flex;gap:4px;margin-top:5px;">
+                <button class="shop-buy-btn" onclick="sellItemFromBag('${name}',${sp});shopTab('sell',document.querySelector('.active-cat'));" style="font-size:.55rem;padding:5px;background:rgba(60,40,0,.8);border:1px solid ${rb};">
+                  💰${sp}
                 </button>
-                <button class="shop-buy-btn" onclick="sellAllItemFromBag('${name}',${sp},${qty});shopTab('sell',document.querySelector('.active-cat'));" style="font-size:.55rem;padding:5px;background:rgba(60,40,0,.6);">
-                  All
-                </button>
+                ${qty>1?`<button class="shop-buy-btn" onclick="sellAllItemFromBag('${name}',${sp},${qty});shopTab('sell',document.querySelector('.active-cat'));" style="font-size:.55rem;padding:5px;background:rgba(60,40,0,.6);border:1px solid ${rb};">
+                  All (💰${sp*qty})
+                </button>`:''}
               </div>
             </div>`;
           }).join('')}</div>`
@@ -3076,6 +3174,8 @@ function setSPBtns(){
 // ─────────────────────────────────────────
 function spAttack(){
   if(!gameState.inBattle)return;
+  // Block player from damaging Veylor
+  if(veylorBlockPlayerAttack()) return;
   incrementCombo('attack');
   let dmg=calcPlayerAttack();
   // Apply elemental multiplier
@@ -3092,9 +3192,12 @@ function spAttack(){
   // Apply combo multiplier
   if(comboState.count >= 2){
     dmg = Math.floor(dmg * comboState.multiplier);
+    trackQuestProgress('combo', comboState.count);
   }
   spLog(`⚔️ <b>${activeCard().name}</b> strikes <b>${gameState.currentEnemy.name}</b> for <b>${dmg}</b>!`,'c');
   gameState.currentEnemy.hp=Math.max(0,gameState.currentEnemy.hp-dmg);
+  // Broadcast to co-op partner if in raid
+  if(gameState.isCoopRaid) broadcastRaidAttack(dmg);
   if(gameState.currentEnemy.hp<=0){spBattleEnd(true);return;}
   spEnemyTurn();
   updateSPHud();setSPBtns();
@@ -3103,6 +3206,13 @@ function spAttack(){
 function spAbility(){
   const card=activeCard();
   if(!gameState.inBattle||(card.abilityCooldown||0)>0)return;
+  // Block abilities on Veylor
+  if(gameState.currentEnemy?.isVeylor){
+    spLog(`⚖️ <i>"Your powers are meaningless before me."</i>`,'sk');
+    veylorEnemyTurnHook();
+    updateSPHud(); setSPBtns();
+    return;
+  }
   const en=gameState.currentEnemy;
   let handled=false;
   switch(card.ability){
@@ -3126,7 +3236,7 @@ function spAbility(){
   }
   card.abilityCooldown=gameState.unlockedSkills.includes('ultimate')?1:2;
   incrementCombo('ability');
-  if(comboState.count >= 3) trackQuestProgress('combo', comboState.count);
+  trackQuestProgress('combo', comboState.count);
   if(gameState.currentEnemy&&gameState.currentEnemy.hp<=0){spBattleEnd(true);return;}
   if(!handled) spEnemyTurn();
   updateSPHud();setSPBtns();
@@ -3147,6 +3257,10 @@ function spHeal(){
 
 function spFlee(){
   if(!gameState.inBattle)return;
+  if(gameState.isVeylorFight){
+    spLog(`⚖️ <b>There is no escape from Veylor's judgement!</b>`,'d');
+    return;
+  }
   if(Math.random()<.5){
     spLog('Your party escapes!','s');
     gameState.inBattle=false;gameState.currentEnemy=null;gameState.enemyStatuses=[];
@@ -3320,6 +3434,8 @@ function getBossAIAction(en, card){
 function spEnemyTurn(){
   const en=gameState.currentEnemy;
   if(!en||en.hp<=0)return;
+  // Veylor fight — completely different logic
+  if(en.isVeylor){ veylorEnemyTurnHook(); return; }
   // Poison ticks on enemy
   let poisonDmg=0;
   gameState.enemyStatuses=gameState.enemyStatuses.filter(s=>{
@@ -3425,7 +3541,18 @@ function spBattleEnd(won){
     if(gameState.isBoss){ trackQuestProgress('boss', 1); trackGuildKill(true); }
     else { trackGuildKill(false); }
     // Track ranked win
-    if(en.isRanked){ recordDuelWin(); spLog(`🏆 <b>Ranked Win!</b> Your rank updated!`,'w'); }
+    if(en.isRanked){
+      recordDuelWin();
+      // Increment arena bot ladder win counter
+      const newArenaWins = getArenaWins() + 1;
+      setArenaWins(newArenaWins);
+      const nextScalePct = Math.round((Math.pow(1.20, newArenaWins)-1)*100);
+      spLog(`🏟️ <b>Arena Win #${newArenaWins}!</b> Next bot is <b>+${nextScalePct}% stronger!</b>`,'w');
+    }
+    // Handle guild war win
+    if(en.isGuildWar) handleGuildWarEnd(true, en);
+    // Handle roguelike win — takes over flow
+    if(gameState.isRoguelikeRun){ handleRoguelikeEnd(true); return; }
     resetCombo();
 
     // ── Card XP — active card gets full XP, reserves get 50% ──
@@ -3472,6 +3599,10 @@ function spBattleEnd(won){
     // Revive all at very low HP
     gameState.deck.forEach(c=>{c.fainted=false;c.hp=Math.floor(c.maxHp*.1);});
     gameState.activeCardIdx=0;
+    // Handle guild war loss
+    if(en.isGuildWar) handleGuildWarEnd(false, en);
+    // Handle roguelike death
+    if(gameState.isRoguelikeRun){ handleRoguelikeEnd(false); return; }
   }
   gameState.currentEnemy=null;gameState.enemyStatuses=[];
   gameState.isBoss=false;gameState.bossPhase=0;gameState.bossRebirthed=false;
@@ -4731,13 +4862,26 @@ function getSocket() {
   // ── Connected ──
   socket.on('connect', () => {
     console.log('[Socket] Connected:', socket.id);
-    // Register this player on the server
     socket.emit('player:register', {
       username: gameState.username || 'Hero',
       level:    gameState.playerLevel || 1,
       deckSize: gameState.deck.length,
       gold:     gameState.playerGold,
     });
+    // Setup Veylor anti-cheat listeners
+    setupVeylorListeners();
+    // Check if account is on hold
+    if(gameState.username) checkAntiCheatStatus();
+  });
+
+  // Save blocked — account is banned or suspended
+  socket.on('account:save:blocked', ({ reason }) => {
+    if(reason === 'banned'){
+      console.warn('[Save blocked] Account permanently banned');
+      // Don't show anything — Veylor screen handles it
+    } else if(reason === 'suspended'){
+      toast('⚖️ Account suspended — progress will not be saved.');
+    }
   });
 
   socket.on('disconnect', () => {
@@ -5367,10 +5511,11 @@ function openInventory(){
 function renderBag(){
   const grouped={};
   gameState.inventory.forEach(i=>{const k=i.item;grouped[k]=(grouped[k]||0)+(i.qty||1);});
-  const sellPrices={'Health Potion':8,'Elixir':25,'Phoenix Feather':80,'Mana Crystal':15,'Antidote':10,
-    'Spell Scroll':28,'Sharp Stone':18,'Iron Links':18,'XP Tome':22,'Mega Potion':30,'Monster Bait':35};
+  const sellPrices=getSellPrices();
   const itemIcons={'Health Potion':'🧪','Elixir':'⚗️','Phoenix Feather':'🪶','Mana Crystal':'🔮',
-    'Antidote':'💉','Spell Scroll':'📜','Sharp Stone':'🗡️','Iron Links':'⛓️','XP Tome':'📚','Mega Potion':'💊','Monster Bait':'🪤'};
+    'Antidote':'💉','Spell Scroll':'📜','Sharp Stone':'🗡️','Iron Links':'⛓️','XP Tome':'📚','Mega Potion':'💊','Monster Bait':'🪤',
+    'Rusty Dagger':'🗡️','Bat Wing':'🪶','Rat Tail':'🐀','Charcoal':'🪨','Fire Shard':'🔥','Frost Crystal':'❄️','Leather Gloves':'🧤','Wolf Pelt':'🐺','Troll Tooth':'🦷','Hydra Scale':'🐉','Stone Fragment':'🪨','Drake Scale':'🔥','Assassin Dagger':'🗡️','Dark Blade':'⚔️','Flame Scale':'🔥','Dragon Heart':'💜','Void King Scale':'👑','Inferno Scale':'🔥','Thunder Core':'⚡','Dark Crystal':'🔮',
+    'Spider Silk':'🕷️','Toxic Gland':'🐸','Scorpion Claw':'🦂','Croc Scale':'🐊','Lion Mane':'🦁','Iron Tusk':'🐘','Shadow Fin':'🦈','Moth Wing':'🦋','Abyss Ink':'🐙','Crab Shell':'🦀','Bee Stinger':'🐝','Lava Scale':'🦎','Frost Pelt':'🐺','Storm Feather':'🦅','Chaos Claw':'🐻','Fox Tail':'🦊','Nightmare Mane':'🐴','Terror Ink':'🦑','Cursed Fin':'🐬','Void Core':'🐋'};
   const body = Object.keys(grouped).length
     ? `<div style="font-size:.62rem;color:var(--dim);margin-bottom:10px;">Click an item to use, sell, or drop it.</div>
        <div class="inv-grid">${Object.entries(grouped).map(([name,qty])=>{
@@ -5537,8 +5682,8 @@ function storyRandomEvent(type, resumeIdx){
         <div style="font-family:'Cinzel',serif;font-size:.6rem;color:var(--gold2);margin-bottom:8px;">📦 Sell from your Bag</div>
         ${gameState.inventory.length
           ? gameState.inventory.slice(0,4).map(i=>{
-              const sellP={'Health Potion':8,'Elixir':25,'Phoenix Feather':80,'Mana Crystal':15,'Antidote':10,'Spell Scroll':28,'Sharp Stone':18,'Iron Links':18,'XP Tome':22,'Mega Potion':30,'Monster Bait':35};
-              const sp=sellP[i.item]||5;
+              const sellP=getSellPrices();
+              const sp=sellP[i.item]||getSellPriceForItem(i);
               return `<div class="trader-item">
                 <div class="trader-item-info"><div class="trader-item-name">${i.item}</div><div class="trader-item-desc">x${i.qty||1}</div></div>
                 <button class="btn-sm" onclick="sellItemFromBag('${i.item}',${sp});document.getElementById('merch-gold-disp').textContent=gameState.playerGold;this.closest('.trader-item').style.opacity='.4';this.disabled=true;" style="font-size:.58rem;flex-shrink:0;background:rgba(60,40,10,.8);">💰${sp}</button>
@@ -5720,10 +5865,14 @@ function recordDuelWin(){
   const curr = getRankData();
   gameState.duelWins = wins;
   updateMenuHud();
-  saveGame(); // this triggers cloudSave which syncs to MongoDB
-  if(curr.rank.name !== prev.rank.name) showRankUpPopup(curr.rank);
+  saveGame();
   // Push to server leaderboard
   syncLeaderboardToServer(gameState.username||'You', wins, curr.rank.name);
+  // Track duel quest progress
+  trackQuestProgress('duel', 1);
+  // Report to anti-cheat system
+  reportWinToAntiCheat();
+  if(curr.rank.name !== prev.rank.name) showRankUpPopup(curr.rank);
 }
 
 function recordDuelLoss(){
@@ -5826,13 +5975,18 @@ function openLeaderboard(){
         </div>
 
         ${allPlayers.length > 0
-          ? allPlayers.slice(0,20).map((p,i)=>`
+          ? allPlayers.slice(0,20).map((p,i)=>{
+              const flagIcon = p.flagLevel==='banned'?'❌':p.flagLevel==='hold'?'🚨':p.flagLevel==='warn'?'⚠️':p.flagLevel==='flag'?'🔴':'';
+              const flagTip  = p.flagLevel==='banned'?'Permanently flagged by Veylor':p.flagLevel==='hold'?'On 8-day hold by Veylor':p.flagLevel==='warn'?'Suspected unusual activity':p.flagLevel==='flag'?'Veylor is watching':'';
+              return `
             <div class="leaderboard-row" style="${p.isMe?'border-color:rgba(200,151,58,.4);background:rgba(200,151,58,.06);':''}">
               <div class="lb-pos">${i===0?'🥇':i===1?'🥈':i===2?'🥉':`#${i+1}`}</div>
-              <div class="lb-name">${p.isMe?`<b style="color:var(--gold);">${p.name} ⭐</b>`:escapeHTML(p.name)}</div>
+              <div class="lb-name">${p.isMe?`<b style="color:var(--gold);">${p.name} ⭐</b>`:escapeHTML(p.name)}
+                ${flagIcon?`<span title="${flagTip}" style="margin-left:4px;cursor:help;">${flagIcon}</span>`:''}
+              </div>
               <span class="rank-badge ${p.rank.cls}" style="font-size:.48rem;padding:2px 6px;">${p.rank.emoji} ${p.rank.name}</span>
               <div class="lb-wins">${p.wins||0}W</div>
-            </div>`).join('')
+            </div>`;}).join('')
           : `<div style="color:var(--dim);font-size:.65rem;font-style:italic;padding:12px 0;text-align:center;">
                Win duels to appear on the leaderboard!
              </div>`}
@@ -6049,20 +6203,83 @@ function updateComboDisplay(){
 // ═══════════════════════════════════════════════════
 //  DAILY QUESTS SYSTEM
 // ═══════════════════════════════════════════════════
+// ── SELL PRICES BY RARITY ──────────────────────────
+// Base sell prices — varies by rarity
+const RARITY_SELL_MULT = { Common:1, Rare:3, Epic:8, Mythic:25 };
+
+function getSellPrices(){
+  return {
+    // Consumables — Common
+    'Health Potion': 8,   'Antidote': 10,
+    // Consumables — Rare
+    'Elixir': 45,         'Mana Crystal': 30,   'Speed Brew': 25,
+    'Mega Potion': 55,    'XP Tome': 40,        'Spell Scroll': 35,
+    'Sharp Stone': 30,    'Iron Links': 30,
+    // Consumables — Epic
+    'Phoenix Feather': 160, 'Monster Bait': 80,
+    // Monster drops — Common
+    'Rusty Dagger':8,  'Bat Wing':6,    'Rat Tail':5,    'Charcoal':6,
+    'Fire Shard':8,    'Leather Gloves':7, 'Bee Stinger':6, 'Spider Silk':7,
+    'Toxic Gland':7,   'Moth Wing':9,
+    // Monster drops — Rare
+    'Frost Crystal':25, 'Wolf Pelt':20,  'Troll Tooth':22, 'Stone Fragment':18,
+    'Scorpion Claw':22, 'Croc Scale':24, 'Lion Mane':26,   'Storm Feather':24,
+    'Fox Tail':20,      'Crab Shell':22, 'Cursed Fin':25,  'Nightmare Mane':28,
+    // Monster drops — Epic
+    'Hydra Scale':80,   'Drake Scale':85,   'Assassin Dagger':90,
+    'Dark Blade':95,    'Flame Scale':88,   'Thunder Core':92,
+    'Dark Crystal':85,  'Iron Tusk':90,     'Shadow Fin':88,
+    'Abyss Ink':95,     'Lava Scale':82,    'Frost Pelt':90,
+    'Chaos Claw':95,    'Terror Ink':92,    'Void Core':100,
+    // Monster drops — Mythic
+    'Dragon Heart':400,  'Void King Scale':500, 'Inferno Scale':450,
+    'Phoenix Feather':160,
+    // Boss drops — Mythic
+    "Volkar's Flame Core":600, 'Legendary Fire Sword':700,
+    'Tyrant Ice Crown':650,    'Frozen Dragon Scale Armor':700,
+    'Storm Queen Feather':680, 'Thunder Staff':720,
+    'Abyss King Crown':800,    'Mythic Dark Blade':850,
+    'Magma Heart':900,         'Volcano Crown':850,
+    'Ocean God Scale':950,     'Leviathan Trident':1000,
+    'Void King Crown':1100,    'Reality Shard':1200,
+    'The Eye':1500,            'Watcher Tome':1400,
+    'Omniscient Crystal':1600, 'Oracle Fragment':2000,
+    'Anthropic Scroll':2500,   'Claude Memory':3000,
+  };
+}
+
+// Fallback — calculate sell price from item rarity in inventory
+function getSellPriceForItem(invItem){
+  const rarity = invItem.rarity || 'Common';
+  const base = { Common:5, Rare:20, Epic:70, Mythic:300 };
+  return base[rarity] || 5;
+}
+
+// ── FIXED DAILY QUESTS ─────────────────────────────
 const QUEST_TEMPLATES = [
-  {id:'kill5',    desc:'Defeat 5 monsters',        type:'kill',    target:5,   reward:{gold:50,  xp:100}},
-  {id:'kill10',   desc:'Defeat 10 monsters',       type:'kill',    target:10,  reward:{gold:100, xp:200}},
-  {id:'kill20',   desc:'Defeat 20 monsters',       type:'kill',    target:20,  reward:{gold:200, xp:400}},
-  {id:'boss1',    desc:'Defeat 1 boss',            type:'boss',    target:1,   reward:{gold:300, xp:600}},
-  {id:'explore5', desc:'Explore 5 times',          type:'explore', target:5,   reward:{gold:40,  xp:80}},
-  {id:'explore10',desc:'Explore 10 times',         type:'explore', target:10,  reward:{gold:80,  xp:160}},
-  {id:'gold100',  desc:'Earn 100 Gold in battle',  type:'gold',    target:100, reward:{gold:60,  xp:120}},
-  {id:'combo3',   desc:'Get a 3x combo',           type:'combo',   target:3,   reward:{gold:80,  xp:150}},
-  {id:'combo5',   desc:'Get a 5x combo',           type:'combo',   target:5,   reward:{gold:150, xp:300}},
-  {id:'lvlup1',   desc:'Level up your party once', type:'levelup', target:1,   reward:{gold:200, xp:400}},
-  {id:'tame1',    desc:'Tame a monster',           type:'tame',    target:1,   reward:{gold:250, xp:500}},
-  {id:'win3duel', desc:'Win 3 duels',              type:'duel',    target:3,   reward:{gold:400, xp:800}},
+  // Easy — kill quests
+  {id:'kill3',    desc:'Defeat 3 monsters',          type:'kill',    target:3,   icon:'⚔️',  reward:{gold:30,  xp:60,  item:null}},
+  {id:'kill8',    desc:'Defeat 8 monsters',          type:'kill',    target:8,   icon:'⚔️',  reward:{gold:80,  xp:150, item:null}},
+  {id:'kill15',   desc:'Defeat 15 monsters',         type:'kill',    target:15,  icon:'⚔️',  reward:{gold:150, xp:300, item:null}},
+  // Medium — boss/explore
+  {id:'boss1',    desc:'Defeat 1 boss',              type:'boss',    target:1,   icon:'👑',  reward:{gold:400, xp:800, item:'Health Potion'}},
+  {id:'explore5', desc:'Explore 5 times',            type:'explore', target:5,   icon:'🧭',  reward:{gold:35,  xp:70,  item:null}},
+  {id:'explore8', desc:'Explore 8 times',            type:'explore', target:8,   icon:'🧭',  reward:{gold:60,  xp:120, item:null}},
+  // Combat skill
+  {id:'combo3',   desc:'Build a 3x Combo',           type:'combo',   target:3,   icon:'💥',  reward:{gold:60,  xp:120, item:null}},
+  {id:'combo5',   desc:'Build a 5x Combo',           type:'combo',   target:5,   icon:'💥',  reward:{gold:120, xp:250, item:'Mana Crystal'}},
+  // Progression
+  {id:'gold50',   desc:'Earn 50 Gold from battles',  type:'gold',    target:50,  icon:'💰',  reward:{gold:40,  xp:80,  item:null}},
+  {id:'gold200',  desc:'Earn 200 Gold from battles', type:'gold',    target:200, icon:'💰',  reward:{gold:100, xp:200, item:null}},
+  {id:'lvlup1',   desc:'Level up your party',        type:'levelup', target:1,   icon:'⬆️',  reward:{gold:300, xp:600, item:'XP Tome'}},
+  {id:'tame1',    desc:'Tame a monster',             type:'tame',    target:1,   icon:'🪤',  reward:{gold:350, xp:700, item:'Monster Bait'}},
+  {id:'duel1',    desc:'Win 1 duel',                 type:'duel',    target:1,   icon:'🏆',  reward:{gold:200, xp:400, item:null}},
+  {id:'duel3',    desc:'Win 3 duels',                type:'duel',    target:3,   icon:'🏆',  reward:{gold:500, xp:1000,item:'Elixir'}},
+  // Dungeon
+  {id:'dungeon1', desc:'Complete a dungeon floor',   type:'dungeon', target:1,   icon:'🏰',  reward:{gold:250, xp:500, item:'Health Potion'}},
 ];
+
+
 
 function getDailyQuestsKey(){
   const d = new Date();
@@ -6120,30 +6337,82 @@ function openDailyQuests(){
   tomorrow.setDate(tomorrow.getDate()+1);
   tomorrow.setHours(0,0,0,0);
   const hoursLeft = Math.ceil((tomorrow-now)/3600000);
+  const minutesLeft = Math.ceil((tomorrow-now)/60000);
+  const timeStr = hoursLeft >= 1 ? `${hoursLeft}h` : `${minutesLeft}m`;
+
+  const completed = quests.filter(q=>q.completed).length;
+  const claimed   = quests.filter(q=>q.claimed).length;
 
   const body = `
-    <div style="font-size:.62rem;color:var(--dim);margin-bottom:12px;text-align:center;">
-      🕐 Resets in <b style="color:var(--gold);">${hoursLeft}h</b> · Complete quests for bonus rewards!
+    <!-- Header -->
+    <div style="text-align:center;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border);">
+      <div style="display:flex;justify-content:center;gap:16px;margin-bottom:8px;">
+        <div style="text-align:center;">
+          <div style="font-family:'Share Tech Mono',monospace;font-size:1rem;color:var(--gold);">${completed}/3</div>
+          <div style="font-size:.5rem;color:var(--dim);">Completed</div>
+        </div>
+        <div style="text-align:center;">
+          <div style="font-family:'Share Tech Mono',monospace;font-size:1rem;color:#60d060;">${claimed}/3</div>
+          <div style="font-size:.5rem;color:var(--dim);">Claimed</div>
+        </div>
+        <div style="text-align:center;">
+          <div style="font-family:'Share Tech Mono',monospace;font-size:1rem;color:var(--text);">${timeStr}</div>
+          <div style="font-size:.5rem;color:var(--dim);">Resets in</div>
+        </div>
+      </div>
+      <div style="font-size:.58rem;color:var(--dim);">Complete all 3 quests for a full day of bonus rewards!</div>
     </div>
-    ${quests.map((q,i)=>`
-      <div style="background:rgba(0,0,0,.4);border:2px solid ${q.claimed?'rgba(60,180,60,.3)':q.completed?'rgba(200,151,58,.4)':'var(--border)'};
-        border-radius:10px;padding:12px;margin-bottom:8px;">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-          <span style="font-size:1.2rem;">${q.claimed?'✅':q.completed?'🎁':'📋'}</span>
+
+    <!-- Quest cards -->
+    ${quests.map((q,i)=>{
+      const pct = Math.min(100, Math.floor(((q.progress||0)/q.target)*100));
+      const borderCol = q.claimed ? 'rgba(60,200,60,.4)' : q.completed ? 'rgba(200,151,58,.5)' : 'var(--border)';
+      const bgCol     = q.claimed ? 'rgba(0,60,0,.3)'    : q.completed ? 'rgba(60,40,0,.4)'    : 'rgba(0,0,0,.35)';
+      const itemReward = q.reward.item ? `🎁 <b>${q.reward.item}</b>` : '';
+      return `
+      <div style="background:${bgCol};border:2px solid ${borderCol};border-radius:12px;padding:12px;margin-bottom:10px;">
+        <!-- Quest title row -->
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+          <span style="font-size:1.4rem;line-height:1;">${q.icon||'📋'}</span>
           <div style="flex:1;">
-            <div style="font-family:'Cinzel',serif;font-size:.65rem;color:${q.claimed?'#60d060':q.completed?'var(--gold)':'var(--text)'};">${q.desc}</div>
-            <div style="font-size:.55rem;color:var(--dim);">Reward: 💰${q.reward.gold} Gold + ⭐${q.reward.xp} XP</div>
+            <div style="font-family:'Cinzel',serif;font-size:.68rem;
+              color:${q.claimed?'#60d060':q.completed?'var(--gold)':'var(--text)'};">
+              ${q.desc}
+            </div>
+            <!-- Rewards -->
+            <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;">
+              <span style="font-size:.52rem;background:rgba(200,151,58,.15);border:1px solid rgba(200,151,58,.3);
+                border-radius:5px;padding:2px 6px;color:var(--gold);">💰 ${q.reward.gold} Gold</span>
+              <span style="font-size:.52rem;background:rgba(100,100,200,.15);border:1px solid rgba(100,100,200,.3);
+                border-radius:5px;padding:2px 6px;color:#a0a0f0;">⭐ ${q.reward.xp} XP</span>
+              ${q.reward.item ? `<span style="font-size:.52rem;background:rgba(100,200,100,.15);border:1px solid rgba(100,200,100,.3);
+                border-radius:5px;padding:2px 6px;color:#80d080;">🎁 ${q.reward.item}</span>` : ''}
+            </div>
           </div>
+          <!-- Claim / status button -->
           ${q.completed && !q.claimed
-            ? `<button class="btn-sm" onclick="claimQuestReward(${i})" style="font-size:.55rem;padding:5px 10px;background:linear-gradient(135deg,#0a3018,#1a7040);">Claim!</button>`
-            : q.claimed ? `<span style="font-size:.6rem;color:#60d060;">Claimed!</span>` : ''}
+            ? `<button class="btn-sm" onclick="claimQuestReward(${i})"
+                style="font-size:.58rem;padding:7px 12px;background:linear-gradient(135deg,#0a3018,#1a7040);
+                white-space:nowrap;border-color:rgba(60,200,60,.4);">
+                🎁 Claim
+              </button>`
+            : q.claimed
+              ? `<div style="text-align:center;"><div style="font-size:1rem;">✅</div><div style="font-size:.48rem;color:#60d060;">Done!</div></div>`
+              : ''}
         </div>
-        <div style="height:5px;background:rgba(0,0,0,.5);border-radius:3px;">
-          <div style="height:100%;background:linear-gradient(90deg,${q.claimed?'#1a6030':'#c8973a'},${q.claimed?'#30c060':'#f0c060'});
-            width:${Math.min(100,Math.floor((q.progress/q.target)*100))}%;border-radius:3px;transition:width .3s;"></div>
+        <!-- Progress bar -->
+        <div style="height:6px;background:rgba(0,0,0,.5);border-radius:3px;margin-bottom:3px;">
+          <div style="height:100%;background:linear-gradient(90deg,
+            ${q.claimed?'#206040':'#c8973a'},${q.claimed?'#40c070':'#f0d060'});
+            width:${pct}%;border-radius:3px;transition:width .4s;"></div>
         </div>
-        <div style="font-size:.52rem;color:var(--dim);margin-top:3px;">${q.progress||0} / ${q.target}</div>
-      </div>`).join('')}`;
+        <div style="display:flex;justify-content:space-between;font-size:.5rem;color:var(--dim);">
+          <span>${q.progress||0} / ${q.target}</span>
+          <span>${pct}%</span>
+        </div>
+      </div>`;
+    }).join('')}`;
+
   showModal('📋 Daily Quests', body, [{label:'Close', cls:'btn-ghost', cb:()=>{ closeModal(); updateDailyBadge(); }}]);
 }
 
@@ -6155,107 +6424,240 @@ function claimQuestReward(idx){
   gameState.playerGold += q.reward.gold;
   gameState.playerXp   += q.reward.xp;
   gameState.skillXp    += q.reward.xp;
+  // Give item reward if any
+  if(q.reward.item){
+    const existing = gameState.inventory.find(i=>i.item===q.reward.item);
+    if(existing){ existing.qty=(existing.qty||1)+1; }
+    else { gameState.inventory.push({item:q.reward.item, qty:1, rarity:'Rare'}); }
+    toast(`🎁 Claimed! +${q.reward.gold}💰 +${q.reward.xp}⭐ +1 ${q.reward.item}!`);
+  } else {
+    toast(`🎁 Claimed! +${q.reward.gold} Gold, +${q.reward.xp} XP!`);
+  }
   saveDailyQuests(quests);
   saveGame();
   updateMenuHud();
   updateDailyBadge();
-  toast(`🎁 Claimed! +${q.reward.gold} Gold, +${q.reward.xp} XP!`);
   openDailyQuests(); // refresh
 }
 
 // ═══════════════════════════════════════════════════
 //  PvP ARENA SYSTEM
 // ═══════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════
+//  PvP ARENA — BOT LADDER SYSTEM
+//  Bots get 20% harder every ranked win
+// ═══════════════════════════════════════════════════
+
+const ARENA_BOTS = [
+  // Tier 1 — Stone/Iron rank bots
+  { name:'Training Scarecrow', emoji:'🪆', title:'Rookie',    element:'earth', style:'balanced',  tier:1 },
+  { name:'Dusty Bandit',       emoji:'🗡️', title:'Rookie',    element:'dark',  style:'aggressive',tier:1 },
+  { name:'Iron Fist',          emoji:'🥊', title:'Brawler',   element:'earth', style:'tank',      tier:1 },
+  // Tier 2 — Bronze rank bots
+  { name:'Shadow Apprentice',  emoji:'🥷', title:'Apprentice',element:'dark',  style:'balanced',  tier:2 },
+  { name:'Frost Archer',       emoji:'🏹', title:'Marksman',  element:'ice',   style:'fast',      tier:2 },
+  { name:'Ember Guard',        emoji:'🔥', title:'Guard',     element:'fire',  style:'tank',      tier:2 },
+  // Tier 3 — Silver rank bots
+  { name:'Storm Walker',       emoji:'⚡', title:'Duelist',   element:'storm', style:'aggressive',tier:3 },
+  { name:'Void Stalker',       emoji:'👻', title:'Phantom',   element:'dark',  style:'fast',      tier:3 },
+  { name:'Iron Sage',          emoji:'🧙', title:'Mage',      element:'earth', style:'magic',     tier:3 },
+  // Tier 4 — Gold rank bots
+  { name:'Thunder Paladin',    emoji:'⚔️', title:'Champion',  element:'storm', style:'tank',      tier:4 },
+  { name:'Dark Summoner',      emoji:'🌑', title:'Summoner',  element:'dark',  style:'magic',     tier:4 },
+  { name:'Flame Warlord',      emoji:'🔥', title:'Warlord',   element:'fire',  style:'aggressive',tier:4 },
+  // Tier 5 — Diamond rank bots
+  { name:'Void Sovereign',     emoji:'💠', title:'Sovereign', element:'dark',  style:'magic',     tier:5 },
+  { name:'Celestial Blade',    emoji:'✨', title:'Legend',    element:'light', style:'balanced',  tier:5 },
+  // Tier 6 — Legend boss bot
+  { name:'The Eternal Champion',emoji:'👑',title:'LEGEND',    element:'light', style:'boss',      tier:6 },
+];
+
+function getArenaBotKey(){ return 'aetherion_arena_wins'; }
+
+function getArenaWins(){
+  return parseInt(localStorage.getItem(getArenaBotKey())||'0');
+}
+
+function setArenaWins(n){
+  localStorage.setItem(getArenaBotKey(), n);
+}
+
+// Build bot stats — scales 20% harder per arena win
+function buildBotOpponent(arenaWins, isRanked){
+  const wins = arenaWins || 0;
+  const scaleMult = Math.pow(1.20, wins); // 20% harder per win
+  const lv = gameState.playerLevel || 1;
+
+  // Pick bot based on wins (progress through tiers)
+  const tierIdx = Math.min(Math.floor(wins / 3), ARENA_BOTS.length - 1);
+  const bot = ARENA_BOTS[tierIdx];
+
+  // Style determines stat distribution
+  const styles = {
+    balanced:   { hp:1.0, atk:1.0, def:1.0, mag:1.0, spd:1.0 },
+    aggressive: { hp:0.8, atk:1.5, def:0.7, mag:1.2, spd:1.2 },
+    tank:       { hp:1.6, atk:0.8, def:1.8, mag:0.6, spd:0.7 },
+    fast:       { hp:0.9, atk:1.1, def:0.8, mag:0.9, spd:1.8 },
+    magic:      { hp:0.9, atk:0.7, def:0.9, mag:1.8, spd:1.0 },
+    boss:       { hp:2.0, atk:1.5, def:1.5, mag:1.5, spd:1.3 },
+  };
+  const st = styles[bot.style] || styles.balanced;
+
+  const base = {
+    hp:  Math.floor((30 + lv * 7)  * st.hp  * scaleMult),
+    atk: Math.floor((6  + lv * 1.2)* st.atk * scaleMult),
+    def: Math.floor((4  + lv * 1.0)* st.def * scaleMult),
+    mag: Math.floor((5  + lv * 1.1)* st.mag * scaleMult),
+    spd: Math.floor((5  + lv * 0.8)* st.spd * scaleMult),
+  };
+
+  // XP and gold also scale
+  const xp   = Math.floor((40 + lv * 8 + wins * 15) * (isRanked ? 1 : 0.3));
+  const gold = isRanked ? Math.floor((15 + lv * 4 + wins * 8)) : 0;
+
+  return {
+    id: 'arena_bot',
+    name: `${bot.emoji} ${bot.name}`,
+    emoji: bot.emoji,
+    title: bot.title,
+    tier: bot.tier,
+    element: bot.element,
+    hp: base.hp, maxHp: base.hp,
+    attack: base.atk, defense: base.def,
+    magic: base.mag, speed: base.spd,
+    ability: getBotAbility(bot.style),
+    abilityDesc: 'Arena special move',
+    levelRequirement: 1,
+    xp, gold,
+    drops: [],
+    isArena: true,
+    isRanked: !!isRanked,
+    botWins: wins,
+    scaleMult: scaleMult.toFixed(2),
+  };
+}
+
+function getBotAbility(style){
+  const abilities = {
+    aggressive: 'Power Surge',
+    tank:       'Iron Wall',
+    fast:       'Speed Blitz',
+    magic:      'Arcane Burst',
+    boss:       'Champion Judgement',
+    balanced:   'Arena Strike',
+  };
+  return abilities[style] || 'Arena Strike';
+}
+
 function openPvPArena(){
   if(!gameState.deck.length){ toast('Build a deck first!'); return; }
   const { wins, losses, rank } = getRankData();
+  const arenaWins = getArenaWins();
+  const nextBot = buildBotOpponent(arenaWins, true);
+  const scalePct = Math.round((parseFloat(nextBot.scaleMult)-1)*100);
+  const tierIdx = Math.min(Math.floor(arenaWins/3), ARENA_BOTS.length-1);
+  const botPreview = ARENA_BOTS[tierIdx];
+
   const body = `
-    <div style="text-align:center;margin-bottom:16px;">
+    <!-- Rank display -->
+    <div style="text-align:center;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border);">
       <div style="font-size:2.5rem;">${rank.emoji}</div>
       <div style="font-family:'Cinzel',serif;font-size:.85rem;color:var(--gold);">${rank.name} Rank</div>
-      <div style="font-size:.6rem;color:var(--dim);margin-top:4px;">${wins}W · ${losses}L</div>
+      <div style="font-size:.6rem;color:var(--dim);margin-top:4px;">${wins}W · ${losses}L · ${arenaWins} Arena Wins</div>
     </div>
-    <div style="border-top:1px solid var(--border);padding-top:14px;">
-      <div style="font-family:'Cinzel',serif;font-size:.65rem;color:var(--gold);margin-bottom:10px;">⚔️ Arena Modes</div>
 
-      <div style="background:rgba(0,0,0,.4);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px;cursor:pointer;"
-        onclick="startRankedMatch()" onmouseover="this.style.borderColor='rgba(200,151,58,.4)'" onmouseout="this.style.borderColor='var(--border)'">
-        <div style="font-family:'Cinzel',serif;font-size:.7rem;color:var(--gold);">🏆 Ranked Match</div>
-        <div style="font-size:.58rem;color:var(--dim);margin-top:3px;">Fight a random opponent at your level. Wins count toward your rank.</div>
+    <!-- Next opponent preview -->
+    <div style="background:rgba(200,151,58,.06);border:1px solid rgba(200,151,58,.3);
+      border-radius:12px;padding:12px;margin-bottom:14px;">
+      <div style="font-size:.55rem;color:var(--dim);margin-bottom:6px;">NEXT RANKED OPPONENT</div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="font-size:2rem;">${botPreview.emoji}</div>
+        <div style="flex:1;">
+          <div style="font-family:'Cinzel',serif;font-size:.7rem;color:var(--text);">${botPreview.name}</div>
+          <div style="font-size:.55rem;color:var(--dim);">${botPreview.title} · ${botPreview.element} element</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:.62rem;color:${scalePct>0?'#e06060':'#60d060'};">+${scalePct}% power</div>
+          <div style="font-size:.5rem;color:var(--dim);">${arenaWins} wins streak</div>
+        </div>
       </div>
+      ${scalePct >= 100
+        ? `<div style="font-size:.55rem;color:#e06060;margin-top:6px;text-align:center;">
+            ⚠️ This bot is ${scalePct}% stronger than the first one!
+          </div>` : ''}
+    </div>
 
-      <div style="background:rgba(0,0,0,.4);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px;cursor:pointer;"
-        onclick="startPracticeMatch()" onmouseover="this.style.borderColor='rgba(200,151,58,.4)'" onmouseout="this.style.borderColor='var(--border)'">
-        <div style="font-family:'Cinzel',serif;font-size:.7rem;color:var(--text);">🎯 Practice Match</div>
-        <div style="font-size:.58rem;color:var(--dim);margin-top:3px;">Fight an AI opponent. No rank impact. Good for testing builds.</div>
-      </div>
+    <!-- Modes -->
+    <div style="font-family:'Cinzel',serif;font-size:.6rem;color:var(--gold);margin-bottom:8px;">⚔️ Arena Modes</div>
 
-      <div style="background:rgba(0,0,0,.4);border:1px solid var(--border);border-radius:10px;padding:12px;cursor:pointer;"
-        onclick="closeModal();goOnline()" onmouseover="this.style.borderColor='rgba(200,151,58,.4)'" onmouseout="this.style.borderColor='var(--border)'">
-        <div style="font-family:'Cinzel',serif;font-size:.7rem;color:var(--text);">🌐 Challenge Friend</div>
-        <div style="font-size:.58rem;color:var(--dim);margin-top:3px;">Go to Online Mode to duel a specific friend with a room code.</div>
+    <div style="background:rgba(0,0,0,.4);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px;cursor:pointer;"
+      onclick="startRankedMatch()" onmouseover="this.style.borderColor='rgba(200,151,58,.4)'" onmouseout="this.style.borderColor='var(--border)'">
+      <div style="font-family:'Cinzel',serif;font-size:.7rem;color:var(--gold);">🏆 Ranked Match</div>
+      <div style="font-size:.58rem;color:var(--dim);margin-top:2px;">Fight the next bot on the ladder. Gets harder every win (+20%). Counts toward rank.</div>
+      <div style="font-size:.55rem;color:#80d080;margin-top:3px;">Reward: ~${Math.floor(15 + (gameState.playerLevel||1)*4 + arenaWins*8)} Gold · XP</div>
+    </div>
+
+    <div style="background:rgba(0,0,0,.4);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px;cursor:pointer;"
+      onclick="startBotBattle(false)" onmouseover="this.style.borderColor='rgba(200,151,58,.4)'" onmouseout="this.style.borderColor='var(--border)'">
+      <div style="font-family:'Cinzel',serif;font-size:.7rem;color:var(--text);">🎯 Practice Match</div>
+      <div style="font-size:.58rem;color:var(--dim);margin-top:2px;">Fight an easier bot. No rank impact. Good for testing builds.</div>
+    </div>
+
+    <div style="background:rgba(0,0,0,.4);border:1px solid var(--border);border-radius:10px;padding:12px;cursor:pointer;"
+      onclick="closeModal();goOnline()" onmouseover="this.style.borderColor='rgba(200,151,58,.4)'" onmouseout="this.style.borderColor='var(--border)'">
+      <div style="font-family:'Cinzel',serif;font-size:.7rem;color:var(--text);">🌐 Challenge Friend</div>
+      <div style="font-size:.58rem;color:var(--dim);margin-top:2px;">Go to Online Mode to fight a real player with a room code.</div>
+    </div>
+
+    <!-- Bot ladder progress -->
+    <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);">
+      <div style="font-family:'Cinzel',serif;font-size:.58rem;color:var(--gold);margin-bottom:6px;">📊 Bot Ladder (${arenaWins} wins)</div>
+      <div style="display:flex;gap:3px;flex-wrap:wrap;">
+        ${ARENA_BOTS.map((b,i)=>{
+          const isUnlocked = i <= tierIdx;
+          const isCurrent  = i === tierIdx;
+          return `<div title="${b.name} — Tier ${b.tier}" style="width:28px;height:28px;border-radius:6px;
+            display:flex;align-items:center;justify-content:center;font-size:.8rem;
+            background:${isCurrent?'rgba(200,151,58,.3)':isUnlocked?'rgba(60,200,60,.15)':'rgba(0,0,0,.3)'};
+            border:1px solid ${isCurrent?'rgba(200,151,58,.6)':isUnlocked?'rgba(60,200,60,.3)':'rgba(100,100,100,.2)'};
+            opacity:${isUnlocked?'1':'.4'};">${b.emoji}</div>`;
+        }).join('')}
       </div>
     </div>`;
+
   showModal('🏟️ PvP Arena', body, [{label:'Close', cls:'btn-ghost', cb:closeModal}]);
 }
 
 function startRankedMatch(){
   closeModal();
-  // Build an AI opponent based on player level
-  const lv = gameState.playerLevel||1;
-  const oppNames = ['Shadow Knight','Void Walker','Storm Caller','Iron Breaker','Frost Mage','Flame Dancer','Dark Sage','Thunder Born'];
-  const oppEmojis = ['🥷','👻','⚡','🛡️','❄️','🔥','🧙','⚡'];
-  const idx = Math.floor(Math.random()*oppNames.length);
-  const opponent = {
-    id: 'pvp_ai',
-    name: oppNames[idx],
-    emoji: oppEmojis[idx],
-    hp:      Math.floor(40 + lv*8 + Math.random()*20),
-    attack:  Math.floor(8  + lv*1.5 + Math.random()*5),
-    defense: Math.floor(5  + lv*1.2 + Math.random()*4),
-    magic:   Math.floor(6  + lv*1.3 + Math.random()*4),
-    speed:   Math.floor(6  + lv*0.8 + Math.random()*4),
-    ability: 'Arena Strike',
-    abilityDesc: 'Powerful arena attack',
-    levelRequirement: lv,
-    xp: Math.floor(50 + lv*10),
-    gold: Math.floor(20 + lv*5),
-    drops: [],
-    isArena: true,
-    isRanked: true,
-  };
-  opponent.maxHp = opponent.hp;
-  spLog(`🏟️ <b>RANKED MATCH!</b> Facing <b>${opponent.name}</b>!`,'w');
+  startBotBattle(true);
+}
+
+function startBotBattle(isRanked){
+  const arenaWins = isRanked ? getArenaWins() : Math.max(0, getArenaWins() - 3);
+  const opponent = buildBotOpponent(arenaWins, isRanked);
+  const scalePct = Math.round((parseFloat(opponent.scaleMult)-1)*100);
+
   startBattle(opponent, 'screen-menu', false);
   showScreen('screen-sp');
-  toast(`⚔️ Ranked match started!`);
+
+  if(isRanked){
+    spLog(`🏟️ <b>RANKED MATCH #${arenaWins+1}!</b>`,'w');
+    spLog(`⚔️ Facing <b>${opponent.name}</b> [${opponent.title}]`,'w');
+    if(scalePct > 0) spLog(`📈 This bot is <b>+${scalePct}% stronger</b> than the first!`,'mn');
+    spLog(`💰 Win reward: <b>${opponent.gold} Gold</b> + <b>${opponent.xp} XP</b>`,'xp');
+  } else {
+    spLog(`🎯 <b>PRACTICE MATCH</b> vs <b>${opponent.name}</b>`,'mn');
+    spLog(`No rank impact — good for testing builds.`,'mn');
+  }
 }
 
 function startPracticeMatch(){
   closeModal();
-  const lv = gameState.playerLevel||1;
-  const opponent = {
-    id: 'practice_ai',
-    name: 'Training Dummy',
-    emoji: '🪆',
-    hp:      Math.floor(30 + lv*5),
-    attack:  Math.floor(5  + lv*1),
-    defense: Math.floor(3  + lv*0.8),
-    magic:   Math.floor(4  + lv*1),
-    speed:   Math.floor(5  + lv*0.5),
-    ability: 'Basic Strike',
-    abilityDesc: 'A basic practice attack',
-    levelRequirement: lv,
-    xp: Math.floor(10 + lv*2),
-    gold: 0, // no gold from practice
-    drops: [],
-    isPractice: true,
-  };
-  opponent.maxHp = opponent.hp;
-  startBattle(opponent, 'screen-menu', false);
-  showScreen('screen-sp');
-  toast(`🎯 Practice match started!`);
+  startBotBattle(false);
 }
+
+
 
 // ═══════════════════════════════════════════════════
 //  GUILD SYSTEM
@@ -6414,6 +6816,12 @@ function renderGuildHome(guild){
       </div>
     </div>
 
+    <!-- Guild War button -->
+    <button class="btn" onclick="closeModal();openGuildWar()" style="width:100%;margin-bottom:12px;
+      background:linear-gradient(135deg,#3a0808,#8a1818);border-color:rgba(200,50,50,.4);font-size:.65rem;">
+      ⚔️ Guild War — Challenge Another Guild!
+    </button>
+
     <!-- Members -->
     <div style="font-family:'Cinzel',serif;font-size:.6rem;color:var(--gold);margin-bottom:8px;">👥 Members</div>
     ${guild.members.map(m=>`
@@ -6481,7 +6889,1022 @@ function trackGuildKill(isBoss){
   saveGuild(guild);
 }
 
-// ── Show Claude win/lose dialog ──
+
+// ═══════════════════════════════════════════════════
+//  VEYLOR ANTI-CHEAT SYSTEM
+// ═══════════════════════════════════════════════════
+
+const VEYLOR_FIGHT_KEY = 'aetherion_veylor_fight';
+
+// Called after every duel win — reports to server
+function reportWinToAntiCheat(){
+  if(!socket?.connected || !gameState.username) return;
+  socket.emit('anticheat:win', { username: gameState.username });
+}
+
+// Check hold status on login — called right after logging in
+function checkAntiCheatStatus(){
+  if(!socket?.connected || !gameState.username) return;
+  socket.emit('anticheat:check', { username: gameState.username });
+  socket.once('anticheat:status', ({ onHold, daysLeft, flagLevel }) => {
+    if(flagLevel === 'banned'){
+      showVeylorBanned();
+      return;
+    }
+    // Check if there is a pending Veylor fight saved locally
+    const pending = localStorage.getItem(VEYLOR_FIGHT_KEY);
+    if(pending){
+      const fight = JSON.parse(pending);
+      // Veylor is waiting — force the fight immediately
+      setTimeout(()=>forceVeylorFight(fight), 800);
+      return;
+    }
+    if(onHold){
+      showVeylorHold(daysLeft);
+    }
+  });
+}
+
+// Setup all Veylor socket listeners
+function setupVeylorListeners(){
+  if(!socket) return;
+
+  // Remove duplicates if reconnecting
+  socket.off('anticheat:flag');
+  socket.off('anticheat:warning');
+  socket.off('anticheat:veylor');
+  socket.off('anticheat:banned');
+  socket.off('anticheat:hold');
+
+  // Flag — subtle warning in log
+  socket.on('anticheat:flag', ({ wins, dialogue }) => {
+    console.warn(`[Veylor] ${dialogue}`);
+  });
+
+  // Warning — toast + log message
+  socket.on('anticheat:warning', ({ wins, dialogue }) => {
+    toast(`⚖️ ${dialogue}`);
+    if(typeof spLog === 'function') spLog(`⚖️ <b>Veylor stirs...</b> "${dialogue}"`, 'mn');
+  });
+
+  // Hold triggered — show cinematic then force the fight
+  socket.on('anticheat:veylor', ({ phase, daysLeft, dialogue, veylor }) => {
+    // Save fight state so it persists across reloads
+    const fightData = { daysLeft, dialogue, phase: 'active', startedAt: Date.now() };
+    localStorage.setItem(VEYLOR_FIGHT_KEY, JSON.stringify(fightData));
+    showVeylorCinematicIntro(dialogue, fightData);
+  });
+
+  // Permanent ban
+  socket.on('anticheat:banned', () => {
+    showVeylorBanned();
+  });
+
+  // Already on hold when trying to win — check for pending fight
+  socket.on('anticheat:hold', ({ daysLeft, dialogue }) => {
+    const pending = localStorage.getItem(VEYLOR_FIGHT_KEY);
+    if(pending){
+      forceVeylorFight(JSON.parse(pending));
+    } else {
+      showVeylorHold(daysLeft);
+    }
+    toast(`⚖️ ${dialogue}`);
+  });
+}
+
+// ── Cinematic intro before the forced fight ──
+function showVeylorCinematicIntro(dialogueLines, fightData){
+  let lineIdx = 0;
+  const overlay = document.createElement('div');
+  overlay.id = 'veylor-overlay';
+  overlay.style.cssText = `
+    position:fixed;inset:0;background:rgba(0,0,0,.98);z-index:99999;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    padding:30px;text-align:center;
+  `;
+
+  // Block all keyboard shortcuts — no escape
+  const blockKeys = (e) => { e.preventDefault(); e.stopPropagation(); };
+  window.addEventListener('keydown', blockKeys, true);
+
+  function nextLine(){
+    if(lineIdx >= dialogueLines.length){
+      window.removeEventListener('keydown', blockKeys, true);
+      overlay.remove();
+      forceVeylorFight(fightData);
+      return;
+    }
+    overlay.innerHTML = `
+      <div style="font-size:3rem;margin-bottom:20px;
+        filter:drop-shadow(0 0 30px rgba(200,0,200,1));
+        animation:logoPulse 1s ease-in-out infinite;">⚖️</div>
+      <div style="font-family:'Cinzel Decorative',serif;font-size:.85rem;
+        color:#e040e0;letter-spacing:.15em;margin-bottom:24px;
+        text-shadow:0 0 20px rgba(200,0,200,.8);">
+        VEYLOR, THE ETERNAL JUDGE
+      </div>
+      <div style="font-family:'IM Fell English',serif;font-size:1.05rem;
+        color:#f0d0f0;line-height:1.9;max-width:420px;margin-bottom:32px;
+        text-shadow:0 0 10px rgba(200,0,200,.4);">
+        "${dialogueLines[lineIdx]}"
+      </div>
+      <div style="font-size:.55rem;color:rgba(200,150,200,.4);font-style:italic;">
+        ${lineIdx < dialogueLines.length-1 ? 'tap to continue...' : 'tap to face judgement...'}
+      </div>`;
+    lineIdx++;
+    overlay.onclick = nextLine;
+  }
+
+  document.body.appendChild(overlay);
+  nextLine();
+}
+
+// ── The actual forced Veylor fight — inescapable ──
+function forceVeylorFight(fightData){
+  if(!gameState.deck.length){ goCardPick('sp'); return; }
+
+  // Force show SP screen
+  showScreen('screen-sp');
+  updateSPHud();
+  setSPBtns();
+
+  // Clear log and set atmosphere
+  document.getElementById('sp-log').innerHTML = '';
+  spLog(`🌑 <b>The realm grows dark...</b>`,'d');
+  spLog(`⚖️ <b>Veylor, the Eternal Judge, has come for you.</b>`,'d');
+  spLog(`💀 <b>There is no escape. There is no mercy.</b>`,'d');
+  spLog(`⚖️ <i>"Your excessive victories have been noted. Face my judgement."</i>`,'sk');
+  spLog(`---`,'mn');
+  spLog(`⚠️ <b>You CANNOT flee. You CANNOT escape. Veylor will one-shot you after 5 turns.</b>`,'d');
+
+  // Build Veylor as an enemy
+  const veylor = {
+    id: 'veylor_judge',
+    name: 'Veylor, the Eternal Judge',
+    emoji: '⚖️',
+    hp: 99999,
+    maxHp: 99999,
+    attack: 50,
+    defense: 999,
+    magic: 80,
+    speed: 30,
+    ability: 'Eternal Judgement',
+    abilityDesc: 'Cannot be killed. After 5 turns deals infinite damage.',
+    levelRequirement: 1,
+    xp: 0,
+    gold: 0,
+    drops: [],
+    isVeylor: true,
+    turnsLeft: 5, // one-shot timer
+    phaseHealAmount: [],
+    phases: [
+      { threshold:1.0, name:'Observing',    desc:'Veylor watches you with cold, ancient eyes.',         mult:1   },
+      { threshold:0.5, name:'Judging',      desc:'"You thought you could hide your sins?" Veylor surges!', mult:2 },
+    ],
+  };
+
+  // Set game state — block flee button
+  gameState.inBattle = true;
+  gameState.currentEnemy = veylor;
+  gameState.enemyStatuses = [];
+  gameState.isBoss = true;
+  gameState.bossPhase = 0;
+  gameState.isVeylorFight = true; // flag to block flee + escape
+
+  // Override buttons
+  document.getElementById('btn-flee').disabled = true;
+  document.getElementById('btn-flee').textContent = '🚫 No Escape';
+  document.getElementById('btn-travel').disabled = true;
+
+  updateSPHud();
+  setSPBtns();
+
+  // Start Veylor turn counter — one-shot after 5 turns
+  gameState.veylorTurnsLeft = 5;
+  updateVeylorTurnDisplay();
+}
+
+function updateVeylorTurnDisplay(){
+  const en = gameState.currentEnemy;
+  if(!en?.isVeylor) return;
+  const turns = gameState.veylorTurnsLeft||5;
+  if(turns <= 2){
+    spLog(`☠️ <b>Veylor charges his final judgement... ${turns} turn${turns!==1?'s':''} remaining!</b>`,'d');
+  } else {
+    spLog(`⚖️ <b>Veylor watches...</b> ${turns} turns until Eternal Judgement.`,'mn');
+  }
+}
+
+// ── Override spEnemyTurn to handle Veylor specially ──
+// Patched in by wrapping the existing spEnemyTurn
+const _originalSpEnemyTurn = window._veylorPatched ? window._spEnemyTurnOrig : null;
+window._veylorPatched = true;
+
+function veylorEnemyTurnHook(){
+  const en = gameState.currentEnemy;
+  if(!en?.isVeylor){
+    // Normal fight — call original logic (handled in spEnemyTurn body)
+    return false;
+  }
+
+  // Veylor fight logic
+  const card = activeCard();
+  gameState.veylorTurnsLeft = (gameState.veylorTurnsLeft||5) - 1;
+
+  // Special Veylor moves each turn
+  const turn = 5 - gameState.veylorTurnsLeft;
+
+  if(gameState.veylorTurnsLeft <= 0){
+    // ONE SHOT — ban the player
+    spLog(`💀 <b>ETERNAL JUDGEMENT!</b>`,'d');
+    spLog(`⚖️ <i>"You have been weighed. You have been measured. You have been found wanting."</i>`,'sk');
+    spLog(`💥 <b>Veylor obliterates ${card.name} with infinite power!</b>`,'d');
+    spLog(`☠️ <b>Your entire party falls...</b>`,'d');
+    // Kill all cards
+    gameState.deck.forEach(c=>{ c.hp=0; c.fainted=true; });
+    card.hp = 0;
+    updateSPHud();
+    // Clear the fight key — they survived the fight (they're now banned)
+    localStorage.removeItem(VEYLOR_FIGHT_KEY);
+    // Issue ban via server
+    if(socket?.connected){
+      socket.emit('anticheat:win', { username: gameState.username }); // triggers repeat offense = permanent
+    }
+    gameState.inBattle = false;
+    gameState.isVeylorFight = false;
+    gameState.currentEnemy = null;
+    setTimeout(()=>{
+      showVeylorBanned();
+    }, 1500);
+    return true;
+  }
+
+  // Turn 1 — debuff
+  if(turn === 1){
+    card.attack  = Math.max(1, Math.floor(card.attack  * 0.5));
+    card.defense = Math.max(1, Math.floor(card.defense * 0.5));
+    card.magic   = Math.max(1, Math.floor(card.magic   * 0.5));
+    spLog(`⚖️ <b>Veylor's curse weakens you!</b> All your stats cut in half!`,'d');
+  }
+  // Turn 2 — heavy hit
+  else if(turn === 2){
+    const dmg = Math.floor(card.maxHp * 0.4);
+    card.hp = Math.max(1, card.hp - dmg);
+    spLog(`⚔️ <b>Veylor strikes ${card.name} for ${dmg} damage!</b> (40% max HP)`,'c');
+    addStatus(false,'stun',1);
+    spLog(`💫 <b>${card.name} is stunned!</b>`,'sk');
+  }
+  // Turn 3 — stun whole party
+  else if(turn === 3){
+    const dmg = Math.floor(card.maxHp * 0.6);
+    card.hp = Math.max(1, card.hp - dmg);
+    spLog(`🔮 <b>Veylor channels divine power!</b> ${card.name} takes ${dmg} magic damage!`,'c');
+    spLog(`⚖️ <i>"Three turns remain. Confess your sins."</i>`,'sk');
+  }
+  // Turn 4 — drain all gold
+  else if(turn === 4){
+    const stolenGold = gameState.playerGold;
+    gameState.playerGold = 0;
+    spLog(`💰 <b>Veylor takes ALL your gold!</b> ${stolenGold} Gold consumed!`,'d');
+    spLog(`⚖️ <i>"Your wealth means nothing before judgement. One turn remains."</i>`,'sk');
+  }
+
+  // Check if card fainted from Veylor hit
+  if(card.hp <= 0){
+    card.fainted = true; card.hp = 0;
+    spLog(`💀 <b>${card.name} has fainted!</b>`,'d');
+    const nextAlive = gameState.deck.findIndex((c,i)=>i!==gameState.activeCardIdx&&!c.fainted&&c.hp>0);
+    if(nextAlive >= 0){
+      gameState.activeCardIdx = nextAlive;
+      spLog(`🔄 <b>${activeCard().name}</b> steps in — but there is no escaping Veylor!`,'w');
+    }
+    // Don't end battle even if all fainted — Veylor controls this fight
+  }
+
+  updateVeylorTurnDisplay();
+  updateSPHud();
+  setSPBtns();
+
+  // Re-block flee every turn in case something re-enables it
+  document.getElementById('btn-flee').disabled = true;
+  document.getElementById('btn-flee').textContent = '🚫 No Escape';
+
+  return true;
+}
+
+// Also block player damage on Veylor — he doesn't take damage
+function veylorBlockPlayerAttack(){
+  if(!gameState.currentEnemy?.isVeylor) return false;
+  spLog(`⚔️ <b>Your attack passes through Veylor like smoke...</b>`,'mn');
+  spLog(`⚖️ <i>"Pathetic."</i>`,'sk');
+  // Still trigger his turn
+  veylorEnemyTurnHook();
+  updateSPHud(); setSPBtns();
+  return true;
+}
+
+function showVeylorHold(daysLeft){
+  showModal('⚖️ Veylor Judgement', `
+    <div style="text-align:center;padding:10px 0 20px;">
+      <div style="font-size:3.5rem;margin-bottom:12px;
+        animation:logoPulse 2s ease-in-out infinite;
+        filter:drop-shadow(0 0 20px rgba(200,0,200,.8));">⚖️</div>
+      <div style="font-family:'Cinzel Decorative',serif;font-size:1rem;
+        color:#e040e0;text-shadow:0 0 20px rgba(200,0,200,.6);margin-bottom:8px;">
+        VEYLOR HAS JUDGED YOU
+      </div>
+      <div style="font-size:.7rem;color:var(--dim);line-height:1.8;margin-bottom:16px;">
+        Your account is on hold by<br>
+        <b style="color:#e040e0;">Veylor, the Eternal Judge</b>.<br><br>
+        Duel wins will not count during this period.
+      </div>
+      <div style="background:rgba(120,0,120,.2);border:2px solid rgba(200,0,200,.4);
+        border-radius:12px;padding:16px;margin-bottom:12px;">
+        <div style="font-family:'Share Tech Mono',monospace;font-size:1.4rem;color:#e040e0;">
+          ${daysLeft} day${daysLeft!==1?'s':''} remaining
+        </div>
+        <div style="font-size:.58rem;color:var(--dim);margin-top:4px;">
+          Hold expires automatically.
+        </div>
+      </div>
+      <div style="font-size:.58rem;color:rgba(200,150,200,.5);font-style:italic;">
+        "When you return... Veylor will be watching."
+      </div>
+    </div>`,
+    [{label:'I Understand', cls:'btn-ghost', cb:closeModal}]
+  );
+}
+
+function showVeylorBanned(){
+  // Clear everything — they're flagged
+  localStorage.removeItem(VEYLOR_FIGHT_KEY);
+  // Full screen block — can't close this
+  const overlay = document.createElement('div');
+  overlay.style.cssText = `
+    position:fixed;inset:0;background:#000;z-index:999999;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    padding:30px;text-align:center;
+  `;
+  overlay.innerHTML = `
+    <div style="font-size:4rem;margin-bottom:16px;
+      filter:drop-shadow(0 0 30px rgba(200,0,200,1));">⚖️</div>
+    <div style="font-family:'Cinzel Decorative',serif;font-size:1rem;
+      color:#e040e0;letter-spacing:.1em;margin-bottom:16px;
+      text-shadow:0 0 30px rgba(200,0,200,.9);">
+      VEYLOR HAS SPOKEN
+    </div>
+    <div style="font-size:.75rem;color:#f0d0f0;line-height:2;margin-bottom:20px;max-width:380px;">
+      You have been found guilty of repeated offenses.<br>
+      <b style="color:#e040e0;">Veylor, the Eternal Judge</b>, has permanently<br>
+      flagged your account.<br><br>
+      Duel wins will no longer count.<br>
+      Your victories mean nothing.
+    </div>
+    <div style="font-size:.6rem;color:rgba(200,150,200,.5);font-style:italic;margin-bottom:24px;">
+      "There is no appeal. There is no escape.<br>
+      The judgement is eternal."
+    </div>
+    <div style="background:rgba(120,0,120,.2);border:1px solid rgba(200,0,200,.3);
+      border-radius:10px;padding:12px;font-size:.58rem;color:rgba(200,150,200,.6);">
+      ❌ Account permanently flagged on leaderboard
+    </div>`;
+  document.body.appendChild(overlay);
+  // Block all interaction
+  window.addEventListener('keydown', e=>e.preventDefault(), true);
+}
+
+
+
+// ═══════════════════════════════════════════════════
+//  ROGUELIKE MODE
+// ═══════════════════════════════════════════════════
+const ROGUELIKE_KEY = 'aetherion_roguelike';
+
+function getRoguelikeState(){
+  const raw = localStorage.getItem(ROGUELIKE_KEY);
+  return raw ? JSON.parse(raw) : null;
+}
+function saveRoguelikeState(state){
+  localStorage.setItem(ROGUELIKE_KEY, JSON.stringify(state));
+}
+function clearRoguelikeState(){
+  localStorage.removeItem(ROGUELIKE_KEY);
+}
+
+function goRoguelike(){
+  if(!gameState.deck.length){ toast('Build a deck first!'); return; }
+
+  // Check for in-progress run
+  const existing = getRoguelikeState();
+  if(existing && !existing.dead){
+    showModal('💀 Roguelike Run', `
+      <div style="text-align:center;padding:8px 0 16px;">
+        <div style="font-size:2.5rem;margin-bottom:8px;">💀</div>
+        <div style="font-family:'Cinzel',serif;font-size:.85rem;color:var(--gold);">RUN IN PROGRESS</div>
+        <div style="font-size:.65rem;color:var(--dim);margin-top:8px;line-height:1.8;">
+          Floor <b style="color:var(--gold);">${existing.floor}</b> · 
+          <b style="color:#60d060;">${existing.kills}</b> kills · 
+          <b style="color:var(--gold);">${existing.gold}</b> gold earned
+        </div>
+        <div style="font-size:.6rem;color:var(--dim);margin-top:6px;">Your card: <b>${existing.cardName}</b></div>
+      </div>`,
+      [{label:'▶ Continue Run', cls:'btn', cb:()=>{ closeModal(); continueRoguelike(existing); }},
+       {label:'🗑 Abandon & Start New', cls:'btn-ghost', cb:()=>{ clearRoguelikeState(); closeModal(); startRoguelikeNew(); }}]
+    );
+    return;
+  }
+  startRoguelikeNew();
+}
+
+function startRoguelikeNew(){
+  // Pick one card
+  const body = `
+    <div style="text-align:center;margin-bottom:14px;">
+      <div style="font-size:2rem;margin-bottom:6px;">💀</div>
+      <div style="font-family:'Cinzel',serif;font-size:.85rem;color:var(--gold);">ROGUELIKE RUN</div>
+      <div style="font-size:.6rem;color:var(--dim);margin-top:6px;line-height:1.7;">
+        Pick <b>ONE card</b>. If it dies — the run is over.<br>
+        No healing between fights. Go as far as you can.<br>
+        <b style="color:var(--gold);">Rewards scale with how far you get.</b>
+      </div>
+    </div>
+    <div style="font-family:'Cinzel',serif;font-size:.6rem;color:var(--gold);margin-bottom:8px;">Choose your card:</div>
+    <div style="display:flex;flex-direction:column;gap:6px;max-height:260px;overflow-y:auto;">
+      ${gameState.deck.map((card,i)=>`
+        <div onclick="pickRoguelikeCard(${i})" style="display:flex;align-items:center;gap:10px;
+          padding:10px;background:rgba(0,0,0,.4);border:1px solid var(--border);border-radius:10px;cursor:pointer;"
+          onmouseover="this.style.borderColor='rgba(200,151,58,.4)'" onmouseout="this.style.borderColor='var(--border)'">
+          <span style="font-size:1.6rem;">${card.emoji||'⚔️'}</span>
+          <div style="flex:1;">
+            <div style="font-family:'Cinzel',serif;font-size:.68rem;color:var(--text);">${card.name}</div>
+            <div style="font-size:.52rem;color:var(--dim);">HP: ${card.hp} · ATK: ${card.attack} · Lv.${card.level||1}</div>
+          </div>
+          <div style="font-size:.55rem;color:var(--gold);">Select →</div>
+        </div>`).join('')}
+    </div>`;
+  showModal('💀 Pick Your Card', body, [{label:'Cancel', cls:'btn-ghost', cb:closeModal}]);
+}
+
+function pickRoguelikeCard(idx){
+  closeModal();
+  const card = gameState.deck[idx];
+  if(!card) return;
+
+  // Create roguelike state
+  const rlState = {
+    cardIdx: idx,
+    cardName: card.name,
+    floor: 1,
+    kills: 0,
+    gold: 0,
+    dead: false,
+    startedAt: Date.now(),
+    // Save card's current HP so we restore after run
+    savedHp: card.hp,
+  };
+  saveRoguelikeState(rlState);
+  continueRoguelike(rlState);
+}
+
+function continueRoguelike(rlState){
+  // Set active card to roguelike card
+  gameState.activeCardIdx = rlState.cardIdx;
+  const card = activeCard();
+  if(!card){ toast('Card not found!'); clearRoguelikeState(); return; }
+
+  // Restore HP to where run left off (not full heal)
+  if(rlState.floor > 1) card.hp = rlState.cardHp || card.hp;
+
+  // Generate a floor enemy — harder per floor
+  const floorMult = Math.pow(1.15, rlState.floor - 1); // 15% harder per floor
+  const lv = gameState.playerLevel || 1;
+
+  // Boss every 5 floors
+  const isBossFloor = rlState.floor % 5 === 0;
+  let enemy;
+
+  if(isBossFloor){
+    const bossPool = [
+      {name:'Floor Titan',     emoji:'🗿', hp:Math.floor((80+lv*12)*floorMult), attack:Math.floor((14+lv*2)*floorMult), defense:Math.floor((10+lv*1.5)*floorMult), magic:Math.floor((8+lv)*floorMult),  speed:6},
+      {name:'Void Reaper',     emoji:'💀', hp:Math.floor((70+lv*10)*floorMult), attack:Math.floor((18+lv*2.5)*floorMult),defense:Math.floor((6+lv)*floorMult),     magic:Math.floor((15+lv*2)*floorMult),speed:12},
+      {name:'Chaos Dragon',    emoji:'🐉', hp:Math.floor((100+lv*15)*floorMult),attack:Math.floor((16+lv*2)*floorMult), defense:Math.floor((12+lv*2)*floorMult),  magic:Math.floor((16+lv*2)*floorMult),speed:10},
+    ];
+    enemy = {...bossPool[Math.floor(Math.random()*bossPool.length)]};
+    enemy.id='rl_boss'; enemy.xp=0; enemy.gold=0; enemy.drops=[]; enemy.levelRequirement=1;
+    enemy.isRoguelikeBoss = true;
+  } else {
+    const monPool = MONSTERS.filter(m=>m.levelRequirement<=(lv+Math.floor(rlState.floor/2)));
+    const base = monPool.length ? {...monPool[Math.floor(Math.random()*monPool.length)]} : {...MONSTERS[0]};
+    enemy = {...base};
+    enemy.hp      = Math.floor(enemy.hp      * floorMult);
+    enemy.attack  = Math.floor(enemy.attack  * floorMult);
+    enemy.defense = Math.floor(enemy.defense * floorMult);
+    enemy.magic   = Math.floor((enemy.magic||5) * floorMult);
+    enemy.maxHp   = enemy.hp;
+    enemy.xp      = 0;
+    enemy.gold    = 0;
+    enemy.drops   = [];
+    enemy.isRoguelike = true;
+  }
+  enemy.maxHp = enemy.hp;
+
+  // Store floor enemy in state
+  rlState.currentEnemy = enemy.name;
+
+  // Start battle — no gold/xp from enemies, roguelike handles rewards
+  gameState.inBattle = true;
+  gameState.currentEnemy = enemy;
+  gameState.enemyStatuses = [];
+  gameState.isBoss = isBossFloor;
+  gameState.bossPhase = 0;
+  gameState.isRoguelikeRun = true;
+  gameState.rlState = rlState;
+
+  showScreen('screen-sp');
+  updateSPHud(); setSPBtns();
+  document.getElementById('sp-log').innerHTML = '';
+
+  const floorGold = Math.floor(5 + rlState.floor * 3);
+  spLog(`💀 <b>ROGUELIKE — Floor ${rlState.floor}</b>${isBossFloor?' 👑 BOSS FLOOR!':''}`, 'w');
+  spLog(`⚔️ Facing <b>${enemy.name}</b>${enemy.emoji?' '+enemy.emoji:''}`, 'c');
+  spLog(`❤️ Your HP: <b>${card.hp}/${card.maxHp}</b> · No healing between floors!`, 'mn');
+  spLog(`💰 Clear reward: <b>${floorGold} Gold</b>`, 'xp');
+
+  if(!isBossFloor && rlState.floor > 1){
+    spLog(`📊 Run: <b>${rlState.kills} kills</b> · <b>${rlState.gold}g earned</b>`, 'mn');
+  }
+}
+
+// Called from spBattleEnd — handle roguelike win/loss
+function handleRoguelikeEnd(won){
+  const rlState = gameState.rlState;
+  if(!rlState) return;
+
+  const card = activeCard();
+
+  if(won){
+    // Floor cleared!
+    const floorGold = Math.floor(5 + rlState.floor * 3);
+    rlState.kills++;
+    rlState.gold += floorGold;
+    rlState.floor++;
+    rlState.cardHp = card.hp; // save HP for next floor — no regen!
+    saveRoguelikeState(rlState);
+
+    const isBossFloor = rlState.floor % 5 === 0;
+    spLog(``, 'mn');
+    spLog(`✅ <b>Floor ${rlState.floor-1} cleared!</b> +${floorGold} Gold`, 'xp');
+    spLog(`❤️ HP carries over: <b>${card.hp}/${card.maxHp}</b>`, 'mn');
+
+    // After a short delay — next floor
+    setTimeout(()=>{
+      showModal('💀 Floor Cleared!', `
+        <div style="text-align:center;padding:8px 0 14px;">
+          <div style="font-size:2.5rem;margin-bottom:8px;">✅</div>
+          <div style="font-family:'Cinzel',serif;font-size:.85rem;color:var(--gold);">FLOOR ${rlState.floor-1} CLEARED</div>
+          <div style="font-size:.65rem;color:var(--dim);margin-top:8px;line-height:1.8;">
+            Kills: <b style="color:#60d060;">${rlState.kills}</b> · 
+            Gold: <b style="color:var(--gold);">${rlState.gold}</b><br>
+            Your HP: <b style="color:${card.hp/card.maxHp>.5?'#60d060':'#e06060'};">${card.hp}/${card.maxHp}</b>
+          </div>
+          ${isBossFloor ? `<div style="font-size:.6rem;color:#f0a020;margin-top:6px;">⚠️ Next floor is a BOSS FLOOR!</div>` : ''}
+        </div>`,
+        [{label:`⚔️ Floor ${rlState.floor} →`, cls:'btn', cb:()=>{ closeModal(); continueRoguelike(rlState); }},
+         {label:'🏳 End Run', cls:'btn-ghost', cb:()=>{ closeModal(); endRoguelikeRun(rlState, false); }}]
+      );
+    }, 800);
+
+  } else {
+    // Card died — run over
+    rlState.dead = true;
+    saveRoguelikeState(rlState);
+    setTimeout(()=> endRoguelikeRun(rlState, true), 800);
+  }
+}
+
+function endRoguelikeRun(rlState, died){
+  clearRoguelikeState();
+  gameState.isRoguelikeRun = false;
+  gameState.rlState = null;
+
+  // Restore card HP
+  const card = gameState.deck[rlState.cardIdx];
+  if(card) card.hp = Math.max(1, card.maxHp); // restore HP after run ends
+
+  // Calculate rewards based on floors cleared
+  const floors = rlState.floor - 1;
+  const goldReward  = rlState.gold;
+  const xpReward    = Math.floor(floors * 80 + rlState.kills * 30);
+  const bonusItem   = floors >= 10 ? 'Phoenix Feather' : floors >= 5 ? 'Elixir' : floors >= 3 ? 'Health Potion' : null;
+
+  gameState.playerGold += goldReward;
+  gameState.playerXp   += xpReward;
+  gameState.skillXp    += xpReward;
+  if(bonusItem){
+    const ex = gameState.inventory.find(i=>i.item===bonusItem);
+    if(ex) ex.qty=(ex.qty||1)+1;
+    else gameState.inventory.push({item:bonusItem, qty:1, rarity: floors>=10?'Epic':'Rare'});
+  }
+  saveGame();
+
+  // Check best run
+  const bestKey = 'aetherion_rl_best';
+  const best = parseInt(localStorage.getItem(bestKey)||'0');
+  const isNewBest = floors > best;
+  if(isNewBest) localStorage.setItem(bestKey, floors);
+
+  showModal('💀 Run Over!', `
+    <div style="text-align:center;padding:8px 0 16px;">
+      <div style="font-size:3rem;margin-bottom:8px;">${died?'💀':'🏳️'}</div>
+      <div style="font-family:'Cinzel Decorative',serif;font-size:.9rem;
+        color:${died?'#e06060':'var(--gold)'};">${died?'YOU DIED':'RUN ENDED'}</div>
+      ${isNewBest?`<div style="font-size:.6rem;color:#f0c030;margin-top:6px;">🏆 NEW BEST RECORD!</div>`:''}
+      <!-- Stats -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:14px 0;">
+        <div style="background:rgba(0,0,0,.4);border-radius:8px;padding:10px;">
+          <div style="font-family:'Share Tech Mono',monospace;font-size:1.1rem;color:var(--gold);">${floors}</div>
+          <div style="font-size:.5rem;color:var(--dim);">Floors Cleared</div>
+        </div>
+        <div style="background:rgba(0,0,0,.4);border-radius:8px;padding:10px;">
+          <div style="font-family:'Share Tech Mono',monospace;font-size:1.1rem;color:var(--gold);">${rlState.kills}</div>
+          <div style="font-size:.5rem;color:var(--dim);">Kills</div>
+        </div>
+      </div>
+      <!-- Rewards -->
+      <div style="background:rgba(200,151,58,.06);border:1px solid rgba(200,151,58,.2);border-radius:10px;padding:12px;margin-bottom:10px;">
+        <div style="font-family:'Cinzel',serif;font-size:.6rem;color:var(--gold);margin-bottom:8px;">🎁 Run Rewards</div>
+        <div style="display:flex;justify-content:center;gap:12px;flex-wrap:wrap;">
+          <span style="font-size:.62rem;color:var(--gold);">💰 +${goldReward} Gold</span>
+          <span style="font-size:.62rem;color:#a0a0f0;">⭐ +${xpReward} XP</span>
+          ${bonusItem?`<span style="font-size:.62rem;color:#80d080;">🎁 ${bonusItem}</span>`:''}
+        </div>
+      </div>
+      <div style="font-size:.55rem;color:var(--dim);">Best run: <b>${isNewBest?floors:best}</b> floors</div>
+    </div>`,
+    [{label:'Try Again', cls:'btn', cb:()=>{ closeModal(); goRoguelike(); }},
+     {label:'Back to Menu', cls:'btn-ghost', cb:()=>{ closeModal(); showScreen('screen-menu'); updateMenuHud(); }}]
+  );
+}
+
+// ═══════════════════════════════════════════════════
+//  CO-OP RAID SYSTEM
+// ═══════════════════════════════════════════════════
+const RAID_BOSSES = [
+  { id:'raid_colossus',  name:'The Iron Colossus',   emoji:'🗿', hp:2000, attack:35, defense:40, magic:20, speed:8,  ability:'Titan Slam',     abilityDesc:'Massive area attack hitting all players', element:'earth', minLevel:5  },
+  { id:'raid_leviathan', name:'Sea Leviathan',        emoji:'🌊', hp:3000, attack:45, defense:30, magic:50, speed:15, ability:'Tidal Wave',     abilityDesc:'Magic surge hitting both players',        element:'water', minLevel:10 },
+  { id:'raid_inferno',   name:'Inferno Warlord',      emoji:'🔥', hp:4000, attack:60, defense:50, magic:45, speed:20, ability:'Hellfire Storm', abilityDesc:'Burns all active cards for 3 turns',     element:'fire',  minLevel:15 },
+  { id:'raid_void_king', name:'The Void King',        emoji:'👑', hp:6000, attack:80, defense:70, magic:80, speed:25, ability:'Void Annihilate',abilityDesc:'Targets the weakest player',              element:'dark',  minLevel:25 },
+  { id:'raid_eternal',   name:'Eternal Destroyer',    emoji:'💠', hp:9999, attack:99, defense:99, magic:99, speed:30, ability:'Reality Break', abilityDesc:'Ignores all defense',                     element:'light', minLevel:40 },
+];
+
+function openCoopRaid(){
+  if(!gameState.deck.length){ toast('Build a deck first!'); return; }
+  if(!socket?.connected){ toast('Connect online first!'); getSocket(); return; }
+
+  const lv = gameState.playerLevel||1;
+  const available = RAID_BOSSES.filter(b=>lv>=b.minLevel);
+  const locked    = RAID_BOSSES.filter(b=>lv<b.minLevel);
+
+  const body = `
+    <div style="text-align:center;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border);">
+      <div style="font-size:.65rem;color:var(--dim);line-height:1.7;">
+        Team up with <b>1 other player</b> to fight a giant boss.<br>
+        Both players attack the same boss. Share the rewards!
+      </div>
+    </div>
+
+    <div style="font-family:'Cinzel',serif;font-size:.6rem;color:var(--gold);margin-bottom:8px;">⚔️ Choose a Raid Boss</div>
+
+    ${RAID_BOSSES.map(b=>{
+      const isLocked = lv < b.minLevel;
+      return `
+      <div style="background:rgba(0,0,0,.4);border:1px solid ${isLocked?'rgba(100,100,100,.2)':'var(--border)'};
+        border-radius:10px;padding:12px;margin-bottom:8px;
+        ${isLocked?'opacity:.5;':'cursor:pointer;'}
+        ${isLocked?'':'onmouseover="this.style.borderColor=\'rgba(200,151,58,.4)\'" onmouseout="this.style.borderColor=\'var(--border)\'"'}"
+        ${isLocked?'':` onclick="hostRaidRoom('${b.id}')"`}>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-size:2rem;">${b.emoji}</span>
+          <div style="flex:1;">
+            <div style="font-family:'Cinzel',serif;font-size:.7rem;color:${isLocked?'var(--dim)':'var(--text)'};">${b.name}</div>
+            <div style="font-size:.52rem;color:var(--dim);">${b.ability} · ${b.hp.toLocaleString()} HP · Lv.${b.minLevel}+</div>
+          </div>
+          ${isLocked
+            ? `<span style="font-size:.55rem;color:var(--dim);">🔒 Lv.${b.minLevel}</span>`
+            : `<span style="font-size:.55rem;color:var(--gold);">Host →</span>`}
+        </div>
+      </div>`;
+    }).join('')}
+
+    <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px;">
+      <div style="font-family:'Cinzel',serif;font-size:.6rem;color:var(--gold);margin-bottom:8px;">🔑 Join a Raid</div>
+      <div style="display:flex;gap:8px;">
+        <input id="raid-code-input" maxlength="6" placeholder="Enter raid code..."
+          style="flex:1;background:rgba(0,0,0,.5);border:1px solid var(--border);border-radius:8px;
+          color:var(--text);font-size:.7rem;padding:10px;outline:none;text-transform:uppercase;">
+        <button class="btn" onclick="joinRaidRoom()" style="padding:10px 14px;font-size:.65rem;">Join</button>
+      </div>
+    </div>`;
+
+  showModal('🤝 Co-op Raid', body, [{label:'Close', cls:'btn-ghost', cb:closeModal}]);
+}
+
+function hostRaidRoom(bossId){
+  const boss = RAID_BOSSES.find(b=>b.id===bossId);
+  if(!boss) return;
+  const code = Math.random().toString(36).substring(2,8).toUpperCase();
+  // Store raid room in localStorage for this session
+  const raidRoom = { code, bossId, hostName: gameState.username||'Hero', phase:'waiting', createdAt:Date.now() };
+  localStorage.setItem('aetherion_raid_room', JSON.stringify(raidRoom));
+  // Emit to server
+  socket.emit('raid:host', { code, bossId, bossName:boss.name, hostName:gameState.username||'Hero' });
+  closeModal();
+  showModal('🤝 Raid Room', `
+    <div style="text-align:center;padding:10px 0 16px;">
+      <div style="font-size:2.5rem;margin-bottom:8px;">${boss.emoji}</div>
+      <div style="font-family:'Cinzel',serif;font-size:.85rem;color:var(--gold);">${boss.name}</div>
+      <div style="font-size:.6rem;color:var(--dim);margin-top:4px;">${boss.hp.toLocaleString()} HP · Waiting for partner...</div>
+      <div style="margin:16px auto;max-width:200px;background:rgba(200,151,58,.08);
+        border:2px solid rgba(200,151,58,.3);border-radius:12px;padding:16px;">
+        <div style="font-size:.55rem;color:var(--dim);margin-bottom:4px;">RAID CODE</div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:1.8rem;color:var(--gold);letter-spacing:.2em;">${code}</div>
+        <div style="font-size:.52rem;color:var(--dim);margin-top:4px;">Share this with your partner</div>
+      </div>
+      <div id="raid-status" style="font-size:.62rem;color:var(--dim);">⏳ Waiting for partner to join...</div>
+    </div>`,
+    [{label:'Cancel', cls:'btn-ghost', cb:()=>{ closeModal(); socket.emit('raid:cancel',{code}); }}]
+  );
+
+  // Listen for partner joining
+  socket.once('raid:partner_joined', ({partnerName})=>{
+    const statusEl = document.getElementById('raid-status');
+    if(statusEl) statusEl.innerHTML = `<b style="color:#60d060;">✅ ${partnerName} joined!</b> Starting raid...`;
+    setTimeout(()=>{ closeModal(); startCoopRaid(boss, raidRoom, false); }, 1200);
+  });
+}
+
+function joinRaidRoom(){
+  const code = document.getElementById('raid-code-input')?.value?.trim().toUpperCase();
+  if(!code || code.length<4){ toast('Enter a valid raid code!'); return; }
+  socket.emit('raid:join', { code, playerName: gameState.username||'Hero' });
+  socket.once('raid:joined', ({bossId, bossName, hostName})=>{
+    const boss = RAID_BOSSES.find(b=>b.id===bossId);
+    if(!boss){ toast('Boss not found!'); return; }
+    closeModal();
+    toast(`⚔️ Joined ${hostName}'s raid! Fighting ${bossName}!`);
+    startCoopRaid(boss, {code, bossId, partnerName:hostName}, true);
+  });
+  socket.once('raid:error',({msg})=>{ toast(`❌ ${msg}`); });
+}
+
+function startCoopRaid(boss, raidRoom, isGuest){
+  if(!gameState.deck.length){ toast('Build a deck first!'); return; }
+
+  // Scale boss HP down slightly for 2 players (but still much harder)
+  const coopBoss = {
+    ...boss,
+    maxHp: boss.hp,
+    levelRequirement: 1,
+    xp: 0, gold: 0, drops: [],
+    isCoopRaid: true,
+    raidCode: raidRoom.code,
+    isGuest,
+  };
+
+  gameState.isCoopRaid = true;
+  gameState.coopRaidPartner = isGuest ? raidRoom.hostName : raidRoom.partnerName;
+  gameState.coopBossHp = boss.hp; // shared HP
+
+  startBattle(coopBoss, 'screen-menu', true);
+  showScreen('screen-sp');
+  updateSPHud(); setSPBtns();
+
+  document.getElementById('sp-log').innerHTML='';
+  spLog(`🤝 <b>CO-OP RAID!</b> Fighting with <b>${gameState.coopRaidPartner||'Partner'}</b>!`,'w');
+  spLog(`👑 <b>${boss.name}</b> — ${boss.hp.toLocaleString()} HP`,'d');
+  spLog(`⚡ <i>"${boss.abilityDesc}"</i>`,'sk');
+  spLog(`💡 Both players attack the same boss. Defeat it together!`,'mn');
+
+  // Listen for partner actions
+  socket.on('raid:partner_attack', ({damage, partnerName})=>{
+    if(!gameState.inBattle || !gameState.currentEnemy?.isCoopRaid) return;
+    gameState.currentEnemy.hp = Math.max(0, gameState.currentEnemy.hp - damage);
+    spLog(`🤝 <b>${partnerName}</b> hits for <b>${damage}</b>!`,'c');
+    updateSPHud();
+    if(gameState.currentEnemy.hp<=0){ spBattleEnd(true); }
+  });
+
+  socket.on('raid:ended', ({won, partnerName})=>{
+    socket.off('raid:partner_attack');
+    socket.off('raid:ended');
+    if(!gameState.inBattle) return;
+    if(won){ spBattleEnd(true); }
+    else { spBattleEnd(false); }
+  });
+}
+
+// Called after a co-op attack — broadcasts to partner
+function broadcastRaidAttack(damage){
+  if(!gameState.isCoopRaid || !socket?.connected) return;
+  const enemy = gameState.currentEnemy;
+  if(!enemy?.raidCode) return;
+  socket.emit('raid:attack', {
+    code: enemy.raidCode,
+    damage,
+    playerName: gameState.username||'Hero',
+  });
+}
+
+// ═══════════════════════════════════════════════════
+//  GUILD WAR SYSTEM
+// ═══════════════════════════════════════════════════
+function openGuildWar(){
+  const guild = getGuild();
+  if(!guild){ toast('Join a guild first!'); return; }
+
+  const wars = guild.wars || [];
+  const activeWar = wars.find(w=>w.status==='active');
+
+  const body = `
+    <div style="text-align:center;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border);">
+      <div style="font-size:2rem;margin-bottom:6px;">⚔️</div>
+      <div style="font-family:'Cinzel',serif;font-size:.85rem;color:var(--gold);">GUILD WAR</div>
+      <div style="font-size:.6rem;color:var(--dim);margin-top:4px;">Challenge another guild to battle!</div>
+    </div>
+
+    ${activeWar ? `
+      <!-- Active war -->
+      <div style="background:rgba(200,0,0,.08);border:2px solid rgba(200,50,50,.3);border-radius:12px;padding:12px;margin-bottom:12px;">
+        <div style="font-family:'Cinzel',serif;font-size:.68rem;color:#e06060;margin-bottom:8px;">⚔️ WAR IN PROGRESS</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <div style="text-align:center;flex:1;">
+            <div style="font-size:.6rem;color:var(--gold);">${guild.emblem} ${guild.name}</div>
+            <div style="font-family:'Share Tech Mono',monospace;font-size:1.2rem;color:#60d060;">${activeWar.ourScore||0}</div>
+          </div>
+          <div style="font-size:1rem;color:var(--dim);">VS</div>
+          <div style="text-align:center;flex:1;">
+            <div style="font-size:.6rem;color:var(--text);">${activeWar.enemyEmblem||'🛡️'} ${activeWar.enemyName}</div>
+            <div style="font-family:'Share Tech Mono',monospace;font-size:1.2rem;color:#e06060;">${activeWar.enemyScore||0}</div>
+          </div>
+        </div>
+        <div style="font-size:.55rem;color:var(--dim);text-align:center;margin-bottom:8px;">
+          Each member can fight once · Most wins after 24h wins
+        </div>
+        <button class="btn" onclick="closeModal();fightGuildWarBattle()" style="width:100%;font-size:.62rem;">
+          ⚔️ Fight for your Guild!
+        </button>
+      </div>` : ''}
+
+    <!-- Challenge another guild -->
+    <div style="font-family:'Cinzel',serif;font-size:.6rem;color:var(--gold);margin-bottom:8px;">🔔 Challenge a Guild</div>
+    <div style="display:flex;gap:8px;margin-bottom:8px;">
+      <input id="war-code-input" maxlength="8" placeholder="Enemy guild invite code..."
+        style="flex:1;background:rgba(0,0,0,.5);border:1px solid var(--border);border-radius:8px;
+        color:var(--text);font-size:.7rem;padding:10px;outline:none;text-transform:uppercase;">
+      <button class="btn" onclick="challengeGuildToWar()" style="padding:10px 14px;font-size:.65rem;">⚔️ War!</button>
+    </div>
+
+    <!-- War history -->
+    ${wars.filter(w=>w.status==='ended').length ? `
+      <div style="font-family:'Cinzel',serif;font-size:.58rem;color:var(--gold);margin-bottom:6px;margin-top:10px;">📜 War History</div>
+      ${wars.filter(w=>w.status==='ended').slice(-3).reverse().map(w=>`
+        <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;
+          background:rgba(0,0,0,.3);border-radius:7px;margin-bottom:4px;
+          border-left:3px solid ${w.won?'#40c060':'#c04040'};">
+          <span>${w.won?'🏆':'💀'}</span>
+          <div style="flex:1;">
+            <div style="font-size:.6rem;color:var(--text);">vs ${w.enemyName}</div>
+            <div style="font-size:.5rem;color:var(--dim);">${w.ourScore}–${w.enemyScore}</div>
+          </div>
+          <span style="font-size:.55rem;color:${w.won?'#60d060':'#e06060'};">${w.won?'WIN':'LOSS'}</span>
+        </div>`).join('')}
+    ` : ''}`;
+
+  showModal('⚔️ Guild War', body, [{label:'Close', cls:'btn-ghost', cb:closeModal}]);
+}
+
+function challengeGuildToWar(){
+  const code = document.getElementById('war-code-input')?.value?.trim().toUpperCase();
+  if(!code){ toast('Enter a guild code!'); return; }
+  const guild = getGuild();
+  if(!guild){ toast('You need a guild!'); return; }
+
+  // Start a local war (in a full multiplayer version this would be server-synced)
+  // For now — simulate an enemy guild based on the code
+  const enemyNames = ['Dark Legion','Storm Riders','Iron Brotherhood','Void Seekers','Flame Order','Frost Pact'];
+  const enemyEmblems = ['🌑','⚡','🛡️','💀','🔥','❄️'];
+  const hash = code.split('').reduce((a,c)=>a+c.charCodeAt(0),0);
+  const enemyName   = enemyNames[hash % enemyNames.length];
+  const enemyEmblem = enemyEmblems[hash % enemyEmblems.length];
+
+  const war = {
+    id: Date.now(),
+    status: 'active',
+    enemyCode: code,
+    enemyName,
+    enemyEmblem,
+    ourScore: 0,
+    enemyScore: 0,
+    startedAt: Date.now(),
+    endsAt: Date.now() + 24*60*60*1000,
+    foughtMembers: [],
+  };
+
+  guild.wars = guild.wars || [];
+  guild.wars.push(war);
+  saveGuild(guild);
+  closeModal();
+  toast(`⚔️ Guild War started vs ${enemyName}!`);
+  openGuildWar();
+}
+
+function fightGuildWarBattle(){
+  const guild = getGuild();
+  if(!guild) return;
+  const activeWar = (guild.wars||[]).find(w=>w.status==='active');
+  if(!activeWar){ toast('No active war!'); return; }
+
+  const me = gameState.username||'Hero';
+  if((activeWar.foughtMembers||[]).includes(me)){
+    toast('⚔️ You already fought in this war today!'); return;
+  }
+
+  if(!gameState.deck.length){ toast('Build a deck first!'); return; }
+
+  // Build enemy guild opponent — scales with war progress
+  const lv = gameState.playerLevel||1;
+  const hash = activeWar.enemyCode.split('').reduce((a,c)=>a+c.charCodeAt(0),0);
+  const styles2=['balanced','aggressive','tank','magic','fast'];
+  const style=styles2[hash%styles2.length];
+  const st={balanced:{hp:1,atk:1,def:1,mag:1,spd:1},aggressive:{hp:.8,atk:1.5,def:.7,mag:1.2,spd:1.2},tank:{hp:1.6,atk:.8,def:1.8,mag:.6,spd:.7},magic:{hp:.9,atk:.7,def:.9,mag:1.8,spd:1},fast:{hp:.9,atk:1.1,def:.8,mag:.9,spd:1.8}}[style];
+  const warMult = 1 + (activeWar.enemyScore||0)*0.1; // enemy gets stronger as they score
+
+  const opponent = {
+    id:'guild_war_bot',
+    name:`${activeWar.enemyEmblem} ${activeWar.enemyName} Champion`,
+    emoji: activeWar.enemyEmblem,
+    hp:      Math.floor((35+lv*7)*st.hp*warMult),
+    attack:  Math.floor((7+lv*1.3)*st.atk*warMult),
+    defense: Math.floor((5+lv*1)*st.def*warMult),
+    magic:   Math.floor((6+lv*1.1)*st.mag*warMult),
+    speed:   Math.floor((5+lv*.8)*st.spd*warMult),
+    ability: 'Guild Strike',
+    abilityDesc: 'Fighting for their guild!',
+    levelRequirement:1, xp:80, gold:30, drops:[],
+    isGuildWar: true,
+    warId: activeWar.id,
+  };
+  opponent.maxHp = opponent.hp;
+
+  startBattle(opponent,'screen-menu',false);
+  showScreen('screen-sp');
+  document.getElementById('sp-log').innerHTML='';
+  spLog(`⚔️ <b>GUILD WAR!</b> ${guild.emblem} ${guild.name} vs ${activeWar.enemyEmblem} ${activeWar.enemyName}`,'w');
+  spLog(`⚔️ Facing <b>${opponent.name}</b>`,'c');
+  spLog(`📊 Score: <b>${activeWar.ourScore}</b> – <b>${activeWar.enemyScore}</b>`,'mn');
+}
+
+// Hook guild war win/loss into spBattleEnd
+function handleGuildWarEnd(won, enemy){
+  const guild = getGuild();
+  if(!guild) return;
+  const war = (guild.wars||[]).find(w=>w.id===enemy.warId && w.status==='active');
+  if(!war) return;
+
+  const me = gameState.username||'Hero';
+  war.foughtMembers = war.foughtMembers || [];
+  war.foughtMembers.push(me);
+
+  if(won){
+    war.ourScore = (war.ourScore||0) + 1;
+    spLog(`🏆 <b>Guild War win!</b> Score: ${war.ourScore}–${war.enemyScore}`,'w');
+    trackGuildKill(false);
+  } else {
+    war.enemyScore = (war.enemyScore||0) + 1;
+    spLog(`💀 <b>Guild War loss!</b> Score: ${war.ourScore}–${war.enemyScore}`,'mn');
+  }
+
+  // Check if war is over (first to 5 wins, or 24h)
+  const enoughWins = war.ourScore >= 5 || war.enemyScore >= 5;
+  const expired = Date.now() > war.endsAt;
+  if(enoughWins || expired){
+    war.status = 'ended';
+    war.won = war.ourScore > war.enemyScore;
+    if(war.won){
+      // War win bonus
+      const bonus = 200 + guild.level * 50;
+      gameState.playerGold += bonus;
+      guild.xp += 200;
+      toast(`🏆 GUILD WAR WON! +${bonus} Gold!`);
+    } else {
+      toast(`💀 Guild War lost...`);
+    }
+  }
+  saveGuild(guild);
+  saveGame();
+}
+
+
 function claudeEndDialog(won){
   const claude = BOSSES.find(b=>b.id==='claude_oracle');
   if(!claude) return;
