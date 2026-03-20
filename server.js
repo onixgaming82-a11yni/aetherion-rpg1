@@ -57,7 +57,16 @@ app.get('/health', (_req, res) => {
 
 // ── ADMIN API ─────────────────────────────────────────────
 const ADMIN_KEY = process.env.ADMIN_KEY || 'onixadmin2025';
-const adminAuth = (req,res,next) => { if(req.headers['x-admin-key']!==ADMIN_KEY){res.status(403).json({error:'Forbidden'});return;} next(); };
+const adminAuth = (req,res,next) => { if(req.headers['x-admin-key']!==ADMIN_KEY && req.query.key!==ADMIN_KEY){res.status(403).json({error:'Forbidden'});return;} next(); };
+
+// Allow admin panel to connect from local files (CORS)
+app.use('/admin', (req,res,next)=>{
+  res.header('Access-Control-Allow-Origin','*');
+  res.header('Access-Control-Allow-Headers','*');
+  res.header('Access-Control-Allow-Methods','GET,POST,OPTIONS');
+  if(req.method==='OPTIONS'){res.sendStatus(200);return;}
+  next();
+});
 
 app.get('/admin/ping', adminAuth, (req,res)=>{ res.json({ok:true,players:accounts.size,uptime:process.uptime()}); });
 
@@ -92,6 +101,19 @@ app.post('/admin/player/:uname/edit', express.json(), adminAuth, async (req,res)
   await dbSaveAccount({...acc,uname});accounts.set(uname,acc);
   const entry=leaderboard.get(uname);if(entry)leaderboard.set(uname,{...entry,wins:save.duelWins||0});
   console.log(`[ADMIN] Edited ${uname}`,req.body);res.json({ok:true});
+});
+
+// GET fallback for CORS — admin panel uses this when POST is blocked
+app.get('/admin/player/:uname/editget', adminAuth, async (req,res)=>{
+  const uname=req.params.uname.toLowerCase();
+  let acc=await dbGetAccount(uname)||accounts.get(uname);
+  if(!acc){res.status(404).json({error:'Not found'});return;}
+  let save={};try{save=acc.save?JSON.parse(acc.save):{};}catch(e){}
+  ['duelWins','playerLevel','playerGold','playerXp','skillXp','duelLosses'].forEach(k=>{if(req.query[k]!==undefined)save[k]=parseInt(req.query[k])||0;});
+  acc.save=JSON.stringify(save);
+  await dbSaveAccount({...acc,uname});accounts.set(uname,acc);
+  const entry=leaderboard.get(uname);if(entry)leaderboard.set(uname,{...entry,wins:save.duelWins||0});
+  console.log(`[ADMIN-GET] Edited ${uname}`,req.query);res.json({ok:true});
 });
 
 app.post('/admin/player/:uname/ban', adminAuth, async (req,res)=>{
