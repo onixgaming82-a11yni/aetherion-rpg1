@@ -55,7 +55,70 @@ app.get('/health', (_req, res) => {
   });
 });
 
-// ── Get local WiFi IP (shown in console) ──────────────────
+// ── ADMIN API ─────────────────────────────────────────────
+const ADMIN_KEY = process.env.ADMIN_KEY || 'onixadmin2025';
+const adminAuth = (req,res,next) => { if(req.headers['x-admin-key']!==ADMIN_KEY){res.status(403).json({error:'Forbidden'});return;} next(); };
+
+app.get('/admin/ping', adminAuth, (req,res)=>{ res.json({ok:true,players:accounts.size,uptime:process.uptime()}); });
+
+app.get('/admin/player/:uname', adminAuth, async (req,res)=>{
+  const uname=req.params.uname.toLowerCase();
+  let acc=await dbGetAccount(uname)||accounts.get(uname);
+  if(!acc){res.status(404).json({error:'Not found'});return;}
+  let save={};try{save=acc.save?JSON.parse(acc.save):{};}catch(e){}
+  const f=flagged.get(uname);
+  res.json({username:acc.username,uname,createdAt:acc.createdAt,lastLogin:acc.lastLogin,banned:acc.banned||(f?.level==='banned')||false,onHold:isOnHold(uname),daysLeft:isOnHold(uname)?Math.ceil(getHoldTimeLeft(uname)/(24*60*60*1000)):0,flagLevel:f?.level||null,save});
+});
+
+app.get('/admin/players', adminAuth, async (req,res)=>{
+  try{
+    const accs=MONGO_URI?await Account.find({}).lean():[...accounts.values()];
+    res.json(accs.map(acc=>{
+      let save={};try{save=acc.save?JSON.parse(acc.save):{};}catch(e){}
+      const uname=acc.uname||acc.username?.toLowerCase();
+      const f=flagged.get(uname);
+      return{username:acc.username,uname,duelWins:save.duelWins||0,playerLevel:save.playerLevel||1,playerGold:save.playerGold||0,banned:acc.banned||(f?.level==='banned')||false,onHold:isOnHold(uname)};
+    }));
+  }catch(e){res.status(500).json({error:e.message});}
+});
+
+app.post('/admin/player/:uname/edit', express.json(), adminAuth, async (req,res)=>{
+  const uname=req.params.uname.toLowerCase();
+  let acc=await dbGetAccount(uname)||accounts.get(uname);
+  if(!acc){res.status(404).json({error:'Not found'});return;}
+  let save={};try{save=acc.save?JSON.parse(acc.save):{};}catch(e){}
+  ['duelWins','playerLevel','playerGold','playerXp','skillXp','duelLosses'].forEach(k=>{if(req.body[k]!==undefined)save[k]=parseInt(req.body[k])||0;});
+  acc.save=JSON.stringify(save);
+  await dbSaveAccount({...acc,uname});accounts.set(uname,acc);
+  const entry=leaderboard.get(uname);if(entry)leaderboard.set(uname,{...entry,wins:save.duelWins||0});
+  console.log(`[ADMIN] Edited ${uname}`,req.body);res.json({ok:true});
+});
+
+app.post('/admin/player/:uname/ban', adminAuth, async (req,res)=>{
+  const uname=req.params.uname.toLowerCase();
+  let acc=await dbGetAccount(uname)||accounts.get(uname);
+  if(!acc){res.status(404).json({error:'Not found'});return;}
+  acc.banned=true;acc.save=null;await dbSaveAccount({...acc,uname});accounts.set(uname,acc);
+  flagged.set(uname,{level:'banned',reason:'Admin ban'});holds.set(uname,Date.now()+100*365*24*60*60*1000);leaderboard.delete(uname);
+  console.log(`[ADMIN] Banned ${uname}`);res.json({ok:true});
+});
+
+app.post('/admin/player/:uname/liftban', adminAuth, async (req,res)=>{
+  const uname=req.params.uname.toLowerCase();
+  let acc=await dbGetAccount(uname)||accounts.get(uname);
+  if(!acc){res.status(404).json({error:'Not found'});return;}
+  acc.banned=false;await dbSaveAccount({...acc,uname});accounts.set(uname,acc);
+  flagged.delete(uname);holds.delete(uname);offenses.delete(uname);
+  console.log(`[ADMIN] Lifted ban ${uname}`);res.json({ok:true});
+});
+
+app.post('/admin/player/:uname/wipesave', adminAuth, async (req,res)=>{
+  const uname=req.params.uname.toLowerCase();
+  let acc=await dbGetAccount(uname)||accounts.get(uname);
+  if(!acc){res.status(404).json({error:'Not found'});return;}
+  acc.save=null;await dbSaveAccount({...acc,uname});accounts.set(uname,acc);leaderboard.delete(uname);
+  console.log(`[ADMIN] Wiped save ${uname}`);res.json({ok:true});
+});
 function getLocalIP() {
   const nets = os.networkInterfaces();
   for (const name of Object.keys(nets)) {
@@ -74,6 +137,65 @@ const socketToRoom  = new Map(); // socket.id → room code
 const onlinePlayers = new Map(); // socket.id → player info (global lobby)
 const trades        = new Map(); // tradeId → trade object
 const leaderboard   = new Map(); // username → { name, wins, rankName, updatedAt }
+
+// ── Anti-Cheat System ─────────────────────────────────────
+const dailyWins     = new Map(); // username → { wins, lastReset, firstWinTime }
+const holds         = new Map(); // username → holdExpiry timestamp
+const offenses      = new Map(); // username → offense count
+const flagged       = new Map(); // username → { level: 'flag'|'warn'|'hold'|'banned', reason }
+
+const DAILY_WIN_LIMIT    = 100;  // warn at 100
+const DAILY_FLAG_LIMIT   = 50;   // flag at 50
+const HOLD_DURATION      = 8 * 24 * 60 * 60 * 1000; // 8 days
+
+function resetDailyWinsIfNeeded(username) {
+  const now = Date.now();
+  const entry = dailyWins.get(username);
+  if (!entry) {
+    dailyWins.set(username, { wins: 0, lastReset: now, firstWinTime: now });
+    return;
+  }
+  if (now - entry.lastReset > 24 * 60 * 60 * 1000) {
+    dailyWins.set(username, { wins: 0, lastReset: now, firstWinTime: now });
+    // Remove daily flags when wins reset
+    const f = flagged.get(username);
+    if (f && (f.level === 'flag' || f.level === 'warn')) flagged.delete(username);
+  }
+}
+
+function checkAntiCheat(username) {
+  const entry = dailyWins.get(username);
+  if (!entry) return null;
+  const { wins, firstWinTime } = entry;
+  const timeSinceFirst = Date.now() - firstWinTime;
+
+  // 100+ wins/day → warning + Veylor hold
+  if (wins >= DAILY_WIN_LIMIT) {
+    return 'hold';
+  }
+  // 100 wins in under 30 min → suspicious warning
+  if (wins >= DAILY_WIN_LIMIT && timeSinceFirst < 30 * 60 * 1000) {
+    return 'warn';
+  }
+  // 50+ wins/day → flag
+  if (wins >= DAILY_FLAG_LIMIT) {
+    return 'flag';
+  }
+  return null;
+}
+
+function isOnHold(username) {
+  const expiry = holds.get(username);
+  if (!expiry) return false;
+  if (Date.now() > expiry) { holds.delete(username); return false; }
+  return true;
+}
+
+function getHoldTimeLeft(username) {
+  const expiry = holds.get(username);
+  if (!expiry) return 0;
+  return Math.max(0, expiry - Date.now());
+}
 
 // ── Account system ────────────────────────────────────────
 const DEFAULT_PASSWORD = '12345';
@@ -621,6 +743,18 @@ io.on('connection', (socket) => {
   socket.on('account:save', async ({ username, password, save } = {}) => {
     if (!username?.trim()) return;
     const uname = username.trim().toLowerCase();
+    // Block saves for banned or suspended accounts
+    const f = flagged.get(uname);
+    if (f && f.level === 'banned') {
+      socket.emit('account:save:blocked', { reason: 'banned' });
+      console.log(`[SAVE BLOCKED] ${username} — permanently banned`);
+      return;
+    }
+    if (isOnHold(uname)) {
+      socket.emit('account:save:blocked', { reason: 'suspended' });
+      console.log(`[SAVE BLOCKED] ${username} — on hold`);
+      return;
+    }
     let acc = await dbGetAccount(uname) || accounts.get(uname);
     if (!acc) return;
     const pw = password?.trim() || DEFAULT_PASSWORD;
@@ -665,11 +799,23 @@ io.on('connection', (socket) => {
   // ── LEADERBOARD ───────────────────────────────────
   socket.on('leaderboard:update', ({ name, wins, rankName } = {}) => {
     if (!name?.trim() || wins === undefined) return;
-    leaderboard.set(name.trim().toLowerCase(), {
+    const uname = name.trim().toLowerCase();
+    const f = flagged.get(uname);
+
+    // Permanently banned — remove from leaderboard entirely
+    if (f && f.level === 'banned') {
+      leaderboard.delete(uname);
+      console.log(`[LB] ${name} removed — permanently banned`);
+      return;
+    }
+
+    leaderboard.set(uname, {
       name: name.trim(),
       wins: parseInt(wins)||0,
       rankName: rankName||'Stone',
       updatedAt: Date.now(),
+      flagLevel: f?.level || null,
+      flagReason: f?.reason || null,
     });
     console.log(`[LB] ${name}: ${wins} wins`);
   });
@@ -677,8 +823,181 @@ io.on('connection', (socket) => {
   socket.on('leaderboard:request', () => {
     const data = [...leaderboard.values()]
       .sort((a,b) => b.wins - a.wins)
-      .slice(0, 100); // top 100
+      .slice(0, 100);
     socket.emit('leaderboard:data', data);
+  });
+
+  // ── ANTI-CHEAT: WIN REPORT ────────────────────────
+  // Called by client after every duel win
+  socket.on('anticheat:win', async ({ username } = {}) => {
+    if (!username?.trim()) return;
+    const uname = username.trim().toLowerCase();
+
+    // Check if on hold first
+    if (isOnHold(uname)) {
+      const msLeft = getHoldTimeLeft(uname);
+      const daysLeft = Math.ceil(msLeft / (24*60*60*1000));
+      socket.emit('anticheat:hold', {
+        daysLeft,
+        dialogue: `Veylor's judgement stands. You remain banished for ${daysLeft} more day${daysLeft!==1?'s':''}. No victories count while under hold.`,
+      });
+      return;
+    }
+
+    resetDailyWinsIfNeeded(uname);
+    const entry = dailyWins.get(uname);
+    entry.wins++;
+    dailyWins.set(uname, entry);
+
+    const result = checkAntiCheat(uname);
+
+    if (result === 'hold') {
+      // Issue hold — stats reset handled client side
+      holds.set(uname, Date.now() + HOLD_DURATION);
+      const off = (offenses.get(uname)||0) + 1;
+      offenses.set(uname, off);
+      flagged.set(uname, { level: 'hold', reason: `${entry.wins} wins in one day` });
+
+      if (off >= 2) {
+        // Repeat offense — permanent ban flag
+        flagged.set(uname, { level: 'banned', reason: 'Repeat offense' });
+        holds.set(uname, Date.now() + 100*365*24*60*60*1000); // effectively permanent
+        // Remove from leaderboard immediately
+        leaderboard.delete(uname);
+        // Wipe their cloud save
+        const accToBan = await dbGetAccount(uname) || accounts.get(uname);
+        if (accToBan) {
+          accToBan.save = null; // invalidate save
+          accToBan.banned = true;
+          await dbSaveAccount({ ...accToBan, uname });
+          accounts.set(uname, accToBan);
+        }
+        socket.emit('anticheat:banned', {
+          dialogue: 'The God of Banishment, Veylor, is merciless now. Your account is permanently flagged. No victories will count.',
+          veylor: {
+            name: 'Veylor, the Eternal Judge',
+            phase: 'permanent',
+            emoji: '⚖️',
+          }
+        });
+        console.log(`[ANTICHEAT] PERMANENT BAN: ${username} (repeat offense)`);
+      } else {
+        socket.emit('anticheat:veylor', {
+          phase: 'hold',
+          daysLeft: 8,
+          dialogue: [
+            'You have been found guilty of excessive victories.',
+            'Veylor, the Eternal Judge, rises from the void.',
+            'Your progress is reset. You are banished for 8 days.',
+            'When you return... Veylor will be watching.'
+          ],
+          veylor: {
+            name: 'Veylor, the Eternal Judge',
+            emoji: '⚖️',
+            hp: 9999,
+            attack: 999,
+            defense: 999,
+            ability: 'Eternal Judgement',
+            abilityDesc: 'Cannot be defeated. Judges all who abuse power.',
+          }
+        });
+        console.log(`[ANTICHEAT] HOLD: ${username} — ${entry.wins} wins today`);
+      }
+    } else if (result === 'warn') {
+      flagged.set(uname, { level: 'warn', reason: `${entry.wins} wins/day` });
+      socket.emit('anticheat:warning', {
+        wins: entry.wins,
+        dialogue: `Veylor watches you closely… ${entry.wins} victories today. The Eternal Judge grows suspicious.`,
+      });
+      console.log(`[ANTICHEAT] WARNING: ${username} — ${entry.wins} wins today`);
+    } else if (result === 'flag') {
+      flagged.set(uname, { level: 'flag', reason: `${entry.wins} wins/day` });
+      socket.emit('anticheat:flag', {
+        wins: entry.wins,
+        dialogue: `Veylor notes your activity. ${entry.wins} wins today.`,
+      });
+    }
+  });
+
+  // ── ANTI-CHEAT: STATUS CHECK ──────────────────────
+  // ── PROFILE IMPORT VALIDATION ────────────────────
+  // Client sends username to check before loading a JSON profile
+  socket.on('profile:validate', ({ username } = {}) => {
+    if (!username?.trim()) { socket.emit('profile:invalid', { reason: 'No username' }); return; }
+    const uname = username.trim().toLowerCase();
+    const f = flagged.get(uname);
+
+    if (f && f.level === 'banned') {
+      // Remove from leaderboard too
+      leaderboard.delete(uname);
+      socket.emit('profile:invalid', {
+        reason: 'banned',
+        message: 'This profile belongs to a banned account. Veylor has invalidated it.'
+      });
+      console.log(`[PROFILE BLOCKED] ${username} — banned account tried to import save`);
+      return;
+    }
+
+    if (isOnHold(uname)) {
+      const daysLeft = Math.ceil(getHoldTimeLeft(uname) / (24*60*60*1000));
+      socket.emit('profile:invalid', {
+        reason: 'suspended',
+        daysLeft,
+        message: `This account is suspended for ${daysLeft} more day${daysLeft!==1?'s':''}. Profile cannot be loaded.`
+      });
+      console.log(`[PROFILE BLOCKED] ${username} — suspended account tried to import save`);
+      return;
+    }
+
+    socket.emit('profile:valid', { username: username.trim() });
+  });
+
+  socket.on('anticheat:check', ({ username } = {}) => {
+    if (!username?.trim()) return;
+    const uname = username.trim().toLowerCase();
+    const onHold = isOnHold(uname);
+    const daysLeft = onHold ? Math.ceil(getHoldTimeLeft(uname)/(24*60*60*1000)) : 0;
+    const f = flagged.get(uname);
+    socket.emit('anticheat:status', {
+      onHold,
+      daysLeft,
+      flagLevel: f?.level || null,
+      flagReason: f?.reason || null,
+    });
+  });
+
+  // ── CO-OP RAIDS ───────────────────────────────────
+  socket.on('raid:host', ({ code, bossId, bossName, hostName } = {}) => {
+    if (!code?.trim()) return;
+    rooms.set(`raid_${code}`, { code, bossId, bossName, hostName, guest: null, hostSocket: socket.id });
+    console.log(`[RAID] ${hostName} hosted raid ${code} — boss: ${bossName}`);
+  });
+
+  socket.on('raid:join', ({ code, playerName } = {}) => {
+    const raid = rooms.get(`raid_${code}`);
+    if (!raid) { socket.emit('raid:error', { msg: 'Raid room not found!' }); return; }
+    if (raid.guest) { socket.emit('raid:error', { msg: 'Raid room is full!' }); return; }
+    raid.guest = playerName;
+    raid.guestSocket = socket.id;
+    rooms.set(`raid_${code}`, raid);
+    // Notify host
+    const hostSock = io.sockets.sockets.get(raid.hostSocket);
+    if (hostSock) hostSock.emit('raid:partner_joined', { partnerName: playerName });
+    socket.emit('raid:joined', { bossId: raid.bossId, bossName: raid.bossName, hostName: raid.hostName });
+    console.log(`[RAID] ${playerName} joined ${raid.hostName}'s raid`);
+  });
+
+  socket.on('raid:attack', ({ code, damage, playerName } = {}) => {
+    const raid = rooms.get(`raid_${code}`);
+    if (!raid) return;
+    // Broadcast to partner
+    const partnerId = socket.id === raid.hostSocket ? raid.guestSocket : raid.hostSocket;
+    const partnerSock = io.sockets.sockets.get(partnerId);
+    if (partnerSock) partnerSock.emit('raid:partner_attack', { damage, partnerName: playerName });
+  });
+
+  socket.on('raid:cancel', ({ code } = {}) => {
+    rooms.delete(`raid_${code}`);
   });
 
   // ── DISCONNECT ────────────────────────────────────────
