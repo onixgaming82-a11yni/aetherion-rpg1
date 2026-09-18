@@ -198,7 +198,7 @@ const BOSSES = [
       { threshold: 1.0, name: 'Veiled Malice',     desc: 'Malzor rises from the abyss, reality fracturing.',   abilityMult: 1.0 },
       { threshold: 0.7, name: 'Unshackled Rage',   desc: 'Malzor sheds his mortal form — pure darkness!',      abilityMult: 1.4 },
       { threshold: 0.4, name: 'Void Incarnate',    desc: 'The abyss consumes everything around him!',           abilityMult: 1.7 },
-      { threshold: 0.15,name: 'Last Breath of Evil','Malzor\'s attacks are now completely unhinged!',           abilityMult: 2.2 }
+      { threshold: 0.15,name: 'Last Breath of Evil', description: 'Malzor\'s attacks are now completely unhinged!', abilityMult: 2.2 }
     ],
     emoji: '👿'
   }
