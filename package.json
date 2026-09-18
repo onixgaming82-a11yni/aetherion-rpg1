@@ -8,13 +8,19 @@
     "dev": "node server.js"
   },
   "dependencies": {
+    "bcryptjs": "^3.0.3",
     "express": "^4.18.2",
-    "socket.io": "^4.7.2",
-    "mongoose": "^8.0.0"
+    "mongoose": "^8.0.0",
+    "socket.io": "^4.7.2"
   },
   "engines": {
     "node": ">=16.0.0"
   },
-  "keywords": ["rpg", "game", "socket.io", "multiplayer"],
+  "keywords": [
+    "rpg",
+    "game",
+    "socket.io",
+    "multiplayer"
+  ],
   "license": "MIT"
 }
