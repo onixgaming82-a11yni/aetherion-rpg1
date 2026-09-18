@@ -3131,6 +3131,30 @@ function confirmDeck(){
     }
     toast('New cards added to your party!');
   }
+  // Persist the complete deck selection to the authenticated server.
+  // cloudSave() intentionally sends only battle-state fields (HP/fainted),
+  // so it cannot create the player's initial deck on the server by itself.
+  // Send the full deck here after first selection or a deliberate reroll.
+  if (typeof socket !== 'undefined' && socket && socket.connected && gameState.username && gameState.deck.length) {
+    socket.emit('player:setDeck', {
+      deck: gameState.deck.map(c => ({
+        id: c.id,
+        name: c.name,
+        emoji: c.emoji,
+        title: c.title,
+        hp: c.hp,
+        maxHp: c.maxHp,
+        attack: c.attack,
+        defense: c.defense,
+        magic: c.magic,
+        speed: c.speed,
+        ability: c.ability,
+        cardLevel: c.cardLevel || 1,
+        cardXp: c.cardXp || 0
+      }))
+    });
+  }
+
   gameState._dealtCards = null;
   saveGame();
 
