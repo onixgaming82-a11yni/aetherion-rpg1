@@ -159,6 +159,20 @@ app.post('/admin/player/:uname/wipesave', adminAuth, async (req,res)=>{
   acc.save=null;await dbSaveAccount({...acc,uname});accounts.set(uname,acc);leaderboard.delete(uname);
   console.log(`[ADMIN] Wiped save ${uname}`);res.json({ok:true});
 });
+
+// Dev/QA flag — a debug account plays normally but is excluded from the
+// leaderboard entirely (see updateLeaderboardEntry). Use this for your own
+// test accounts so testing duels/raids never shows up as a fake rank.
+app.post('/admin/player/:uname/setdebug', express.json(), adminAuth, async (req,res)=>{
+  const uname=req.params.uname.toLowerCase();
+  let acc=await dbGetAccount(uname)||accounts.get(uname);
+  if(!acc){res.status(404).json({error:'Not found'});return;}
+  acc.isDebug = !!req.body?.enabled;
+  await dbSaveAccount({...acc,uname});accounts.set(uname,acc);
+  leaderboard.delete(uname); // immediately drop any existing entry either way
+  console.log(`[ADMIN] Set isDebug=${acc.isDebug} for ${uname}`);
+  res.json({ok:true, isDebug: acc.isDebug});
+});
 function getLocalIP() {
   const nets = os.networkInterfaces();
   for (const name of Object.keys(nets)) {
@@ -201,6 +215,9 @@ const DEFAULT_RAID_PARTICIPANT = { uname: null, atk: 10 }; // used until a real 
 
 // ── Push one account's authoritative wins onto the in-memory leaderboard ─
 function updateLeaderboardEntry(uname, acc) {
+  // Dev/QA accounts: never appear on the leaderboard, regardless of wins —
+  // they're for testing, not for showing up as a fake rank to real players.
+  if (acc.isDebug) { leaderboard.delete(uname); return; }
   const f = flagged.get(uname);
   if (f && f.level === 'banned') { leaderboard.delete(uname); return; }
   const save  = loadPlayerSave(acc);
@@ -601,6 +618,10 @@ const AccountSchema = new mongoose.Schema({
   save:      { type: String, default: null }, // JSON string of game save
   createdAt: { type: Number, default: Date.now },
   lastLogin: { type: Number, default: Date.now },
+  // Dev/QA accounts only — set via /admin/player/:uname/setdebug. A debug
+  // account plays normally (duels, raids, everything) but is invisible to
+  // the leaderboard/rankings, so testing never pollutes real player stats.
+  isDebug:   { type: Boolean, default: false },
 });
 const Account = mongoose.model('Account', AccountSchema);
 
