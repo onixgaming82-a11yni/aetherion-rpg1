@@ -4980,6 +4980,7 @@ function getSocket() {
     // Setup Veylor anti-cheat listeners
     setupVeylorListeners();
     setupDuelResultListener();
+    setupGuildListeners();
     // Check if account is on hold
     if(gameState.username) checkAntiCheatStatus();
   });
@@ -7051,19 +7052,30 @@ let _guildData = null;
 function gEsc(s){ const d=document.createElement('div'); d.textContent=String(s||''); return d.innerHTML; }
 
 function openGuild(){
+  if(!socket?.connected){ toast('Connect online first!'); getSocket(); return; }
   socket.emit('guild:fetch');
 }
 
-// Server sends guild:data after fetch / create / join / update
-socket.on('guild:data', ({ guild }) => {
-  _guildData = guild;
-  if (guild) { renderGuildHome(guild); }
-  else       { renderGuildJoin(); }
-});
-
-socket.on('guild:error', ({ msg }) => {
-  toast('❌ ' + msg);
-});
+// Server sends guild:data after fetch / create / join / update.
+// Registered from setupGuildListeners() (called once per connection from
+// getSocket()'s 'connect' handler) — NOT here at top level. Registering it
+// here ran immediately at page load, while `socket` was still null, which
+// threw synchronously and silently killed every top-level statement further
+// down this script (guild responses never rendered as a result — the fetch
+// went out, but nothing was ever listening for the reply).
+function setupGuildListeners(){
+  if(!socket) return;
+  socket.off('guild:data');
+  socket.off('guild:error');
+  socket.on('guild:data', ({ guild }) => {
+    _guildData = guild;
+    if (guild) { renderGuildHome(guild); }
+    else       { renderGuildJoin(); }
+  });
+  socket.on('guild:error', ({ msg }) => {
+    toast('❌ ' + msg);
+  });
+}
 
 function renderGuildJoin(){
   const body = `
@@ -7708,7 +7720,7 @@ function continueRoguelike(rlState){
   if(!card){ toast('Card not found!'); clearRoguelikeState(); return; }
 
   // Restore HP to where run left off (not full heal)
-  if(rlState.floor > 1) card.hp = rlState.cardHp || card.hp;
+  if(rlState.floor > 1) card.hp = rlState.savedHp || card.hp;
 
   // Generate a floor enemy — harder per floor
   const floorMult = Math.pow(1.15, rlState.floor - 1); // 15% harder per floor
@@ -7783,7 +7795,7 @@ function handleRoguelikeEnd(won){
     rlState.kills++;
     rlState.gold += floorGold;
     rlState.floor++;
-    rlState.cardHp = card.hp; // save HP for next floor — no regen!
+    rlState.savedHp = card.hp; // save HP for next floor — no regen!
     saveRoguelikeState(rlState);
 
     const isBossFloor = rlState.floor % 5 === 0;
