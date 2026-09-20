@@ -1197,6 +1197,7 @@ input, textarea { font-size: 16px !important; } /* Prevents iOS zoom on focus */
   #menu-player-bar { gap:6px; }
   .menu-profile-btn { width:40px; height:40px; min-width:40px; font-size:1.1rem; }
 }
+@keyframes spin { to { transform: rotate(360deg); } }
 </style>
 <!-- Socket.io client — loaded from CDN -->
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
@@ -1225,7 +1226,7 @@ input, textarea { font-size: 16px !important; } /* Prevents iOS zoom on focus */
           style="margin-bottom:0;">
         <div style="position:relative;">
           <input class="username-input" id="login-password" maxlength="30" type="password"
-            placeholder="Password" autocomplete="current-password"
+            placeholder="Password (default: 12345)" autocomplete="current-password"
             onkeydown="if(event.key==='Enter')doLogin()"
             style="margin-bottom:0;padding-right:44px;">
           <button onclick="togglePassVis('login-password',this)"
@@ -1244,7 +1245,7 @@ input, textarea { font-size: 16px !important; } /* Prevents iOS zoom on focus */
     <!-- REGISTER PANEL -->
     <div id="intro-register" style="width:100%;display:none;">
       <div style="font-size:.65rem;color:var(--dim);text-align:center;margin-bottom:14px;">
-        Create your account (password must be at least 6 characters)
+        Create your account — default password is <b style="color:var(--gold);">12345</b>
       </div>
       <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
         <input class="username-input" id="reg-username" maxlength="20"
@@ -1253,7 +1254,7 @@ input, textarea { font-size: 16px !important; } /* Prevents iOS zoom on focus */
           style="margin-bottom:0;">
         <div style="position:relative;">
           <input class="username-input" id="reg-password" maxlength="30" type="password"
-            placeholder="Password (min 6 characters)" autocomplete="new-password"
+            placeholder="Password (leave empty for 12345)" autocomplete="new-password"
             onkeydown="if(event.key==='Enter')doRegister()"
             style="margin-bottom:0;padding-right:44px;">
           <button onclick="togglePassVis('reg-password',this)"
@@ -2108,12 +2109,7 @@ function debugLogoClick() {
   _debugClickTimer = setTimeout(() => { _debugClickCount = 0; }, 600);
   if (_debugClickCount >= 3) {
     _debugClickCount = 0;
-    // Debug login only works when the server is not in production mode
-    if (typeof IS_PRODUCTION === 'undefined' || !IS_PRODUCTION) {
-      debugLogin();
-    } else {
-      toast('Debug mode is disabled in production.');
-    }
+    debugLogin();
   }
 }
 
@@ -2212,7 +2208,7 @@ function loadGame(){
 //  ACCOUNT / LOGIN SYSTEM
 // ─────────────────────────────────────────
 
-// _accountPassword removed — passwords are never stored client-side
+let _accountPassword = '12345'; // stored in memory for session saves
 
 function togglePassVis(inputId, btn){
   const el = document.getElementById(inputId);
@@ -2233,124 +2229,86 @@ function showRegisterPanel(){
   document.getElementById('reg-error').textContent='';
 }
 
-let _loginInProgress = false;
-
 function doLogin(){
-  if (_loginInProgress) return;
-
   const username = document.getElementById('login-username').value.trim();
-  const password = document.getElementById('login-password').value; // no .trim() — passwords may have intentional spaces
+  const password = document.getElementById('login-password').value.trim() || '12345';
   const errEl    = document.getElementById('login-error');
-  const loginBtn = document.querySelector('.btn-start[onclick="doLogin()"]');
 
-  if (!username) { errEl.textContent = 'Enter your username.'; return; }
-  if (!password) { errEl.textContent = 'Enter your password.'; return; }
-
-  _loginInProgress = true;
+  if(!username){ errEl.textContent='Enter your username!'; return; }
   errEl.textContent = 'Connecting...';
-  if (loginBtn) loginBtn.disabled = true;
 
-  const _finishLogin = () => {
-    _loginInProgress = false;
-    if (loginBtn) loginBtn.disabled = false;
-  };
-
+  // Connect socket and attempt login
   const s = getSocket();
+  s.emit('account:login', { username, password });
 
-  // ── IMPORTANT: listeners registered BEFORE emit ──────────
+  // Handle response
   const onLoggedIn = ({ username: uname, save, isNew }) => {
     s.off('account:loggedin', onLoggedIn);
     s.off('account:error',    onErr);
-    s.off('disconnect',       onDisconnect);
-    _finishLogin();
-    // Store only the username — never the password
+    _accountPassword = password;
     localStorage.setItem('aetherion_hero_name', uname);
-    localStorage.removeItem('aetherion_hero_pass'); // remove any stale password
+    localStorage.setItem('aetherion_hero_pass', password);
     gameState.username = uname;
     gameState.onlineUsername = uname;
-    if (save && !isNew) {
+    if(save && !isNew){
+      // Load cloud save
       try {
         const sd = typeof save === 'string' ? JSON.parse(save) : save;
-        gameState.playerLevel    = sd.playerLevel    || 1;
-        gameState.playerXp       = sd.playerXp       || 0;
-        gameState.xpToNext       = sd.xpToNext       || 100;
-        gameState.playerGold     = sd.playerGold     || 0;
-        gameState.inventory      = sd.inventory      || [];
-        gameState.deck           = sd.deck           || [];
-        gameState.unlockedSkills = sd.unlockedSkills || [];
-        gameState.skillXp        = sd.skillXp        || 0;
-        gameState.shopOwned      = sd.shopOwned      || {};
-        gameState.activeCardIdx  = sd.activeCardIdx  || 0;
-      } catch(e) {}
+        gameState.playerLevel    = sd.playerLevel  || 1;
+        gameState.playerXp       = sd.playerXp     || 0;
+        gameState.xpToNext       = sd.xpToNext     || 100;
+        gameState.playerGold     = sd.playerGold   || 0;
+        gameState.inventory      = sd.inventory    || [];
+        gameState.deck           = sd.deck         || [];
+        gameState.unlockedSkills = sd.unlockedSkills|| [];
+        gameState.skillXp        = sd.skillXp      || 0;
+        gameState.shopOwned      = sd.shopOwned    || {};
+        gameState.activeCardIdx  = sd.activeCardIdx|| 0;
+      } catch(e){}
     }
-    if (gameState.deck.length > 0) {
+    if(gameState.deck.length > 0){
       updateMenuHud(); showScreen('screen-menu');
       toast(`⚔️ Welcome back, ${uname}!`);
     } else {
       goCardPick('menu');
     }
   };
-
   const onErr = ({ msg }) => {
     s.off('account:loggedin', onLoggedIn);
     s.off('account:error',    onErr);
-    s.off('disconnect',       onDisconnect);
-    _finishLogin();
-    errEl.textContent = msg || 'Login failed. Please try again.';
+    errEl.textContent = msg;
   };
-
-  const onDisconnect = () => {
-    s.off('account:loggedin', onLoggedIn);
-    s.off('account:error',    onErr);
-    _finishLogin();
-    errEl.textContent = 'Connection lost. Please try again.';
-  };
-
   s.once('account:loggedin', onLoggedIn);
   s.once('account:error',    onErr);
-  s.once('disconnect',       onDisconnect);
-
-  s.emit('account:login', { username, password });
 }
 
-let _registerInProgress = false;
-
 function doRegister(){
-  if (_registerInProgress) return;
-
   const username = document.getElementById('reg-username').value.trim();
-  const password = document.getElementById('reg-password').value;
+  const password = document.getElementById('reg-password').value.trim() || '12345';
   const errEl    = document.getElementById('reg-error');
-  const regBtn   = document.querySelector('.btn-start[onclick="doRegister()"]');
 
-  errEl.style.color = '#d06060';
-  if (!username)             { errEl.textContent = 'Choose a username.'; return; }
-  if (username.length < 3)   { errEl.textContent = 'Username must be at least 3 characters.'; return; }
-  if (!password)             { errEl.textContent = 'Choose a password.'; return; }
-  if (password.length < 6)   { errEl.textContent = 'Password must be at least 6 characters.'; return; }
-
-  _registerInProgress = true;
+  if(!username){ errEl.textContent='Choose a username!'; return; }
+  if(username.length < 3){ errEl.textContent='Username must be at least 3 characters'; return; }
   errEl.textContent = 'Creating account...';
-  errEl.style.color = 'var(--dim)';
-  if (regBtn) regBtn.disabled = true;
-
-  const _finishReg = () => {
-    _registerInProgress = false;
-    if (regBtn) regBtn.disabled = false;
-  };
 
   const s = getSocket();
+  s.emit('account:register', { username, password });
 
-  // ── IMPORTANT: listeners registered BEFORE emit ──────────
+  // If name was taken, server sends the new suggested name first
+  s.once('account:renamed', ({ suggestedName }) => {
+    errEl.style.color = 'var(--gold)';
+    errEl.textContent = `"${username}" was taken — your username is now "${suggestedName}"`;
+    // Update input so player can see their assigned name
+    const input = document.getElementById('reg-username');
+    if(input) input.value = suggestedName;
+  });
+
   const onRegistered = ({ username: uname }) => {
     s.off('account:registered', onRegistered);
-    s.off('account:nameTaken',  onNameTaken);
     s.off('account:error',      onErr);
-    s.off('disconnect',         onDisconnect);
-    _finishReg();
-    // Store only the username — never the password
+    _accountPassword = password;
     localStorage.setItem('aetherion_hero_name', uname);
-    localStorage.removeItem('aetherion_hero_pass');
+    localStorage.setItem('aetherion_hero_pass', password);
     gameState.username = uname;
     gameState.onlineUsername = uname;
     gameState.playerLevel=1; gameState.playerXp=0; gameState.xpToNext=100;
@@ -2359,50 +2317,25 @@ function doRegister(){
     toast(`🎉 Account created! Welcome, ${uname}!`);
     goCardPick('menu');
   };
-
-  // Server sends account:nameTaken (not account:renamed) when name is taken
-  const onNameTaken = ({ suggestedName }) => {
-    _finishReg();
-    errEl.style.color = 'var(--gold)';
-    errEl.textContent = `"${username}" is taken. Try "${suggestedName}" or choose another name.`;
-    const input = document.getElementById('reg-username');
-    if (input) input.value = suggestedName;
-  };
-
   const onErr = ({ msg }) => {
     s.off('account:registered', onRegistered);
-    s.off('account:nameTaken',  onNameTaken);
     s.off('account:error',      onErr);
-    s.off('disconnect',         onDisconnect);
-    _finishReg();
     errEl.style.color = '#d06060';
-    errEl.textContent = msg || 'Registration failed. Please try again.';
+    errEl.textContent = msg;
   };
-
-  const onDisconnect = () => {
-    s.off('account:registered', onRegistered);
-    s.off('account:nameTaken',  onNameTaken);
-    s.off('account:error',      onErr);
-    _finishReg();
-    errEl.style.color = '#d06060';
-    errEl.textContent = 'Connection lost. Please try again.';
-  };
-
   s.once('account:registered', onRegistered);
-  s.once('account:nameTaken',  onNameTaken);
   s.once('account:error',      onErr);
-  s.once('disconnect',         onDisconnect);
-
-  s.emit('account:register', { username, password });
 }
 
 function initIntroScreen(){
-  // Restore only the username — never auto-fill the password
+  // Check if we have saved credentials — auto-fill username
   const savedName = localStorage.getItem('aetherion_hero_name');
-  localStorage.removeItem('aetherion_hero_pass'); // scrub any old stored password
-  if (savedName) {
+  const savedPass = localStorage.getItem('aetherion_hero_pass');
+  if(savedName){
     const nameEl = document.getElementById('login-username');
-    if (nameEl) nameEl.value = savedName;
+    const passEl = document.getElementById('login-password');
+    if(nameEl) nameEl.value = savedName;
+    if(passEl && savedPass) passEl.value = savedPass;
   }
 }
 
@@ -2492,7 +2425,8 @@ function doChangePassword(){
     newPassword: newPw,
   });
   s.once('account:passchanged', ()=>{
-    // Password changed — do not store the new password locally
+    _accountPassword = newPw;
+    localStorage.setItem('aetherion_hero_pass', newPw);
     errEl.style.color = '#60d060';
     errEl.textContent = '✓ Password changed successfully!';
     setTimeout(closeModal, 1500);
@@ -2666,7 +2600,7 @@ function applyImportedProfile(profile){
 
 function doLogout(){
   localStorage.removeItem('aetherion_hero_name');
-  localStorage.removeItem('aetherion_hero_pass'); // should already be absent
+  localStorage.removeItem('aetherion_hero_pass');
   localStorage.removeItem(SAVE_KEY);
   gameState.username = '';
   gameState.deck = [];
@@ -5007,21 +4941,18 @@ function spExplore(){
 //  ONLINE MODE  — Real Socket.io multiplayer
 // ─────────────────────────────────────────
 
-// ── Production flag (injected by server into the HTML) ──
-// The server adds window.IS_PRODUCTION = true/false via a meta tag or
-// inline script. Fallback: treat as non-production if undefined.
-const IS_PRODUCTION = window.IS_PRODUCTION || false;
-
 // ── Socket connection ──
 let socket = null;
 let onlineRoomPlayers = [];   // real players in current room
+let friendsList = [];
 let tradeSelected = { cardIdx: -1, targetIdx: -1 };
 let _tradeTargetId = '';
 let _tradeTargetName = '';
 let pendingTrades = [];
 
 function getSocket() {
-  if (socket && socket.connected) return socket;
+  // If socket exists (even if still connecting), return it — don't create a second one
+  if (socket) return socket;
   if (typeof io === 'undefined') {
     toast('⚠️ Multiplayer not available in offline mode.');
     return { emit: ()=>{}, on: ()=>{}, once: ()=>{}, off: ()=>{}, connected: false };
@@ -5038,36 +4969,29 @@ function getSocket() {
       deckSize: gameState.deck.length,
       gold:     gameState.playerGold,
     });
-
-    // SECURITY: no password is ever cached or resent here. If this socket
-    // already has a server-side session for this browser tab (see
-    // session:restore on the server — it's keyed off the live connection,
-    // not a persisted token), try to silently pick that back up. If not,
-    // the player just needs to log in again — that's correct behavior, not
-    // a bug: there is no stored credential this could fall back to.
+    // Re-authenticate this socket if we were already logged in (e.g. after a
+    // dropped connection/reconnect). A fresh socket has no server-side
+    // session yet — without this, the new socket would be treated as an
+    // unauthenticated guest and lose things like authoritative duel results.
+    // Re-authenticate via session token (not password) on reconnect
     const sessionToken = sessionStorage.getItem('aetherion_session');
-    if (sessionToken) {
-      socket.emit('session:restore', { token: sessionToken }, (res) => {
-        if (res?.ok && res.player?.username) {
-          gameState.username = res.player.username;
-          updateMenuHud();
-        } else {
+    if(sessionToken){
+      socket.emit('session:restore', { token: sessionToken }, (result) => {
+        if(!result?.ok && gameState.username){
+          // Session expired — show login screen without exposing password
           sessionStorage.removeItem('aetherion_session');
+          gameState.username = null;
+          showScreen('screen-intro');
+          toast('Session expired. Please log in again.');
         }
       });
     }
-
-    // Setup listeners (each guards against double-registration internally)
+    // Setup Veylor anti-cheat listeners
     setupVeylorListeners();
     setupDuelResultListener();
     setupGuildListeners();
-    setupFriendListeners();
     // Check if account is on hold
     if(gameState.username) checkAntiCheatStatus();
-  });
-
-  socket.on('connect_error', (error) => {
-    console.error('[Socket] Connection error:', error);
   });
 
   // Save blocked — account is banned or suspended
@@ -5112,10 +5036,13 @@ function getSocket() {
   // Server rejects an action
   socket.on('player:actionError', ({ msg }) => {
     toast(`⚠️ ${msg}`);
-    // NOTE: this used to silently re-run account:login with a cached
-    // plaintext password to "resync" — removed. If the session actually
-    // dropped, the next protected action will fail with a clear
-    // "not logged in" error and the player logs in again normally.
+    // Re-sync from server to correct any optimistic UI update
+    if(gameState.username && socket.connected){
+      socket.emit('account:login', {
+        username: gameState.username,
+        password: _accountPassword || localStorage.getItem('aetherion_hero_pass') || '12345'
+      });
+    }
   });
 
   socket.on('disconnect', () => {
@@ -5265,214 +5192,549 @@ function getSocket() {
   return socket;
 }
 
-// ═══════════════════════════════════════════════════
-//  FRIEND SYSTEM — server-authoritative
-// ═══════════════════════════════════════════════════
-let _friends = [], _incomingReqs = [], _outgoingReqs = [], _friendListLoading = false;
-let _friendListenersSet = false;
+// ── Go Online screen ──
+function goOnline() {
+  if (!gameState.deck.length) { goCardPick('online_return'); return; }
+  const greet = document.getElementById('online-greeting-name');
+  if (greet) greet.textContent = gameState.username || 'Hero';
+  // Connect socket
+  getSocket();
+  onlineTab('lobby');
+  showScreen('screen-online');
+  renderFriendsList();
+}
 
-function setupFriendListeners() {
-  if (_friendListenersSet || !socket) return;
-  _friendListenersSet = true;
-  socket.on('friend:list:update', () => { _loadFriendList(); });
-  socket.on('friend:request:received', ({ fromUname, fromDisplay } = {}) => {
-    toast('👥 ' + escapeHTML(fromDisplay || fromUname) + ' sent you a friend request!');
-    updateFriendsNotifDot(true);
-    _loadFriendList();
+function onlineSetUsername() {
+  const name = document.getElementById('online-username')?.value?.trim();
+  if (name) { gameState.onlineUsername = name; gameState.username = name; }
+  goOnline();
+}
+
+function onlineTab(tab) {
+  ['lobby','trade','chat'].forEach(t => {
+    const el  = document.getElementById('online-tab-'+t);
+    const btn = document.getElementById('otab-'+t);
+    if (el)  el.style.display = t===tab ? '' : 'none';
+    if (btn) {
+      btn.style.background   = t===tab ? 'linear-gradient(135deg,#3a2008,#7a4818)' : 'rgba(0,0,0,.4)';
+      btn.style.borderColor  = t===tab ? 'rgba(200,151,58,.3)' : 'var(--border)';
+    }
+  });
+  if (tab==='trade')   { renderTradeParty(); renderTradePlayers(); renderTradeIncoming(); }
+  if (tab==='chat')    { updateChatRoomLabel(); document.getElementById('chat-input')?.focus(); }
+}
+
+// ── HOST ──
+function onlineHost() {
+  if (!gameState.deck.length) { toast('Pick your deck first!'); goCardPick('online_host'); return; }
+  const s = getSocket();
+  document.getElementById('online-user-setup').style.display = 'none';
+  document.getElementById('online-host-panel').style.display = '';
+  document.getElementById('room-code-display').textContent = '...';
+  document.getElementById('online-status').textContent = 'Creating room...';
+  s.emit('room:host', {
+    username: gameState.username || 'Hero',
+    deck:     gameState.deck.map(c=>({
+      ...c,
+      // Make sure all upgraded stats are included
+      hp:      c.hp,
+      maxHp:   c.maxHp,
+      attack:  c.attack,
+      defense: c.defense,
+      magic:   c.magic,
+      speed:   c.speed,
+      cardLevel: c.cardLevel||1,
+      cardXp:  c.cardXp||0,
+    })),
+    level:    gameState.playerLevel || 1,
   });
 }
 
-function _loadFriendList() {
-  if (!socket?.connected || _friendListLoading) return;
-  _friendListLoading = true;
-  socket.emit('friend:list', {}, (res) => {
-    _friendListLoading = false;
-    if (!res?.ok) return;
-    _friends      = res.friends  || [];
-    _incomingReqs = res.incoming || [];
-    _outgoingReqs = res.outgoing || [];
-    renderFriendsList();
-    renderFriendRequests();
-    updateFriendsNotifDot(_incomingReqs.length > 0);
+// ── JOIN ──
+function showJoinForm() {
+  document.getElementById('online-user-setup').style.display = 'none';
+  document.getElementById('online-join-panel').style.display = '';
+}
+
+function onlineJoin() {
+  const code = document.getElementById('join-code-input').value.trim().toUpperCase();
+  if (code.length !== 6) { document.getElementById('join-status').textContent='Code must be 6 chars.'; document.getElementById('join-status').className='online-status err'; return; }
+  if (!gameState.deck.length) { toast('Pick your deck first!'); goCardPick('online_join'); return; }
+  document.getElementById('join-status').textContent = 'Connecting...';
+  const s = getSocket();
+  s.emit('room:join', {
+    username: gameState.username || 'Hero',
+    code,
+    deck: gameState.deck.map(c=>({
+      ...c,
+      hp:      c.hp,
+      maxHp:   c.maxHp,
+      attack:  c.attack,
+      defense: c.defense,
+      magic:   c.magic,
+      speed:   c.speed,
+      cardLevel: c.cardLevel||1,
+      cardXp:  c.cardXp||0,
+    })),
+    level: gameState.playerLevel || 1,
   });
+  // Show host panel so they can see the room
+  document.getElementById('online-join-panel').style.display = 'none';
+  document.getElementById('online-host-panel').style.display = '';
+  document.getElementById('room-code-display').textContent = code;
+}
+
+// ── COPY CODE ──
+function copyRoomCode() {
+  navigator.clipboard.writeText(gameState.onlineRoomCode).then(() => toast('Code copied!')).catch(() => {
+    const el = document.createElement('textarea'); el.value = gameState.onlineRoomCode;
+    document.body.appendChild(el); el.select(); document.execCommand('copy');
+    document.body.removeChild(el); toast('Code copied!');
+  });
+}
+
+// ── RENDER PLAYER LIST ──
+function renderPlayerList() {
+  const el = document.getElementById('player-list');
+  if (!el) return;
+  if (!onlineRoomPlayers.length) {
+    el.innerHTML = '<div style="color:var(--dim);font-size:.65rem;font-style:italic;">Waiting for players...</div>';
+    return;
+  }
+  el.innerHTML = onlineRoomPlayers.map(p => `
+    <div class="player-entry" style="flex-direction:column;align-items:flex-start;gap:6px;margin-bottom:10px;">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <span style="font-size:1.4rem;">⚔️</span>
+        <div style="flex:1;">
+          <div class="pe-name">${p.username}${p.isHost?' 👑':''}</div>
+          <div style="font-size:.58rem;color:var(--dim);">Party Lv.${p.level||1} · ${p.deckSize||0} cards</div>
+        </div>
+        <div class="friend-status-dot dot-online"></div>
+      </div>
+    </div>`).join('');
+}
+
+// ── START MODES ──
+function backToLobbyChoice(){
+  document.getElementById('online-host-panel').style.display = 'none';
+  document.getElementById('online-join-panel').style.display = 'none';
+  document.getElementById('online-user-setup').style.display = '';
+}
+
+function onlineStartStory() {
+  if (onlineRoomPlayers.length < 2) { toast('Need at least 2 players!'); return; }
+  // If player has a saved story, offer to use it
+  const stories = JSON.parse(localStorage.getItem('aetherion_stories')||'[]');
+  if(stories.length){
+    const body = `
+      <div style="font-size:.68rem;color:var(--dim);margin-bottom:12px;">Pick a story to play online with your party:</div>
+      ${stories.map((s,i)=>`
+        <div class="saved-story-entry" style="cursor:pointer;padding:10px 12px;border:2px solid var(--border);border-radius:8px;margin-bottom:6px;transition:all .15s;"
+          onmouseover="this.style.borderColor='rgba(200,151,58,.4)'" onmouseout="this.style.borderColor='var(--border)'"
+          onclick="launchOnlineStory(${i})">
+          <div style="font-family:'Cinzel',serif;font-size:.72rem;color:var(--gold);">📖 ${s.title}</div>
+          <div style="font-size:.58rem;color:var(--dim);margin-top:2px;">${s.blocks?.length||0} scenes</div>
+        </div>`).join('')}
+      <div style="margin-top:10px;">
+        <button class="btn-ghost" onclick="launchOnlineStoryRandom()" style="width:100%;font-size:.65rem;">🎲 Random Adventure</button>
+      </div>`;
+    showModal('📖 Pick a Story', body, [{label:'Cancel', cls:'btn-ghost', cb:closeModal}]);
+  } else {
+    launchOnlineStoryRandom();
+  }
+}
+
+function launchOnlineStory(idx){
+  closeModal();
+  const stories = JSON.parse(localStorage.getItem('aetherion_stories')||'[]');
+  const story = stories[idx];
+  if(!story) return;
+  getSocket().emit('game:start', { mode:'story', storyBlocks: story.blocks });
+  showScreen('screen-sp'); initSP();
+  spLog(`🌐 <b>Online Story: ${story.title}</b>`,'l');
+  onlineRoomPlayers.forEach(p=>spLog(`👤 <b>${p.username}</b> joined the adventure`,'mn'));
+}
+
+function launchOnlineStoryRandom(){
+  closeModal();
+  getSocket().emit('game:start', { mode:'story' });
+  showScreen('screen-sp'); initSP();
+  spLog(`🌐 <b>Online Adventure Mode</b>`,'l');
+  onlineRoomPlayers.forEach(p=>spLog(`👤 <b>${p.username}</b> joined the adventure`,'mn'));
+}
+
+function onlineStartDuel() {
+  if (onlineRoomPlayers.length < 2) { toast('Need at least 2 players!'); return; }
+  getSocket().emit('game:start', { mode: 'duel' });
+}
+
+// ── ONLINE DUEL ──
+let onlineDuelState = null;
+
+function startOnlineDuel(bs) {
+  onlineDuelState = bs;
+  const me  = bs.combatants.find(c => c.id === socket?.id);
+  const opp = bs.combatants.find(c => c.id !== socket?.id);
+  if (!me || !opp) return;
+  showModal('⚔️ Online Duel', buildDuelHTML(bs, me, opp), []);
+  // Listen for duel chat
+  if(socket) socket.on('duel:chat', ({from, message, time})=>{
+    appendDuelChat(from, message, from===(gameState.username||'Hero'));
+  });
+}
+
+function buildDuelHTML(bs, me, opp) {
+  const myTurn = bs.activePlayer === socket?.id;
+  const myDeck = me.deck || [];
+  const deckHTML = myDeck.length > 1 ? `
+    <div style="margin-bottom:10px;">
+      <div style="font-family:'Cinzel',serif;font-size:.55rem;color:var(--dim);margin-bottom:5px;">YOUR DECK — click to switch active card</div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;">
+        ${myDeck.map((c,i)=>`
+          <div onclick="${myTurn&&!c.fainted?`duelSwitch(${i})`:'void(0)'}"
+            style="background:${i===me.activeIdx?'rgba(200,151,58,.15)':'rgba(0,0,0,.4)'};
+            border:2px solid ${i===me.activeIdx?'rgba(200,151,58,.5)':c.fainted?'rgba(200,50,50,.3)':'var(--border)'};
+            border-radius:8px;padding:5px 8px;text-align:center;cursor:${myTurn&&!c.fainted?'pointer':'default'};
+            opacity:${c.fainted?'0.4':'1'};min-width:56px;transition:all .15s;">
+            <div style="font-size:1.2rem;">${c.emoji||'⚔️'}</div>
+            <div style="font-family:'Cinzel',serif;font-size:.45rem;color:${i===me.activeIdx?'var(--gold)':'var(--text)'};">${c.name?.split(' ')[0]||'?'}</div>
+            <div style="font-size:.42rem;color:${c.hp/c.maxHp<0.3?'#d06060':'#60d060'};">${c.fainted?'💀':`${c.hp}/${c.maxHp}`}</div>
+          </div>`).join('')}
+      </div>
+    </div>` : '';
+
+  return `
+    <!-- Turn indicator -->
+    <div style="text-align:center;margin-bottom:10px;padding:6px;background:${myTurn?'rgba(0,100,0,.2)':'rgba(0,0,0,.3)'};border-radius:8px;">
+      <div style="font-size:.65rem;font-family:'Cinzel',serif;color:${myTurn?'#60d060':'var(--dim)'};">
+        ${myTurn ? '⚡ YOUR TURN' : `⏳ Waiting for ${opp.name}...`}
+      </div>
+    </div>
+
+    <!-- Combatants -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+      <div style="background:rgba(0,100,0,.15);border:2px solid rgba(0,200,0,.2);border-radius:10px;padding:10px;text-align:center;">
+        <div style="font-size:1.8rem;">${me.emoji||'⚔️'}</div>
+        <div style="font-family:'Cinzel',serif;font-size:.62rem;color:var(--gold);">${me.name}</div>
+        <div style="font-size:.55rem;color:var(--dim);margin-bottom:4px;">${me.cardName||''}</div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:.68rem;color:#60d060;">${me.hp}/${me.maxHp} HP</div>
+        <div style="height:5px;background:rgba(0,0,0,.5);border-radius:3px;margin-top:4px;">
+          <div style="height:100%;background:linear-gradient(90deg,#1a6040,#30c080);width:${Math.max(0,me.hp/me.maxHp*100)}%;border-radius:3px;transition:width .3s;"></div>
+        </div>
+        <div style="font-size:.5rem;color:var(--dim);margin-top:3px;">ATK:${me.atk} DEF:${me.def} MAG:${me.mag}</div>
+      </div>
+      <div style="background:rgba(100,0,0,.15);border:2px solid rgba(200,0,0,.2);border-radius:10px;padding:10px;text-align:center;">
+        <div style="font-size:1.8rem;">${opp.emoji||'👾'}</div>
+        <div style="font-family:'Cinzel',serif;font-size:.62rem;color:#d06060;">${opp.name}</div>
+        <div style="font-size:.55rem;color:var(--dim);margin-bottom:4px;">${opp.cardName||''}</div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:.68rem;color:#d06060;">${opp.hp}/${opp.maxHp} HP</div>
+        <div style="height:5px;background:rgba(0,0,0,.5);border-radius:3px;margin-top:4px;">
+          <div style="height:100%;background:linear-gradient(90deg,#601a1a,#c03030);width:${Math.max(0,opp.hp/opp.maxHp*100)}%;border-radius:3px;transition:width .3s;"></div>
+        </div>
+        <div style="font-size:.5rem;color:var(--dim);margin-top:3px;">ATK:${opp.atk} DEF:${opp.def} MAG:${opp.mag}</div>
+      </div>
+    </div>
+
+    <!-- Deck switcher -->
+    ${deckHTML}
+
+    <!-- Actions -->
+    ${myTurn ? `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+      <button class="btn" onclick="duelAction('attack')" style="font-size:.72rem;">⚔️ Attack</button>
+      <button class="btn" onclick="duelAction('ability')" style="font-size:.72rem;${me.abilityCooldown>0?'opacity:.5;':''}" ${me.abilityCooldown>0?'disabled':''}>
+        ${me.abilityCooldown>0?`✨ Cooldown (${me.abilityCooldown})`:`✨ ${me.ability}`}
+      </button>
+      <button class="btn-ghost" onclick="duelAction('heal')" style="font-size:.72rem;">🧪 Heal</button>
+      <button class="btn-ghost" onclick="duelAction('flee')" style="font-size:.72rem;border-color:rgba(200,50,50,.3);color:#d06060;">🏃 Flee</button>
+    </div>`
+    : `<div style="text-align:center;color:var(--dim);font-size:.65rem;padding:8px 0;">Waiting for ${opp.name} to move...</div>`}
+
+    <!-- Battle log -->
+    <div id="duel-log" style="max-height:80px;overflow-y:auto;font-size:.58rem;color:var(--dim);margin-bottom:8px;border-top:1px solid var(--border);padding-top:6px;">
+      ${bs.log.slice(-5).map(l=>`<div style="padding:2px 0;">${l}</div>`).join('')}
+    </div>
+
+    <!-- In-duel chat -->
+    <div style="border-top:1px solid var(--border);padding-top:8px;">
+      <div id="duel-chat-msgs" style="max-height:80px;overflow-y:auto;margin-bottom:6px;font-size:.6rem;"></div>
+      <div style="display:flex;gap:6px;">
+        <input id="duel-chat-input" placeholder="Chat with opponent..." maxlength="100"
+          style="flex:1;background:rgba(0,0,0,.5);border:1px solid var(--border);border-radius:6px;
+          color:var(--text);font-size:.62rem;padding:6px 10px;outline:none;"
+          onkeydown="if(event.key==='Enter')sendDuelChat()">
+        <button class="btn-sm" onclick="sendDuelChat()" style="font-size:.58rem;padding:6px 10px;">💬</button>
+      </div>
+    </div>`;
+}
+
+function duelAction(action) {
+  if (!socket) return;
+  socket.emit('battle:action', { action });
+}
+
+function duelSwitch(cardIdx) {
+  if (!socket) return;
+  socket.emit('battle:action', { action: 'switch', cardIdx });
+}
+
+function sendDuelChat() {
+  const input = document.getElementById('duel-chat-input');
+  const msg = input?.value?.trim();
+  if (!msg || !socket) return;
+  socket.emit('duel:chat', { message: msg });
+  appendDuelChat(gameState.username||'You', msg, true);
+  input.value = '';
+}
+
+function appendDuelChat(from, message, isMe) {
+  const el = document.getElementById('duel-chat-msgs');
+  if (!el) return;
+  const div = document.createElement('div');
+  div.style.cssText = `text-align:${isMe?'right':'left'};margin-bottom:3px;`;
+  div.innerHTML = `<span style="background:${isMe?'rgba(200,151,58,.15)':'rgba(255,255,255,.08)'};
+    border-radius:8px;padding:3px 8px;font-size:.6rem;color:var(--text);">
+    ${isMe?'':('<b style="color:var(--gold);font-size:.55rem;">'+from+'</b> ')}${escapeHTML(message)}
+  </span>`;
+  el.appendChild(div);
+  el.scrollTop = el.scrollHeight;
+}
+
+function updateOnlineDuel(bs, message) {
+  onlineDuelState = bs;
+  const me  = bs.combatants.find(c => c.id === socket?.id);
+  const opp = bs.combatants.find(c => c.id !== socket?.id);
+  if (!me || !opp) return;
+  // Preserve chat messages before re-render
+  const chatMsgs = document.getElementById('duel-chat-msgs')?.innerHTML || '';
+  document.getElementById('modal-body').innerHTML = buildDuelHTML(bs, me, opp);
+  // Restore chat
+  const chatEl = document.getElementById('duel-chat-msgs');
+  if (chatEl && chatMsgs) chatEl.innerHTML = chatMsgs;
+  toast(message.replace(/<b>|<\/b>/g,''));
+}
+
+// ── FRIENDS ──
+// Active tab in friends panel: 'friends' | 'suggested' | 'invites'
+let _friendsTab = 'friends';
+
+function openFriendsPanel() {
+  _friendsTab = 'friends';
+  try { getSocket().emit('lobby:request'); } catch(e) {}
+  updateFriendsNotifDot();
+  _renderFriendsModal();
+}
+
+function _renderFriendsModal() {
+  const myId = (gameState.username || 'HERO').toUpperCase().substring(0,8);
+
+  const body = `
+  <div style="display:flex;gap:12px;flex-wrap:wrap;">
+
+    <!-- LEFT: Add Friends panel -->
+    <div style="flex:0 0 200px;min-width:160px;background:rgba(255,255,255,.04);
+      border:1px solid rgba(200,151,58,.25);border-radius:12px;padding:14px;">
+      <div style="font-family:'Cinzel',serif;font-size:.7rem;color:var(--gold);
+        text-align:center;margin-bottom:12px;letter-spacing:.1em;">➕ ADD FRIENDS</div>
+
+      <!-- Player ID display -->
+      <div style="background:rgba(0,0,0,.4);border:1px solid rgba(200,151,58,.2);
+        border-radius:8px;padding:8px 10px;margin-bottom:10px;text-align:center;">
+        <div style="font-size:.48rem;color:var(--dim);margin-bottom:3px;">YOUR ID</div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:.75rem;
+          color:var(--gold);letter-spacing:.08em;">#${myId}</div>
+      </div>
+
+      <!-- Search input -->
+      <input id="friend-add-input" placeholder="Enter username..." maxlength="20"
+        style="width:100%;background:rgba(0,0,0,.5);border:1px solid var(--border);
+        border-radius:8px;color:var(--text);font-size:.65rem;padding:8px 10px;
+        outline:none;box-sizing:border-box;margin-bottom:6px;"
+        onkeydown="if(event.key==='Enter')addFriend()">
+      <button class="btn" onclick="addFriend()"
+        style="width:100%;font-size:.65rem;padding:8px;">
+        ADD FRIEND
+      </button>
+
+      <!-- Divider -->
+      <div style="display:flex;align-items:center;gap:6px;margin:10px 0;">
+        <div style="flex:1;height:1px;background:var(--border);"></div>
+        <div style="font-size:.55rem;color:var(--dim);">OR</div>
+        <div style="flex:1;height:1px;background:var(--border);"></div>
+      </div>
+
+      <!-- Share invite -->
+      <button class="btn-ghost" onclick="shareFriendInvite()"
+        style="width:100%;font-size:.6rem;padding:7px;margin-bottom:6px;">
+        🔗 SHARE INVITE
+      </button>
+    </div>
+
+    <!-- RIGHT: Tabs panel -->
+    <div style="flex:1;min-width:200px;">
+
+      <!-- Tab bar -->
+      <div style="display:flex;gap:4px;margin-bottom:10px;">
+        ${['friends','suggested','invites'].map(t => `
+          <button onclick="_switchFriendsTab('${t}')" id="ftab-${t}"
+            style="flex:1;padding:8px 4px;font-size:.58rem;font-family:'Cinzel',serif;
+            letter-spacing:.05em;border-radius:8px 8px 0 0;border:1px solid var(--border);
+            border-bottom:none;cursor:pointer;transition:background .15s;
+            ${_friendsTab===t
+              ? 'background:linear-gradient(135deg,rgba(200,151,58,.25),rgba(200,151,58,.1));color:var(--gold);border-color:rgba(200,151,58,.4);'
+              : 'background:rgba(0,0,0,.3);color:var(--dim);'}">
+            ${t==='friends'?'👥 FRIENDS':t==='suggested'?'✨ SUGGESTED':'📬 INVITES'}
+          </button>`).join('')}
+      </div>
+
+      <!-- Tab content area -->
+      <div id="friends-tab-body"
+        style="background:rgba(0,0,0,.25);border:1px solid rgba(200,151,58,.2);
+        border-radius:0 8px 8px 8px;padding:8px;min-height:200px;max-height:320px;overflow-y:auto;">
+        <div id="friends-list-el"></div>
+        <div id="friend-requests-el" style="display:none;"></div>
+        <div id="online-players-el" style="display:none;"></div>
+      </div>
+    </div>
+  </div>`;
+
+  showModal('👤 FRIENDS', body, [{label:'✕ Close', cls:'btn-ghost', cb:closeModal}]);
+  _switchFriendsTab(_friendsTab);
+}
+
+function _switchFriendsTab(tab) {
+  _friendsTab = tab;
+  // Update tab button styles
+  ['friends','suggested','invites'].forEach(t => {
+    const btn = document.getElementById('ftab-' + t);
+    if (!btn) return;
+    if (t === tab) {
+      btn.style.background = 'linear-gradient(135deg,rgba(200,151,58,.25),rgba(200,151,58,.1))';
+      btn.style.color = 'var(--gold)';
+      btn.style.borderColor = 'rgba(200,151,58,.4)';
+    } else {
+      btn.style.background = 'rgba(0,0,0,.3)';
+      btn.style.color = 'var(--dim)';
+      btn.style.borderColor = 'var(--border)';
+    }
+  });
+  // Show/hide panels
+  const fl = document.getElementById('friends-list-el');
+  const fr = document.getElementById('friend-requests-el');
+  const op = document.getElementById('online-players-el');
+  if (fl) fl.style.display = tab === 'friends'   ? '' : 'none';
+  if (fr) fr.style.display = tab === 'invites'   ? '' : 'none';
+  if (op) op.style.display = tab === 'suggested' ? '' : 'none';
+  // Render correct content
+  if (tab === 'friends')   renderFriendsList();
+  if (tab === 'invites')   renderFriendRequests();
+  if (tab === 'suggested') { try { getSocket().emit('lobby:request'); } catch(e) {} }
+}
+
+function shareFriendInvite() {
+  const id = (gameState.username || 'HERO').toUpperCase().substring(0,8);
+  const msg = 'Join me on Aetherion RPG! Search for #' + id;
+  if (navigator.share) { navigator.share({ text: msg }).catch(()=>{}); }
+  else if (navigator.clipboard) { navigator.clipboard.writeText(msg); toast('📋 Invite link copied!'); }
+  else toast('Your ID: #' + id);
+}
+
+function updateFriendsNotifDot() {
+  // Show red dot on profile button only when there are pending requests
+  // (renderFriendRequests currently shows none, so dot stays hidden)
+  const dot = document.getElementById('friends-notif-dot');
+  if (dot) dot.style.display = 'none'; // extend here when real requests are implemented
 }
 
 function renderFriendsList() {
   const el = document.getElementById('friends-list-el');
   if (!el) return;
+
+  // Header row: "FRIENDS (N)"
   const header = `<div style="font-family:'Cinzel',serif;font-size:.6rem;color:var(--dim);
-    padding:4px 6px 8px;letter-spacing:.08em;">FRIENDS (${_friends.length})</div>`;
-  if (!_friends.length) {
+    padding:4px 6px 8px;letter-spacing:.08em;">FRIENDS (${friendsList.length})</div>`;
+
+  if (!friendsList.length) {
     el.innerHTML = header + `<div style="color:var(--dim);font-size:.63rem;
-      font-style:italic;padding:8px 6px;">No friends yet — search for a player above!</div>`;
+      font-style:italic;padding:8px 6px;">No friends yet — add someone on the left!</div>`;
     return;
   }
-  const emojis = ['⚔️','🔥','❄️','⚡','🌑','👑','🐉','🛡️','✨','💎'];
-  const colors = ['#3a1a6a','#1a3a6a','#1a6a3a','#6a3a1a','#4a1a1a','#1a4a4a'];
-  el.innerHTML = header + _friends.map((f, i) => {
-    const su = escapeHTML(f.uname);
-    const seed = f.uname.split('').reduce((a,ch)=>a+ch.charCodeAt(0),0);
-    const aE = emojis[seed % emojis.length], aC = colors[seed % colors.length];
-    const dot = f.online
-      ? '<span style="color:#60d060;font-size:.52rem;">🟢 Online</span>'
-      : '<span style="color:var(--dim);font-size:.52rem;">⚫ Offline</span>';
-    return `<div style="display:flex;align-items:center;gap:10px;padding:8px;
+
+  const rows = friendsList.map((f, i) => {
+    const sf   = escapeHTML(f);
+    // Generate a consistent colour+emoji avatar from the username
+    const avatarEmojis = ['⚔️','🔥','❄️','⚡','🌑','👑','🐉','🛡️','✨','💎'];
+    const avatarColors = ['#3a1a6a','#1a3a6a','#1a6a3a','#6a3a1a','#4a1a1a','#1a4a4a'];
+    const seed  = f.split('').reduce((a,ch)=>a+ch.charCodeAt(0),0);
+    const aEmoji = avatarEmojis[seed % avatarEmojis.length];
+    const aColor = avatarColors[seed % avatarColors.length];
+    // Fake rank/trophy data (extend with real data when server tracks it)
+    const trophies = ((seed * 37) % 2000);
+
+    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 8px;
       background:rgba(255,255,255,.04);border-radius:10px;margin-bottom:5px;
-      border:1px solid rgba(200,151,58,.12);">
-      <div style="font-size:.55rem;color:var(--dim);min-width:14px;">${i+1}</div>
-      <div style="width:34px;height:34px;min-width:34px;border-radius:50%;
-        background:${aC};border:2px solid rgba(200,151,58,.4);
-        display:flex;align-items:center;justify-content:center;font-size:1rem;">${aE}</div>
-      <div style="flex:1;min-width:0;">
-        <div style="font-family:'Cinzel',serif;font-size:.63rem;color:var(--gold);
-          white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${su}</div>
-        <div style="margin-top:1px;">${dot}</div>
+      border:1px solid rgba(200,151,58,.12);transition:background .15s;"
+      onmouseover="this.style.background='rgba(200,151,58,.08)'"
+      onmouseout="this.style.background='rgba(255,255,255,.04)'">
+
+      <!-- Rank number -->
+      <div style="font-family:'Share Tech Mono',monospace;font-size:.6rem;
+        color:var(--dim);min-width:16px;text-align:center;">${i+1}</div>
+
+      <!-- Avatar circle -->
+      <div style="width:36px;height:36px;min-width:36px;border-radius:50%;
+        background:${aColor};border:2px solid rgba(200,151,58,.4);
+        display:flex;align-items:center;justify-content:center;font-size:1.1rem;">
+        ${aEmoji}
       </div>
-      <button onclick="removeFriend('${su}')"
+
+      <!-- Name + last online -->
+      <div style="flex:1;min-width:0;">
+        <div style="font-family:'Cinzel',serif;font-size:.65rem;color:var(--gold);
+          white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${sf}</div>
+        <div style="font-size:.5rem;color:var(--dim);margin-top:1px;">Last online: recently</div>
+      </div>
+
+      <!-- Trophy count -->
+      <div style="display:flex;align-items:center;gap:3px;margin-right:4px;">
+        <span style="font-size:.8rem;">🏆</span>
+        <span style="font-family:'Share Tech Mono',monospace;font-size:.62rem;
+          color:#e8c840;">${trophies}</span>
+      </div>
+
+      <!-- Remove button -->
+      <button onclick="removeFriend(${i})" title="Remove friend"
         style="background:rgba(80,10,10,.5);border:1px solid rgba(150,30,30,.4);
-        border-radius:6px;color:#d06060;font-size:.6rem;padding:4px 7px;cursor:pointer;">✕</button>
+        border-radius:6px;color:#d06060;font-size:.65rem;padding:4px 7px;
+        cursor:pointer;line-height:1;min-height:unset;">✕</button>
     </div>`;
   }).join('');
+
+  el.innerHTML = header + rows;
+}
+
+function addFriend() {
+  const input = document.getElementById('friend-add-input');
+  const name  = input.value.trim();
+  if (!name) { input.style.borderColor='rgba(200,50,50,.6)'; return; }
+  if (friendsList.includes(name)) { toast('Already friends!'); return; }
+  if (name === gameState.username) { toast("Can't add yourself!"); return; }
+  friendsList.push(name);
+  input.value = '';
+  renderFriendsList();
+  toast(`👥 Added ${name}!`);
+}
+
+function removeFriend(idx) {
+  const name = friendsList[idx];
+  friendsList.splice(idx, 1);
+  renderFriendsList();
+  toast(`Removed ${name}.`);
 }
 
 function renderFriendRequests() {
   const el = document.getElementById('friend-requests-el');
-  if (!el) return;
-  let html = '';
-  if (_incomingReqs.length) {
-    html += `<div style="font-family:'Cinzel',serif;font-size:.6rem;color:var(--gold);
-      padding:4px 6px 6px;">📬 INCOMING (${_incomingReqs.length})</div>`;
-    html += _incomingReqs.map(r => {
-      const su = escapeHTML(r.uname);
-      return `<div style="display:flex;align-items:center;gap:8px;padding:8px;
-        background:rgba(200,151,58,.06);border:1px solid rgba(200,151,58,.2);
-        border-radius:10px;margin-bottom:5px;">
-        <div style="flex:1;font-family:'Cinzel',serif;font-size:.62rem;color:var(--text);">${su}</div>
-        <button onclick="acceptFriendRequest('${su}')"
-          style="background:rgba(10,60,20,.7);border:1px solid rgba(50,150,50,.5);
-          border-radius:6px;color:#60d060;font-size:.58rem;padding:4px 8px;cursor:pointer;">✓</button>
-        <button onclick="rejectFriendRequest('${su}')"
-          style="background:rgba(80,10,10,.5);border:1px solid rgba(150,30,30,.4);
-          border-radius:6px;color:#d06060;font-size:.58rem;padding:4px 8px;cursor:pointer;">✕</button>
-      </div>`;
-    }).join('');
-  }
-  if (_outgoingReqs.length) {
-    html += `<div style="font-family:'Cinzel',serif;font-size:.6rem;color:var(--dim);
-      padding:8px 6px 6px;">📤 SENT (${_outgoingReqs.length})</div>`;
-    html += _outgoingReqs.map(r => {
-      const su = escapeHTML(r.uname);
-      return `<div style="display:flex;align-items:center;gap:8px;padding:7px 8px;
-        background:rgba(0,0,0,.25);border:1px solid var(--border);
-        border-radius:10px;margin-bottom:5px;">
-        <div style="flex:1;font-family:'Cinzel',serif;font-size:.62rem;color:var(--dim);">${su}</div>
-        <span style="font-size:.52rem;color:var(--dim);">Pending...</span>
-        <button onclick="cancelFriendRequest('${su}')"
-          style="background:rgba(60,20,10,.5);border:1px solid rgba(130,60,20,.4);
-          border-radius:6px;color:#c08040;font-size:.55rem;padding:3px 7px;cursor:pointer;">Cancel</button>
-      </div>`;
-    }).join('');
-  }
-  if (!html) html = `<div style="color:var(--dim);font-size:.62rem;font-style:italic;padding:8px 6px;">No pending requests.</div>`;
-  el.innerHTML = html;
-}
-
-let _addFriendInProgress = false;
-function addFriend() {
-  const input = document.getElementById('friend-add-input');
-  const name = input?.value?.trim();
-  if (!name || name.length < 2) { toast('Enter a username (min 2 chars).'); return; }
-  if (_addFriendInProgress) return;
-  const s = getSocket();
-  if (!s?.connected) { toast('Connect online first!'); return; }
-  _addFriendInProgress = true;
-  const btn = document.querySelector('[onclick="addFriend()"]');
-  if (btn) btn.textContent = '...';
-  s.emit('friend:search', { query: name }, (res) => {
-    _addFriendInProgress = false;
-    if (btn) btn.textContent = 'ADD FRIEND';
-    if (!res?.ok) { toast('❌ ' + (res?.error || 'Player not found.')); return; }
-    const p = res.player, su = escapeHTML(p.uname);
-    if (p.relationStatus === 'friends')  { toast('Already friends with ' + su + '!'); return; }
-    if (p.relationStatus === 'outgoing') { toast('Request already sent to ' + su + '.'); return; }
-    if (p.relationStatus === 'incoming') { acceptFriendRequest(p.uname); return; }
-    showModal('➕ Add Friend', `
-      <div style="text-align:center;padding:12px 0;">
-        <div style="font-family:'Cinzel',serif;font-size:.9rem;color:var(--gold);">${su}</div>
-        <div style="font-size:.62rem;color:var(--dim);margin-top:6px;">${p.online ? '🟢 Online' : '⚫ Offline'}</div>
-      </div>`,
-      [{label:'Send Request', cls:'btn', cb:()=>{
-        s.emit('friend:request:send', { toUname: p.uname }, (r) => {
-          closeModal();
-          if (!r?.ok) { toast('❌ ' + (r?.error||'Failed.')); return; }
-          toast('📨 Request sent to ' + su + '!');
-          if (input) input.value = '';
-          _loadFriendList();
-        });
-      }}, {label:'Cancel', cls:'btn-ghost', cb:closeModal}]
-    );
-  });
-}
-
-function addFriendDirect(uname) {
-  const s = getSocket();
-  if (!s?.connected) { toast('Connect online first!'); return; }
-  s.emit('friend:request:send', { toUname: uname }, (r) => {
-    if (!r?.ok) { toast('❌ ' + (r?.error||'Failed.')); return; }
-    toast(r.autoAccepted ? '✅ Now friends with ' + escapeHTML(uname) + '!'
-                         : '📨 Request sent to ' + escapeHTML(uname) + '!');
-    _loadFriendList();
-  });
-}
-
-function removeFriend(uname) {
-  const su = escapeHTML(uname);
-  showModal('Remove Friend?', `<div style="text-align:center;padding:10px;color:var(--dim);">Remove <b>${su}</b>?</div>`,
-    [{label:'Yes, Remove', cls:'btn-ghost', cb:()=>{
-      const s = getSocket();
-      if (!s?.connected) { closeModal(); toast('Connect online first!'); return; }
-      s.emit('friend:remove', { otherUname: uname }, (r) => {
-        closeModal();
-        if (!r?.ok) { toast('❌ ' + (r?.error||'Failed.')); return; }
-        toast('Removed ' + su + '.');
-        _loadFriendList();
-      });
-    }}, {label:'Cancel', cls:'btn', cb:closeModal}]
-  );
-}
-
-function acceptFriendRequest(uname) {
-  const s = getSocket();
-  if (!s?.connected) return;
-  s.emit('friend:request:accept', { fromUname: uname }, (r) => {
-    if (!r?.ok) { toast('❌ ' + (r?.error||'Failed.')); return; }
-    toast('✅ Now friends with ' + escapeHTML(uname) + '!');
-    _loadFriendList();
-  });
-}
-
-function rejectFriendRequest(uname) {
-  const s = getSocket();
-  if (!s?.connected) return;
-  s.emit('friend:request:reject', { fromUname: uname }, (r) => {
-    if (r?.ok) _loadFriendList();
-    else toast('❌ ' + (r?.error||'Failed.'));
-  });
-}
-
-function cancelFriendRequest(uname) {
-  const s = getSocket();
-  if (!s?.connected) return;
-  s.emit('friend:request:cancel', { toUname: uname }, (r) => {
-    if (r?.ok) _loadFriendList();
-    else toast('❌ ' + (r?.error||'Failed.'));
-  });
-}
-
-function inviteFriend(idxOrUname) {
-  const uname = typeof idxOrUname === 'number' ? (_friends[idxOrUname]?.uname) : idxOrUname;
-  if (!uname) return;
-  toast('📨 Guild invite sent to ' + escapeHTML(uname) + '!');
+  if (el) el.innerHTML = `<div style="color:var(--dim);font-size:.62rem;font-style:italic;padding:4px;">No pending requests.</div>`;
 }
 
 function renderOnlinePlayers(list) {
@@ -5522,6 +5784,16 @@ function renderOnlinePlayers(list) {
   }).join('');
 }
 
+function addFriendDirect(name) {
+  if (!friendsList.includes(name)) { friendsList.push(name); renderFriendsList(); toast(`Added ${name}!`); }
+  else toast('Already friends!');
+}
+
+function inviteFriend(idxOrName) {
+  const name = typeof idxOrName === 'number' ? friendsList[idxOrName] : idxOrName;
+  if (!name) return;
+  toast(`📨 Invite sent to ${escapeHTML(name)}!`);
+}
 
 // ── TRADE ──
 function renderTradeParty() {
@@ -6863,8 +7135,14 @@ function _fetchGuild() {
 // went out, but nothing was ever listening for the reply).
 function setupGuildListeners(){
   if(!socket) return;
+  // Off before on — prevents duplicate listeners if socket reconnects
   socket.off('guild:data');
   socket.off('guild:error');
+  socket.off('guild:disbanded');
+  socket.off('guild:kicked');
+  socket.off('guild:member_joined');
+  socket.off('guild:member_left');
+
   socket.on('guild:data', ({ guild }) => {
     _guildFetchInProgress = false;
     _guildCacheTime = Date.now();
@@ -6873,15 +7151,21 @@ function setupGuildListeners(){
     if (guild) { renderGuildHome(guild); }
     else       { renderGuildJoin(); }
   });
+
   socket.on('guild:error', ({ msg }) => {
     _guildFetchInProgress = false;
     toast('❌ ' + msg);
   });
+
+  // Server broadcasts this when the guild is disbanded by the leader
   socket.on('guild:disbanded', ({ msg } = {}) => {
     _guildData = null; _guildCacheTime = 0;
     toast('🛡️ ' + (msg || 'Your guild was disbanded.'));
+    // If the guild modal is open, show the join screen instead
     renderGuildJoin();
   });
+
+  // Server broadcasts this when the current player is kicked
   socket.on('guild:kicked', ({ uname } = {}) => {
     const myUname = (gameState.username||'').toLowerCase();
     if (uname === myUname) {
@@ -6890,14 +7174,19 @@ function setupGuildListeners(){
       renderGuildJoin();
     }
   });
+
+  // Server broadcasts when a new member joins — refresh if modal is open
   socket.on('guild:member_joined', ({ display } = {}) => {
-    toast('👥 ' + (display||'Someone') + ' joined your guild!');
-    _guildCacheTime = 0;
+    toast('👥 ' + gEsc(display||'Someone') + ' joined your guild!');
+    _guildCacheTime = 0; // invalidate so next open re-fetches
   });
+
+  // Server broadcasts when a member leaves
   socket.on('guild:member_left', ({ uname } = {}) => {
     _guildCacheTime = 0;
-    if (_guildData && _guildData.members)
+    if (_guildData && _guildData.members) {
       _guildData.members = _guildData.members.filter(m => m.uname !== uname);
+    }
   });
 }
 
@@ -6967,16 +7256,27 @@ function renderGuildHome(guild){
   const canEdit  = isLeader || isOfficer;
   const xpPct    = Math.min(100, Math.floor(((guild.xp||0)/(guild.xpToNext||500))*100));
 
-  // Build member rows using textContent-safe values (server already escaped, but we re-escape client-side too)
+  // Build member rows — one innerHTML build, not per-row updates
   const memberRows = (guild.members||[]).map(m => {
     const rankIcon = m.rank==='Leader'?'👑':m.rank==='Officer'?'⭐':'⚔️';
     const isMe = m.uname === myUname;
+    const safeUname = m.uname.replace(/'/g,"\\'");
+
+    // Build action buttons based on viewer's role (display only — server enforces permissions)
+    let actions = '';
+    if (!isMe) {
+      if (isLeader && m.rank === 'Member')  actions += `<button onclick="guildPromote('${safeUname}')" style="font-size:.48rem;padding:2px 6px;background:rgba(20,60,20,.6);border:1px solid rgba(50,150,50,.4);border-radius:5px;color:#60d060;cursor:pointer;margin-left:2px;">▲ Promote</button>`;
+      if (isLeader && m.rank === 'Officer') actions += `<button onclick="guildDemote('${safeUname}')" style="font-size:.48rem;padding:2px 6px;background:rgba(60,40,10,.6);border:1px solid rgba(150,100,20,.4);border-radius:5px;color:#d0a040;cursor:pointer;margin-left:2px;">▼ Demote</button>`;
+      if ((isLeader || isOfficer) && m.rank !== 'Leader') actions += `<button onclick="guildKick('${safeUname}')" style="font-size:.48rem;padding:2px 6px;background:rgba(60,10,10,.6);border:1px solid rgba(150,30,30,.4);border-radius:5px;color:#d06060;cursor:pointer;margin-left:2px;">✕ Kick</button>`;
+    }
+
     return `<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:rgba(0,0,0,.3);border-radius:7px;margin-bottom:4px;">
       <span style="font-size:.6rem;">${rankIcon}</span>
-      <div style="flex:1;">
-        <div style="font-family:'Cinzel',serif;font-size:.62rem;color:${isMe?'var(--gold)':'var(--text)'};">${gEsc(m.display)}${isMe?' (You)':''}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-family:'Cinzel',serif;font-size:.62rem;color:${isMe?'var(--gold)':'var(--text)'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${gEsc(m.display)}${isMe?' (You)':''}</div>
         <div style="font-size:.5rem;color:var(--dim);">${gEsc(m.rank)} · ${m.kills||0} kills</div>
       </div>
+      <div style="display:flex;gap:2px;flex-shrink:0;">${actions}</div>
     </div>`;
   }).join('');
 
@@ -7020,7 +7320,9 @@ function renderGuildHome(guild){
     ${memberRows}
     <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);">
       ${isLeader
-        ? `<button class="btn-ghost" onclick="disbandGuild()" style="width:100%;border-color:rgba(200,0,0,.3);color:#d06060;font-size:.6rem;">💀 Disband Guild</button>`
+        ? `<div style="display:flex;gap:6px;">
+            <button class="btn-ghost" onclick="disbandGuild()" style="flex:1;border-color:rgba(200,0,0,.3);color:#d06060;font-size:.58rem;">💀 Disband</button>
+           </div>`
         : `<button class="btn-ghost" onclick="leaveGuild()" style="width:100%;border-color:rgba(200,50,50,.3);color:#d06060;font-size:.6rem;">🚪 Leave Guild</button>`}
     </div>`;
   showModal(`${guild.emblem} ${gEsc(guild.name)}`, body, [{label:'Close', cls:'btn-ghost', cb:closeModal}]);
@@ -7059,109 +7361,6 @@ function leaveGuild(){
 }
 
 
-// ── openFriendsPanel ─────────────────────────────────────────
-let _friendsPanelTab = 'friends';
-
-function openFriendsPanel() {
-  _friendsPanelTab = 'friends';
-  try { getSocket().emit('lobby:request'); } catch(e) {}
-  updateFriendsNotifDot(_incomingReqs.length > 0);
-  _renderFriendsModal();
-  _loadFriendList();
-}
-
-function updateFriendsNotifDot(hasRequests) {
-  const dot = document.getElementById('friends-notif-dot');
-  if (dot) dot.style.display = hasRequests ? 'block' : 'none';
-}
-
-function _renderFriendsModal() {
-  const myId = (gameState.username || 'HERO').toUpperCase().substring(0,8);
-  const body = `
-  <div style="display:flex;gap:12px;flex-wrap:wrap;">
-    <div style="flex:0 0 200px;min-width:160px;background:rgba(255,255,255,.04);
-      border:1px solid rgba(200,151,58,.25);border-radius:12px;padding:14px;">
-      <div style="font-family:'Cinzel',serif;font-size:.7rem;color:var(--gold);
-        text-align:center;margin-bottom:12px;letter-spacing:.1em;">➕ ADD FRIENDS</div>
-      <div style="background:rgba(0,0,0,.4);border:1px solid rgba(200,151,58,.2);
-        border-radius:8px;padding:8px 10px;margin-bottom:10px;text-align:center;">
-        <div style="font-size:.48rem;color:var(--dim);margin-bottom:3px;">YOUR ID</div>
-        <div style="font-family:'Share Tech Mono',monospace;font-size:.75rem;
-          color:var(--gold);letter-spacing:.08em;">#${myId}</div>
-      </div>
-      <input id="friend-add-input" placeholder="Enter username..." maxlength="20"
-        style="width:100%;background:rgba(0,0,0,.5);border:1px solid var(--border);
-        border-radius:8px;color:var(--text);font-size:.65rem;padding:8px 10px;
-        outline:none;box-sizing:border-box;margin-bottom:6px;"
-        onkeydown="if(event.key==='Enter')addFriend()">
-      <button class="btn" onclick="addFriend()"
-        style="width:100%;font-size:.65rem;padding:8px;">ADD FRIEND</button>
-      <div style="display:flex;align-items:center;gap:6px;margin:10px 0;">
-        <div style="flex:1;height:1px;background:var(--border);"></div>
-        <div style="font-size:.55rem;color:var(--dim);">OR</div>
-        <div style="flex:1;height:1px;background:var(--border);"></div>
-      </div>
-      <button class="btn-ghost" onclick="shareFriendInvite()"
-        style="width:100%;font-size:.6rem;padding:7px;">🔗 SHARE INVITE</button>
-    </div>
-    <div style="flex:1;min-width:200px;">
-      <div style="display:flex;gap:4px;margin-bottom:10px;">
-        ${['friends','invites','suggested'].map(t => `
-          <button onclick="_switchFriendsPanelTab('${t}')" id="fptab-${t}"
-            style="flex:1;padding:8px 4px;font-size:.55rem;font-family:'Cinzel',serif;
-            letter-spacing:.04em;border-radius:8px 8px 0 0;border:1px solid var(--border);
-            border-bottom:none;cursor:pointer;transition:background .15s;
-            ${_friendsPanelTab===t
-              ? 'background:linear-gradient(135deg,rgba(200,151,58,.25),rgba(200,151,58,.1));color:var(--gold);border-color:rgba(200,151,58,.4);'
-              : 'background:rgba(0,0,0,.3);color:var(--dim);'}">
-            ${t==='friends'?'👥 FRIENDS':t==='invites'?'📬 INVITES':'✨ SUGGEST'}
-          </button>`).join('')}
-      </div>
-      <div style="background:rgba(0,0,0,.25);border:1px solid rgba(200,151,58,.2);
-        border-radius:0 8px 8px 8px;padding:8px;min-height:200px;max-height:320px;overflow-y:auto;">
-        <div id="friends-list-el"></div>
-        <div id="friend-requests-el" style="display:none;"></div>
-        <div id="online-players-el" style="display:none;"></div>
-      </div>
-    </div>
-  </div>`;
-  showModal('👤 FRIENDS', body, [{label:'✕ Close', cls:'btn-ghost', cb:closeModal}]);
-  _switchFriendsPanelTab(_friendsPanelTab);
-}
-
-function _switchFriendsPanelTab(tab) {
-  _friendsPanelTab = tab;
-  ['friends','invites','suggested'].forEach(t => {
-    const btn = document.getElementById('fptab-' + t);
-    if (!btn) return;
-    if (t === tab) {
-      btn.style.background = 'linear-gradient(135deg,rgba(200,151,58,.25),rgba(200,151,58,.1))';
-      btn.style.color = 'var(--gold)'; btn.style.borderColor = 'rgba(200,151,58,.4)';
-    } else {
-      btn.style.background = 'rgba(0,0,0,.3)';
-      btn.style.color = 'var(--dim)'; btn.style.borderColor = 'var(--border)';
-    }
-  });
-  const fl = document.getElementById('friends-list-el');
-  const fr = document.getElementById('friend-requests-el');
-  const op = document.getElementById('online-players-el');
-  if (fl) fl.style.display = tab === 'friends'   ? '' : 'none';
-  if (fr) fr.style.display = tab === 'invites'   ? '' : 'none';
-  if (op) op.style.display = tab === 'suggested' ? '' : 'none';
-  if (tab === 'friends')   renderFriendsList();
-  if (tab === 'invites')   renderFriendRequests();
-  if (tab === 'suggested') { try { getSocket().emit('lobby:request'); } catch(e) {} }
-}
-
-function shareFriendInvite() {
-  const id = (gameState.username || 'HERO').toUpperCase().substring(0,8);
-  const msg = 'Join me on Aetherion RPG! Find me as #' + id;
-  if (navigator.share) { navigator.share({ text: msg }).catch(()=>{}); }
-  else if (navigator.clipboard) { navigator.clipboard.writeText(msg); toast('📋 Invite copied!'); }
-  else toast('Your ID: #' + id);
-}
-
-
 function guildKick(targetUname) {
   showModal('Kick Member?', `<div style="text-align:center;color:#d06060;padding:10px;">Kick <b>${gEsc(targetUname)}</b> from the guild?</div>`,
     [{label:'Yes, Kick', cls:'btn-ghost', cb:()=>{
@@ -7184,7 +7383,7 @@ function guildDemote(targetUname) {
 }
 
 function guildTransferLeadership(targetUname) {
-  showModal('Transfer Leadership?', `<div style="text-align:center;color:#d06060;padding:10px;">Transfer leadership to <b>${gEsc(targetUname)}</b>?</div>`,
+  showModal('Transfer Leadership?', `<div style="text-align:center;color:#d06060;padding:10px;">Transfer guild leadership to <b>${gEsc(targetUname)}</b>? You will become a Member.</div>`,
     [{label:'Yes, Transfer', cls:'btn-ghost', cb:()=>{
       socket.emit('guild:transfer', { targetUname }); closeModal();
     }}, {label:'Cancel', cls:'btn', cb:closeModal}]);
@@ -8231,6 +8430,353 @@ function claudeEndDialog(won){
   spLog(`🤖 <b>Claude:</b> "${line}"`,'sk');
 }
 
+</script>
+
+<!-- ═════════ FRIEND REQUEST SYSTEM (added; server-backed). Loaded after the main script so these
+     definitions take over from the older local-only placeholder friends functions without editing them. ═════════ -->
+<script>
+// ═══════════════════════════════════════════════════
+//  FRIEND SYSTEM — server-authoritative
+// ═══════════════════════════════════════════════════
+let _friends = [], _incomingReqs = [], _outgoingReqs = [], _friendListLoading = false;
+let _friendListenersSet = false;
+
+function setupFriendListeners() {
+  if (_friendListenersSet || !socket) return;
+  _friendListenersSet = true;
+  socket.on('friend:list:update', () => { _loadFriendList(); });
+  socket.on('friend:request:received', ({ fromUname, fromDisplay } = {}) => {
+    toast('👥 ' + escapeHTML(fromDisplay || fromUname) + ' sent you a friend request!');
+    updateFriendsNotifDot(true);
+    _loadFriendList();
+  });
+}
+
+function _loadFriendList() {
+  if (!socket?.connected || _friendListLoading) return;
+  _friendListLoading = true;
+  socket.emit('friend:list', {}, (res) => {
+    _friendListLoading = false;
+    if (!res?.ok) return;
+    _friends      = res.friends  || [];
+    _incomingReqs = res.incoming || [];
+    _outgoingReqs = res.outgoing || [];
+    renderFriendsList();
+    renderFriendRequests();
+    updateFriendsNotifDot(_incomingReqs.length > 0);
+  });
+}
+
+function renderFriendsList() {
+  const el = document.getElementById('friends-list-el');
+  if (!el) return;
+  const header = `<div style="font-family:'Cinzel',serif;font-size:.6rem;color:var(--dim);
+    padding:4px 6px 8px;letter-spacing:.08em;">FRIENDS (${_friends.length})</div>`;
+  if (!_friends.length) {
+    el.innerHTML = header + `<div style="color:var(--dim);font-size:.63rem;
+      font-style:italic;padding:8px 6px;">No friends yet — search for a player above!</div>`;
+    return;
+  }
+  const emojis = ['⚔️','🔥','❄️','⚡','🌑','👑','🐉','🛡️','✨','💎'];
+  const colors = ['#3a1a6a','#1a3a6a','#1a6a3a','#6a3a1a','#4a1a1a','#1a4a4a'];
+  el.innerHTML = header + _friends.map((f, i) => {
+    const su = escapeHTML(f.uname);
+    const seed = f.uname.split('').reduce((a,ch)=>a+ch.charCodeAt(0),0);
+    const aE = emojis[seed % emojis.length], aC = colors[seed % colors.length];
+    const dot = f.online
+      ? '<span style="color:#60d060;font-size:.52rem;">🟢 Online</span>'
+      : '<span style="color:var(--dim);font-size:.52rem;">⚫ Offline</span>';
+    return `<div style="display:flex;align-items:center;gap:10px;padding:8px;
+      background:rgba(255,255,255,.04);border-radius:10px;margin-bottom:5px;
+      border:1px solid rgba(200,151,58,.12);">
+      <div style="font-size:.55rem;color:var(--dim);min-width:14px;">${i+1}</div>
+      <div style="width:34px;height:34px;min-width:34px;border-radius:50%;
+        background:${aC};border:2px solid rgba(200,151,58,.4);
+        display:flex;align-items:center;justify-content:center;font-size:1rem;">${aE}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-family:'Cinzel',serif;font-size:.63rem;color:var(--gold);
+          white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${su}</div>
+        <div style="margin-top:1px;">${dot}</div>
+      </div>
+      <button onclick="removeFriend('${su}')"
+        style="background:rgba(80,10,10,.5);border:1px solid rgba(150,30,30,.4);
+        border-radius:6px;color:#d06060;font-size:.6rem;padding:4px 7px;cursor:pointer;">✕</button>
+    </div>`;
+  }).join('');
+}
+
+function renderFriendRequests() {
+  const el = document.getElementById('friend-requests-el');
+  if (!el) return;
+  let html = '';
+  if (_incomingReqs.length) {
+    html += `<div style="font-family:'Cinzel',serif;font-size:.6rem;color:var(--gold);
+      padding:4px 6px 6px;">📬 INCOMING (${_incomingReqs.length})</div>`;
+    html += _incomingReqs.map(r => {
+      const su = escapeHTML(r.uname);
+      return `<div style="display:flex;align-items:center;gap:8px;padding:8px;
+        background:rgba(200,151,58,.06);border:1px solid rgba(200,151,58,.2);
+        border-radius:10px;margin-bottom:5px;">
+        <div style="flex:1;font-family:'Cinzel',serif;font-size:.62rem;color:var(--text);">${su}</div>
+        <button onclick="acceptFriendRequest('${su}')"
+          style="background:rgba(10,60,20,.7);border:1px solid rgba(50,150,50,.5);
+          border-radius:6px;color:#60d060;font-size:.58rem;padding:4px 8px;cursor:pointer;">✓</button>
+        <button onclick="rejectFriendRequest('${su}')"
+          style="background:rgba(80,10,10,.5);border:1px solid rgba(150,30,30,.4);
+          border-radius:6px;color:#d06060;font-size:.58rem;padding:4px 8px;cursor:pointer;">✕</button>
+      </div>`;
+    }).join('');
+  }
+  if (_outgoingReqs.length) {
+    html += `<div style="font-family:'Cinzel',serif;font-size:.6rem;color:var(--dim);
+      padding:8px 6px 6px;">📤 SENT (${_outgoingReqs.length})</div>`;
+    html += _outgoingReqs.map(r => {
+      const su = escapeHTML(r.uname);
+      return `<div style="display:flex;align-items:center;gap:8px;padding:7px 8px;
+        background:rgba(0,0,0,.25);border:1px solid var(--border);
+        border-radius:10px;margin-bottom:5px;">
+        <div style="flex:1;font-family:'Cinzel',serif;font-size:.62rem;color:var(--dim);">${su}</div>
+        <span style="font-size:.52rem;color:var(--dim);">Pending...</span>
+        <button onclick="cancelFriendRequest('${su}')"
+          style="background:rgba(60,20,10,.5);border:1px solid rgba(130,60,20,.4);
+          border-radius:6px;color:#c08040;font-size:.55rem;padding:3px 7px;cursor:pointer;">Cancel</button>
+      </div>`;
+    }).join('');
+  }
+  if (!html) html = `<div style="color:var(--dim);font-size:.62rem;font-style:italic;padding:8px 6px;">No pending requests.</div>`;
+  el.innerHTML = html;
+}
+
+let _addFriendInProgress = false;
+function addFriend() {
+  const input = document.getElementById('friend-add-input');
+  const name = input?.value?.trim();
+  if (!name || name.length < 2) { toast('Enter a username (min 2 chars).'); return; }
+  if (_addFriendInProgress) return;
+  const s = getSocket();
+  if (!s?.connected) { toast('Connect online first!'); return; }
+  _addFriendInProgress = true;
+  const btn = document.querySelector('[onclick="addFriend()"]');
+  if (btn) btn.textContent = '...';
+  s.emit('friend:search', { query: name }, (res) => {
+    _addFriendInProgress = false;
+    if (btn) btn.textContent = 'ADD FRIEND';
+    if (!res?.ok) { toast('❌ ' + (res?.error || 'Player not found.')); return; }
+    const p = res.player, su = escapeHTML(p.uname);
+    if (p.relationStatus === 'friends')  { toast('Already friends with ' + su + '!'); return; }
+    if (p.relationStatus === 'outgoing') { toast('Request already sent to ' + su + '.'); return; }
+    if (p.relationStatus === 'incoming') { acceptFriendRequest(p.uname); return; }
+    showModal('➕ Add Friend', `
+      <div style="text-align:center;padding:12px 0;">
+        <div style="font-family:'Cinzel',serif;font-size:.9rem;color:var(--gold);">${su}</div>
+        <div style="font-size:.62rem;color:var(--dim);margin-top:6px;">${p.online ? '🟢 Online' : '⚫ Offline'}</div>
+      </div>`,
+      [{label:'Send Request', cls:'btn', cb:()=>{
+        s.emit('friend:request:send', { toUname: p.uname }, (r) => {
+          closeModal();
+          if (!r?.ok) { toast('❌ ' + (r?.error||'Failed.')); return; }
+          toast('📨 Request sent to ' + su + '!');
+          if (input) input.value = '';
+          _loadFriendList();
+        });
+      }}, {label:'Cancel', cls:'btn-ghost', cb:closeModal}]
+    );
+  });
+}
+
+function addFriendDirect(uname) {
+  const s = getSocket();
+  if (!s?.connected) { toast('Connect online first!'); return; }
+  s.emit('friend:request:send', { toUname: uname }, (r) => {
+    if (!r?.ok) { toast('❌ ' + (r?.error||'Failed.')); return; }
+    toast(r.autoAccepted ? '✅ Now friends with ' + escapeHTML(uname) + '!'
+                         : '📨 Request sent to ' + escapeHTML(uname) + '!');
+    _loadFriendList();
+  });
+}
+
+function removeFriend(uname) {
+  const su = escapeHTML(uname);
+  showModal('Remove Friend?', `<div style="text-align:center;padding:10px;color:var(--dim);">Remove <b>${su}</b>?</div>`,
+    [{label:'Yes, Remove', cls:'btn-ghost', cb:()=>{
+      const s = getSocket();
+      if (!s?.connected) { closeModal(); toast('Connect online first!'); return; }
+      s.emit('friend:remove', { otherUname: uname }, (r) => {
+        closeModal();
+        if (!r?.ok) { toast('❌ ' + (r?.error||'Failed.')); return; }
+        toast('Removed ' + su + '.');
+        _loadFriendList();
+      });
+    }}, {label:'Cancel', cls:'btn', cb:closeModal}]
+  );
+}
+
+function acceptFriendRequest(uname) {
+  const s = getSocket();
+  if (!s?.connected) return;
+  s.emit('friend:request:accept', { fromUname: uname }, (r) => {
+    if (!r?.ok) { toast('❌ ' + (r?.error||'Failed.')); return; }
+    toast('✅ Now friends with ' + escapeHTML(uname) + '!');
+    _loadFriendList();
+  });
+}
+
+function rejectFriendRequest(uname) {
+  const s = getSocket();
+  if (!s?.connected) return;
+  s.emit('friend:request:reject', { fromUname: uname }, (r) => {
+    if (r?.ok) _loadFriendList();
+    else toast('❌ ' + (r?.error||'Failed.'));
+  });
+}
+
+function cancelFriendRequest(uname) {
+  const s = getSocket();
+  if (!s?.connected) return;
+  s.emit('friend:request:cancel', { toUname: uname }, (r) => {
+    if (r?.ok) _loadFriendList();
+    else toast('❌ ' + (r?.error||'Failed.'));
+  });
+}
+
+function inviteFriend(idxOrUname) {
+  const uname = typeof idxOrUname === 'number' ? (_friends[idxOrUname]?.uname) : idxOrUname;
+  if (!uname) return;
+  toast('📨 Guild invite sent to ' + escapeHTML(uname) + '!');
+}
+
+// ── openFriendsPanel ─────────────────────────────────────────
+let _friendsPanelTab = 'friends';
+
+function openFriendsPanel() {
+  _friendsPanelTab = 'friends';
+  try { getSocket().emit('lobby:request'); } catch(e) {}
+  updateFriendsNotifDot(_incomingReqs.length > 0);
+  _renderFriendsModal();
+  _loadFriendList();
+}
+
+function updateFriendsNotifDot(hasRequests) {
+  const dot = document.getElementById('friends-notif-dot');
+  if (dot) dot.style.display = hasRequests ? 'block' : 'none';
+}
+
+function _renderFriendsModal() {
+  const myId = (gameState.username || 'HERO').toUpperCase().substring(0,8);
+  const body = `
+  <div style="display:flex;gap:12px;flex-wrap:wrap;">
+    <div style="flex:0 0 200px;min-width:160px;background:rgba(255,255,255,.04);
+      border:1px solid rgba(200,151,58,.25);border-radius:12px;padding:14px;">
+      <div style="font-family:'Cinzel',serif;font-size:.7rem;color:var(--gold);
+        text-align:center;margin-bottom:12px;letter-spacing:.1em;">➕ ADD FRIENDS</div>
+      <div style="background:rgba(0,0,0,.4);border:1px solid rgba(200,151,58,.2);
+        border-radius:8px;padding:8px 10px;margin-bottom:10px;text-align:center;">
+        <div style="font-size:.48rem;color:var(--dim);margin-bottom:3px;">YOUR ID</div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:.75rem;
+          color:var(--gold);letter-spacing:.08em;">#${myId}</div>
+      </div>
+      <input id="friend-add-input" placeholder="Enter username..." maxlength="20"
+        style="width:100%;background:rgba(0,0,0,.5);border:1px solid var(--border);
+        border-radius:8px;color:var(--text);font-size:.65rem;padding:8px 10px;
+        outline:none;box-sizing:border-box;margin-bottom:6px;"
+        onkeydown="if(event.key==='Enter')addFriend()">
+      <button class="btn" onclick="addFriend()"
+        style="width:100%;font-size:.65rem;padding:8px;">ADD FRIEND</button>
+      <div style="display:flex;align-items:center;gap:6px;margin:10px 0;">
+        <div style="flex:1;height:1px;background:var(--border);"></div>
+        <div style="font-size:.55rem;color:var(--dim);">OR</div>
+        <div style="flex:1;height:1px;background:var(--border);"></div>
+      </div>
+      <button class="btn-ghost" onclick="shareFriendInvite()"
+        style="width:100%;font-size:.6rem;padding:7px;">🔗 SHARE INVITE</button>
+    </div>
+    <div style="flex:1;min-width:200px;">
+      <div style="display:flex;gap:4px;margin-bottom:10px;">
+        ${['friends','invites','suggested'].map(t => `
+          <button onclick="_switchFriendsPanelTab('${t}')" id="fptab-${t}"
+            style="flex:1;padding:8px 4px;font-size:.55rem;font-family:'Cinzel',serif;
+            letter-spacing:.04em;border-radius:8px 8px 0 0;border:1px solid var(--border);
+            border-bottom:none;cursor:pointer;transition:background .15s;
+            ${_friendsPanelTab===t
+              ? 'background:linear-gradient(135deg,rgba(200,151,58,.25),rgba(200,151,58,.1));color:var(--gold);border-color:rgba(200,151,58,.4);'
+              : 'background:rgba(0,0,0,.3);color:var(--dim);'}">
+            ${t==='friends'?'👥 FRIENDS':t==='invites'?'📬 INVITES':'✨ SUGGEST'}
+          </button>`).join('')}
+      </div>
+      <div style="background:rgba(0,0,0,.25);border:1px solid rgba(200,151,58,.2);
+        border-radius:0 8px 8px 8px;padding:8px;min-height:200px;max-height:320px;overflow-y:auto;">
+        <div id="friends-list-el"></div>
+        <div id="friend-requests-el" style="display:none;"></div>
+        <div id="online-players-el" style="display:none;"></div>
+      </div>
+    </div>
+  </div>`;
+  showModal('👤 FRIENDS', body, [{label:'✕ Close', cls:'btn-ghost', cb:closeModal}]);
+  _switchFriendsPanelTab(_friendsPanelTab);
+}
+
+function _switchFriendsPanelTab(tab) {
+  _friendsPanelTab = tab;
+  ['friends','invites','suggested'].forEach(t => {
+    const btn = document.getElementById('fptab-' + t);
+    if (!btn) return;
+    if (t === tab) {
+      btn.style.background = 'linear-gradient(135deg,rgba(200,151,58,.25),rgba(200,151,58,.1))';
+      btn.style.color = 'var(--gold)'; btn.style.borderColor = 'rgba(200,151,58,.4)';
+    } else {
+      btn.style.background = 'rgba(0,0,0,.3)';
+      btn.style.color = 'var(--dim)'; btn.style.borderColor = 'var(--border)';
+    }
+  });
+  const fl = document.getElementById('friends-list-el');
+  const fr = document.getElementById('friend-requests-el');
+  const op = document.getElementById('online-players-el');
+  if (fl) fl.style.display = tab === 'friends'   ? '' : 'none';
+  if (fr) fr.style.display = tab === 'invites'   ? '' : 'none';
+  if (op) op.style.display = tab === 'suggested' ? '' : 'none';
+  if (tab === 'friends')   renderFriendsList();
+  if (tab === 'invites')   renderFriendRequests();
+  if (tab === 'suggested') { try { getSocket().emit('lobby:request'); } catch(e) {} }
+}
+
+function shareFriendInvite() {
+  const id = (gameState.username || 'HERO').toUpperCase().substring(0,8);
+  const msg = 'Join me on Aetherion RPG! Find me as #' + id;
+  if (navigator.share) { navigator.share({ text: msg }).catch(()=>{}); }
+  else if (navigator.clipboard) { navigator.clipboard.writeText(msg); toast('📋 Invite copied!'); }
+  else toast('Your ID: #' + id);
+}
+
+// ═══════════════════════════════════════════════════
+//  GLUE (new) — connects the friend system to the existing socket
+//  * setupFriendListeners() is defined above but was never called in the
+//    friends build, so live pushes (friend:request:received /
+//    friend:list:update) never registered. This registers them on the
+//    current socket, and again if the socket object is ever replaced.
+//  * Refreshes the friend list after every successful login (first login
+//    and every reconnect re-auth) so the notification dot is correct.
+//  * Implemented by wrapping getSocket() at runtime; no existing source
+//    line is modified. To remove: delete this IIFE — everything else still
+//    works, you just lose live notifications until the panel is opened.
+// ═══════════════════════════════════════════════════
+(function wireFriendSystem() {
+  var wiredSocket = null;
+  function attach() {
+    try {
+      if (typeof socket === 'undefined' || !socket || typeof socket.on !== 'function') return;
+      if (socket === wiredSocket) return;
+      wiredSocket = socket;
+      _friendListenersSet = false;
+      setupFriendListeners();
+      socket.on('account:loggedin', function () { _loadFriendList(); });
+    } catch (e) { console.error('[Friends] wiring failed:', e); }
+  }
+  var original = window.getSocket;
+  if (typeof original === 'function') {
+    window.getSocket = function () { var s = original.apply(this, arguments); attach(); return s; };
+  }
+  attach();
+})();
 </script>
 </body>
 </html>
