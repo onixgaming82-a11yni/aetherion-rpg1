@@ -1225,7 +1225,7 @@ input, textarea { font-size: 16px !important; } /* Prevents iOS zoom on focus */
           style="margin-bottom:0;">
         <div style="position:relative;">
           <input class="username-input" id="login-password" maxlength="30" type="password"
-            placeholder="Password (default: 12345)" autocomplete="current-password"
+            placeholder="Password" autocomplete="current-password"
             onkeydown="if(event.key==='Enter')doLogin()"
             style="margin-bottom:0;padding-right:44px;">
           <button onclick="togglePassVis('login-password',this)"
@@ -1244,7 +1244,7 @@ input, textarea { font-size: 16px !important; } /* Prevents iOS zoom on focus */
     <!-- REGISTER PANEL -->
     <div id="intro-register" style="width:100%;display:none;">
       <div style="font-size:.65rem;color:var(--dim);text-align:center;margin-bottom:14px;">
-        Create your account — default password is <b style="color:var(--gold);">12345</b>
+        Create your account (password must be at least 6 characters)
       </div>
       <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
         <input class="username-input" id="reg-username" maxlength="20"
@@ -1253,7 +1253,7 @@ input, textarea { font-size: 16px !important; } /* Prevents iOS zoom on focus */
           style="margin-bottom:0;">
         <div style="position:relative;">
           <input class="username-input" id="reg-password" maxlength="30" type="password"
-            placeholder="Password (leave empty for 12345)" autocomplete="new-password"
+            placeholder="Password (min 6 characters)" autocomplete="new-password"
             onkeydown="if(event.key==='Enter')doRegister()"
             style="margin-bottom:0;padding-right:44px;">
           <button onclick="togglePassVis('reg-password',this)"
@@ -2108,7 +2108,12 @@ function debugLogoClick() {
   _debugClickTimer = setTimeout(() => { _debugClickCount = 0; }, 600);
   if (_debugClickCount >= 3) {
     _debugClickCount = 0;
-    debugLogin();
+    // Debug login only works when the server is not in production mode
+    if (typeof IS_PRODUCTION === 'undefined' || !IS_PRODUCTION) {
+      debugLogin();
+    } else {
+      toast('Debug mode is disabled in production.');
+    }
   }
 }
 
@@ -2207,7 +2212,7 @@ function loadGame(){
 //  ACCOUNT / LOGIN SYSTEM
 // ─────────────────────────────────────────
 
-let _accountPassword = '12345'; // stored in memory for session saves
+// _accountPassword removed — passwords are never stored client-side
 
 function togglePassVis(inputId, btn){
   const el = document.getElementById(inputId);
@@ -2228,86 +2233,124 @@ function showRegisterPanel(){
   document.getElementById('reg-error').textContent='';
 }
 
+let _loginInProgress = false;
+
 function doLogin(){
+  if (_loginInProgress) return;
+
   const username = document.getElementById('login-username').value.trim();
-  const password = document.getElementById('login-password').value.trim() || '12345';
+  const password = document.getElementById('login-password').value; // no .trim() — passwords may have intentional spaces
   const errEl    = document.getElementById('login-error');
+  const loginBtn = document.querySelector('.btn-start[onclick="doLogin()"]');
 
-  if(!username){ errEl.textContent='Enter your username!'; return; }
+  if (!username) { errEl.textContent = 'Enter your username.'; return; }
+  if (!password) { errEl.textContent = 'Enter your password.'; return; }
+
+  _loginInProgress = true;
   errEl.textContent = 'Connecting...';
+  if (loginBtn) loginBtn.disabled = true;
 
-  // Connect socket and attempt login
+  const _finishLogin = () => {
+    _loginInProgress = false;
+    if (loginBtn) loginBtn.disabled = false;
+  };
+
   const s = getSocket();
-  s.emit('account:login', { username, password });
 
-  // Handle response
+  // ── IMPORTANT: listeners registered BEFORE emit ──────────
   const onLoggedIn = ({ username: uname, save, isNew }) => {
     s.off('account:loggedin', onLoggedIn);
     s.off('account:error',    onErr);
-    _accountPassword = password;
+    s.off('disconnect',       onDisconnect);
+    _finishLogin();
+    // Store only the username — never the password
     localStorage.setItem('aetherion_hero_name', uname);
-    localStorage.setItem('aetherion_hero_pass', password);
+    localStorage.removeItem('aetherion_hero_pass'); // remove any stale password
     gameState.username = uname;
     gameState.onlineUsername = uname;
-    if(save && !isNew){
-      // Load cloud save
+    if (save && !isNew) {
       try {
         const sd = typeof save === 'string' ? JSON.parse(save) : save;
-        gameState.playerLevel    = sd.playerLevel  || 1;
-        gameState.playerXp       = sd.playerXp     || 0;
-        gameState.xpToNext       = sd.xpToNext     || 100;
-        gameState.playerGold     = sd.playerGold   || 0;
-        gameState.inventory      = sd.inventory    || [];
-        gameState.deck           = sd.deck         || [];
-        gameState.unlockedSkills = sd.unlockedSkills|| [];
-        gameState.skillXp        = sd.skillXp      || 0;
-        gameState.shopOwned      = sd.shopOwned    || {};
-        gameState.activeCardIdx  = sd.activeCardIdx|| 0;
-      } catch(e){}
+        gameState.playerLevel    = sd.playerLevel    || 1;
+        gameState.playerXp       = sd.playerXp       || 0;
+        gameState.xpToNext       = sd.xpToNext       || 100;
+        gameState.playerGold     = sd.playerGold     || 0;
+        gameState.inventory      = sd.inventory      || [];
+        gameState.deck           = sd.deck           || [];
+        gameState.unlockedSkills = sd.unlockedSkills || [];
+        gameState.skillXp        = sd.skillXp        || 0;
+        gameState.shopOwned      = sd.shopOwned      || {};
+        gameState.activeCardIdx  = sd.activeCardIdx  || 0;
+      } catch(e) {}
     }
-    if(gameState.deck.length > 0){
+    if (gameState.deck.length > 0) {
       updateMenuHud(); showScreen('screen-menu');
       toast(`⚔️ Welcome back, ${uname}!`);
     } else {
       goCardPick('menu');
     }
   };
+
   const onErr = ({ msg }) => {
     s.off('account:loggedin', onLoggedIn);
     s.off('account:error',    onErr);
-    errEl.textContent = msg;
+    s.off('disconnect',       onDisconnect);
+    _finishLogin();
+    errEl.textContent = msg || 'Login failed. Please try again.';
   };
+
+  const onDisconnect = () => {
+    s.off('account:loggedin', onLoggedIn);
+    s.off('account:error',    onErr);
+    _finishLogin();
+    errEl.textContent = 'Connection lost. Please try again.';
+  };
+
   s.once('account:loggedin', onLoggedIn);
   s.once('account:error',    onErr);
+  s.once('disconnect',       onDisconnect);
+
+  s.emit('account:login', { username, password });
 }
 
-function doRegister(){
-  const username = document.getElementById('reg-username').value.trim();
-  const password = document.getElementById('reg-password').value.trim() || '12345';
-  const errEl    = document.getElementById('reg-error');
+let _registerInProgress = false;
 
-  if(!username){ errEl.textContent='Choose a username!'; return; }
-  if(username.length < 3){ errEl.textContent='Username must be at least 3 characters'; return; }
+function doRegister(){
+  if (_registerInProgress) return;
+
+  const username = document.getElementById('reg-username').value.trim();
+  const password = document.getElementById('reg-password').value;
+  const errEl    = document.getElementById('reg-error');
+  const regBtn   = document.querySelector('.btn-start[onclick="doRegister()"]');
+
+  errEl.style.color = '#d06060';
+  if (!username)             { errEl.textContent = 'Choose a username.'; return; }
+  if (username.length < 3)   { errEl.textContent = 'Username must be at least 3 characters.'; return; }
+  if (!password)             { errEl.textContent = 'Choose a password.'; return; }
+  if (password.length < 6)   { errEl.textContent = 'Password must be at least 6 characters.'; return; }
+
+  _registerInProgress = true;
   errEl.textContent = 'Creating account...';
+  errEl.style.color = 'var(--dim)';
+  if (regBtn) regBtn.disabled = true;
+
+  const _finishReg = () => {
+    _registerInProgress = false;
+    if (regBtn) regBtn.disabled = false;
+  };
 
   const s = getSocket();
-  s.emit('account:register', { username, password });
 
-  // If name was taken, server sends the new suggested name first
-  s.once('account:renamed', ({ suggestedName }) => {
-    errEl.style.color = 'var(--gold)';
-    errEl.textContent = `"${username}" was taken — your username is now "${suggestedName}"`;
-    // Update input so player can see their assigned name
-    const input = document.getElementById('reg-username');
-    if(input) input.value = suggestedName;
-  });
-
+  // ── IMPORTANT: listeners registered BEFORE emit ──────────
   const onRegistered = ({ username: uname }) => {
     s.off('account:registered', onRegistered);
+    s.off('account:nameTaken',  onNameTaken);
     s.off('account:error',      onErr);
-    _accountPassword = password;
+    s.off('disconnect',         onDisconnect);
+    _finishReg();
+    // Store only the username — never the password
     localStorage.setItem('aetherion_hero_name', uname);
-    localStorage.setItem('aetherion_hero_pass', password);
+    localStorage.removeItem('aetherion_hero_pass');
     gameState.username = uname;
     gameState.onlineUsername = uname;
     gameState.playerLevel=1; gameState.playerXp=0; gameState.xpToNext=100;
@@ -2316,25 +2359,50 @@ function doRegister(){
     toast(`🎉 Account created! Welcome, ${uname}!`);
     goCardPick('menu');
   };
+
+  // Server sends account:nameTaken (not account:renamed) when name is taken
+  const onNameTaken = ({ suggestedName }) => {
+    _finishReg();
+    errEl.style.color = 'var(--gold)';
+    errEl.textContent = `"${username}" is taken. Try "${suggestedName}" or choose another name.`;
+    const input = document.getElementById('reg-username');
+    if (input) input.value = suggestedName;
+  };
+
   const onErr = ({ msg }) => {
     s.off('account:registered', onRegistered);
+    s.off('account:nameTaken',  onNameTaken);
     s.off('account:error',      onErr);
+    s.off('disconnect',         onDisconnect);
+    _finishReg();
     errEl.style.color = '#d06060';
-    errEl.textContent = msg;
+    errEl.textContent = msg || 'Registration failed. Please try again.';
   };
+
+  const onDisconnect = () => {
+    s.off('account:registered', onRegistered);
+    s.off('account:nameTaken',  onNameTaken);
+    s.off('account:error',      onErr);
+    _finishReg();
+    errEl.style.color = '#d06060';
+    errEl.textContent = 'Connection lost. Please try again.';
+  };
+
   s.once('account:registered', onRegistered);
+  s.once('account:nameTaken',  onNameTaken);
   s.once('account:error',      onErr);
+  s.once('disconnect',         onDisconnect);
+
+  s.emit('account:register', { username, password });
 }
 
 function initIntroScreen(){
-  // Check if we have saved credentials — auto-fill username
+  // Restore only the username — never auto-fill the password
   const savedName = localStorage.getItem('aetherion_hero_name');
-  const savedPass = localStorage.getItem('aetherion_hero_pass');
-  if(savedName){
+  localStorage.removeItem('aetherion_hero_pass'); // scrub any old stored password
+  if (savedName) {
     const nameEl = document.getElementById('login-username');
-    const passEl = document.getElementById('login-password');
-    if(nameEl) nameEl.value = savedName;
-    if(passEl && savedPass) passEl.value = savedPass;
+    if (nameEl) nameEl.value = savedName;
   }
 }
 
@@ -2424,8 +2492,7 @@ function doChangePassword(){
     newPassword: newPw,
   });
   s.once('account:passchanged', ()=>{
-    _accountPassword = newPw;
-    localStorage.setItem('aetherion_hero_pass', newPw);
+    // Password changed — do not store the new password locally
     errEl.style.color = '#60d060';
     errEl.textContent = '✓ Password changed successfully!';
     setTimeout(closeModal, 1500);
@@ -2599,7 +2666,7 @@ function applyImportedProfile(profile){
 
 function doLogout(){
   localStorage.removeItem('aetherion_hero_name');
-  localStorage.removeItem('aetherion_hero_pass');
+  localStorage.removeItem('aetherion_hero_pass'); // should already be absent
   localStorage.removeItem(SAVE_KEY);
   gameState.username = '';
   gameState.deck = [];
@@ -4939,6 +5006,11 @@ function spExplore(){
 // ─────────────────────────────────────────
 //  ONLINE MODE  — Real Socket.io multiplayer
 // ─────────────────────────────────────────
+
+// ── Production flag (injected by server into the HTML) ──
+// The server adds window.IS_PRODUCTION = true/false via a meta tag or
+// inline script. Fallback: treat as non-production if undefined.
+const IS_PRODUCTION = window.IS_PRODUCTION || false;
 
 // ── Socket connection ──
 let socket = null;
