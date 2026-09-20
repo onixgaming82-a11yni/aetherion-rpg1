@@ -625,6 +625,114 @@ const AccountSchema = new mongoose.Schema({
 });
 const Account = mongoose.model('Account', AccountSchema);
 
+// ── Friendship Schema ──────────────────────────────────────
+// status: 'pending' (A→B waiting) | 'accepted' (both friends)
+// Compound unique index prevents duplicate pairs.
+const FriendshipSchema = new mongoose.Schema({
+  fromUname: { type: String, required: true },  // sender (lowercase)
+  toUname:   { type: String, required: true },  // recipient (lowercase)
+  status:    { type: String, enum: ['pending','accepted'], default: 'pending' },
+  createdAt: { type: Number, default: Date.now },
+  updatedAt: { type: Number, default: Date.now },
+});
+FriendshipSchema.index({ fromUname: 1, toUname: 1 }, { unique: true });
+FriendshipSchema.index({ toUname: 1, status: 1 });   // fast: incoming pending
+FriendshipSchema.index({ fromUname: 1, status: 1 }); // fast: outgoing pending
+const Friendship = mongoose.model('Friendship', FriendshipSchema);
+
+// In-memory fallback (when no MongoDB)
+// Key: `${a}:${b}` where a < b alphabetically for accepted; `${from}>${to}` for pending
+const friendshipMem = new Map();
+
+// ── Friendship DB helpers ──────────────────────────────────
+async function dbGetFriendships(uname) {
+  // Returns all friendships involving this user (both directions)
+  if (MONGO_URI) {
+    try {
+      return await Friendship.find({
+        $or: [{ fromUname: uname }, { toUname: uname }]
+      }).lean();
+    } catch(e) { console.warn('[FRIEND DB]', e.message); }
+  }
+  return [...friendshipMem.values()].filter(f => f.fromUname===uname || f.toUname===uname);
+}
+
+async function dbGetFriendship(a, b) {
+  // Find a relationship between a and b in either direction
+  if (MONGO_URI) {
+    try {
+      return await Friendship.findOne({
+        $or: [{ fromUname: a, toUname: b }, { fromUname: b, toUname: a }]
+      }).lean();
+    } catch(e) {}
+  }
+  return friendshipMem.get(a+'>'+b) || friendshipMem.get(b+'>'+a) || null;
+}
+
+async function dbUpsertFriendship(fromUname, toUname, status) {
+  const now = Date.now();
+  if (MONGO_URI) {
+    try {
+      return await Friendship.findOneAndUpdate(
+        { fromUname, toUname },
+        { fromUname, toUname, status, updatedAt: now,
+          $setOnInsert: { createdAt: now } },
+        { upsert: true, new: true }
+      );
+    } catch(e) { console.warn('[FRIEND DB upsert]', e.message); }
+  }
+  const rec = { fromUname, toUname, status, createdAt: now, updatedAt: now };
+  friendshipMem.set(fromUname+'>'+toUname, rec);
+  return rec;
+}
+
+async function dbDeleteFriendship(a, b) {
+  if (MONGO_URI) {
+    try {
+      await Friendship.deleteOne({ $or: [
+        { fromUname: a, toUname: b }, { fromUname: b, toUname: a }
+      ]});
+    } catch(e) {}
+  }
+  friendshipMem.delete(a+'>'+b);
+  friendshipMem.delete(b+'>'+a);
+}
+
+// Build the client-safe friend list payload for a user
+async function buildFriendPayload(uname) {
+  const ships = await dbGetFriendships(uname);
+  const friends  = [];
+  const incoming = [];
+  const outgoing = [];
+
+  for (const s of ships) {
+    if (s.status === 'accepted') {
+      const otherUname = s.fromUname === uname ? s.toUname : s.fromUname;
+      // Check if online
+      let isOnline = false;
+      for (const [, p] of onlinePlayers) {
+        if ((p.uname||p.username||'').toLowerCase() === otherUname) { isOnline = true; break; }
+      }
+      friends.push({ uname: otherUname, online: isOnline, since: s.updatedAt });
+    } else if (s.status === 'pending') {
+      if (s.fromUname === uname) {
+        outgoing.push({ uname: s.toUname, since: s.createdAt });
+      } else {
+        incoming.push({ uname: s.fromUname, since: s.createdAt });
+      }
+    }
+  }
+  return { friends, incoming, outgoing };
+}
+
+// Find the socket.id of an online player by uname (for real-time notifications)
+function getSocketOfPlayer(uname) {
+  for (const [sid, p] of onlinePlayers) {
+    if ((p.uname||p.username||'').toLowerCase() === uname) return sid;
+  }
+  return null;
+}
+
 // ── Guild Schema ───────────────────────────────────────────
 const GuildMemberSchema = new mongoose.Schema({
   uname:    { type: String, required: true },
@@ -651,10 +759,43 @@ const GuildSchema = new mongoose.Schema({
   notice:         { type: String, default: 'Welcome to the guild!' },
   createdAt:      { type: Number, default: Date.now },
 });
+// Indexes MUST be defined before mongoose.model() — Mongoose ignores indexes added after.
+GuildSchema.index({ 'members.uname': 1 });          // hot path: player→guild lookup
+GuildSchema.index({ code: 1 },      { unique: true }); // invite-code lookup
+GuildSchema.index({ nameLower: 1 }, { unique: true }); // duplicate-name check
 const Guild = mongoose.model('Guild', GuildSchema);
 
-// In-memory guild cache (code -> plain object) for when DB is unavailable
+// In-memory guild cache  code → guild object
 const guildCache = new Map();
+// O(1) reverse index: player uname → guild code  (avoids O(n*m) scan on every fetch)
+const playerGuildIndex = new Map();
+
+// Keep playerGuildIndex in sync whenever a guild is saved
+function _indexGuild(guild) {
+  if (!guild || !guild.members) return;
+  (guild.members).forEach(m => playerGuildIndex.set(m.uname, guild.code));
+}
+function _unindexPlayer(uname) { playerGuildIndex.delete(uname); }
+// Codes of guilds modified in memory but not yet flushed to MongoDB
+const guildDirtySet = new Set();
+// Flush dirty guilds to DB every 30 seconds (non-critical stat updates)
+setInterval(async () => {
+  if (!MONGO_URI || guildDirtySet.size === 0) return;
+  const codes = [...guildDirtySet];
+  guildDirtySet.clear();
+  for (const code of codes) {
+    const g = guildCache.get(code);
+    if (g) {
+      try {
+        await Guild.findOneAndUpdate({ code }, g, { upsert: true });
+      } catch(e) {
+        console.warn('[GUILD FLUSH]', code, e.message);
+        guildDirtySet.add(code); // retry next cycle
+      }
+    }
+  }
+  if (codes.length > 0) console.log('[GUILD FLUSH] Persisted', codes.length, 'guild(s)');
+}, 30000);
 
 async function dbGetGuild(code) {
   if (MONGO_URI) { try { const g = await Guild.findOne({ code }); if(g) return g.toObject(); } catch(e){} }
@@ -667,15 +808,38 @@ async function dbGetGuildByName(nameLower) {
 }
 async function dbSaveGuild(guild) {
   guildCache.set(guild.code, guild);
+  _indexGuild(guild); // keep O(1) reverse index in sync
   if (MONGO_URI) { try { await Guild.findOneAndUpdate({ code: guild.code }, guild, { upsert: true, new: true }); } catch(e){ console.warn('[GUILD DB]', e.message); } }
 }
 async function dbDeleteGuild(code) {
+  const g = guildCache.get(code);
+  if (g && g.members) g.members.forEach(m => _unindexPlayer(m.uname));
   guildCache.delete(code);
   if (MONGO_URI) { try { await Guild.deleteOne({ code }); } catch(e){} }
 }
 async function dbGetPlayerGuild(uname) {
-  if (MONGO_URI) { try { const g = await Guild.findOne({ 'members.uname': uname }); if(g) return g.toObject(); } catch(e){} }
-  for (const g of guildCache.values()) { if (g.members && g.members.some(m => m.uname === uname)) return g; }
+  // O(1) fast path: reverse index built from in-memory cache
+  const code = playerGuildIndex.get(uname);
+  if (code) {
+    const cached = guildCache.get(code);
+    if (cached) return cached;
+  }
+  // DB path (first access or cache miss)
+  if (MONGO_URI) {
+    try {
+      const g = await Guild.findOne({ 'members.uname': uname });
+      if (g) {
+        const plain = g.toObject();
+        guildCache.set(plain.code, plain);
+        _indexGuild(plain); // populate reverse index for next time
+        return plain;
+      }
+    } catch(e) { console.warn('[GUILD DB getPlayer]', e.message); }
+  }
+  // Memory-only fallback (no MongoDB)
+  for (const g of guildCache.values()) {
+    if (g.members && g.members.some(m => m.uname === uname)) return g;
+  }
   return null;
 }
 
@@ -2147,6 +2311,24 @@ io.on('connection', (socket) => {
   // safe text for HTML insertion
   function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
+  // ── session:restore ──────────────────────────────
+  // Called by frontend on reconnect instead of re-sending password.
+  // Uses the server-side onlinePlayers map to validate the socket session.
+  socket.on('session:restore', async (payload, callback) => {
+    // For now: restore from onlinePlayers map (populated on account:login).
+    // If the socket reconnected and account:login fires on the 'connect' handler,
+    // this will be called after. Check if this socket is already authenticated.
+    const player = onlinePlayers.get(socket.id);
+    if (player?.username) {
+      const acc = accounts.get(player.username.toLowerCase()) || await dbGetAccount(player.username.toLowerCase());
+      if (acc) {
+        callback?.({ ok: true, player: { username: acc.username } });
+        return;
+      }
+    }
+    callback?.({ ok: false });
+  });
+
   // ── guild:create ─────────────────────────────────
   socket.on('guild:create', async ({ name, tag, emblem } = {}) => {
     const uname   = authUname(socket.id);
@@ -2182,6 +2364,7 @@ io.on('connection', (socket) => {
       createdAt: Date.now(),
     };
     await dbSaveGuild(guild);
+    socket.join('guild:' + guild.code);
     socket.emit('guild:data', { guild: sanitizeGuild(guild) });
     console.log('[GUILD] Created: ' + cleanName + ' [' + cleanTag + '] by ' + display);
   });
@@ -2208,15 +2391,24 @@ io.on('connection', (socket) => {
 
     guild.members.push({ uname, display, rank: 'Member', joined: Date.now(), kills: 0, bossKills: 0 });
     await dbSaveGuild(guild);
-    socket.emit('guild:data', { guild: sanitizeGuild(guild) });
+    socket.join('guild:' + guild.code);
+    const sanitized = sanitizeGuild(guild);
+    socket.emit('guild:data', { guild: sanitized });
+    // Notify existing members in real time
+    socket.to('guild:' + guild.code).emit('guild:member_joined', { display, uname });
     console.log('[GUILD] ' + display + ' joined ' + guild.name);
   });
 
   // ── guild:fetch ──────────────────────────────────
   socket.on('guild:fetch', async () => {
+    const t0 = Date.now();
     const uname = authUname(socket.id);
     if (!uname) { socket.emit('guild:data', { guild: null }); return; }
+    // O(1) lookup via reverse index → guildCache → MongoDB
     const guild = await dbGetPlayerGuild(uname);
+    console.log('[GUILD] fetch:', uname, guild ? guild.name : 'none', Date.now()-t0+'ms');
+    // Join the guild's Socket.IO room for real-time push updates
+    if (guild) socket.join('guild:' + guild.code);
     socket.emit('guild:data', { guild: guild ? sanitizeGuild(guild) : null });
   });
 
@@ -2233,7 +2425,9 @@ io.on('connection', (socket) => {
     }
     guild.notice = String(notice||'').trim().substring(0, 200);
     await dbSaveGuild(guild);
-    socket.emit('guild:data', { guild: sanitizeGuild(guild) });
+    const noticeSanitized = sanitizeGuild(guild);
+    // Push update to all guild members in the room
+    io.to('guild:' + guild.code).emit('guild:data', { guild: noticeSanitized });
   });
 
   // ── guild:leave ──────────────────────────────────
@@ -2244,7 +2438,10 @@ io.on('connection', (socket) => {
     if (!guild) { socket.emit('guild:error', { msg: 'Not in a guild.' }); return; }
     if (guild.leaderUname === uname) { socket.emit('guild:error', { msg: 'Transfer leadership or disband before leaving.' }); return; }
     guild.members = guild.members.filter(m => m.uname !== uname);
+    _unindexPlayer(uname);
     await dbSaveGuild(guild);
+    socket.leave('guild:' + guild.code);
+    socket.to('guild:' + guild.code).emit('guild:member_left', { uname });
     socket.emit('guild:data', { guild: null });
   });
 
@@ -2255,31 +2452,122 @@ io.on('connection', (socket) => {
     const guild = await dbGetPlayerGuild(uname);
     if (!guild) { socket.emit('guild:error', { msg: 'Not in a guild.' }); return; }
     if (guild.leaderUname !== uname) { socket.emit('guild:error', { msg: 'Only the guild leader can disband.' }); return; }
-    await dbDeleteGuild(guild.code);
+    const disbandCode = guild.code;
+    await dbDeleteGuild(disbandCode);
+    // Notify all guild members and remove them from the room
+    io.to('guild:' + disbandCode).emit('guild:disbanded', { msg: 'The guild has been disbanded.' });
+    io.socketsLeave('guild:' + disbandCode);
     socket.emit('guild:data', { guild: null });
     console.log('[GUILD] Disbanded: ' + guild.name);
   });
 
-  // ── guild:kill ───────────────────────────────────
-  // Called by the server battle-end logic — not trusted from client directly
-  // Exposed as an internal function; we wire it into battle reward handlers
-  async function recordGuildKill(uname, isBoss) {
+  // ── guild:kick ───────────────────────────────────
+  socket.on('guild:kick', async ({ targetUname } = {}) => {
+    const uname = authUname(socket.id);
+    if (!uname || !targetUname) return;
     const guild = await dbGetPlayerGuild(uname);
-    if (!guild) return;
+    if (!guild) { socket.emit('guild:error', { msg: 'Not in a guild.' }); return; }
+    const actor  = guild.members.find(m => m.uname === uname);
+    const target = guild.members.find(m => m.uname === targetUname);
+    if (!actor || !target) { socket.emit('guild:error', { msg: 'Member not found.' }); return; }
+    if (actor.rank !== 'Leader' && actor.rank !== 'Officer') {
+      socket.emit('guild:error', { msg: 'Only Leader or Officer can kick members.' }); return;
+    }
+    if (target.rank === 'Leader') { socket.emit('guild:error', { msg: 'Cannot kick the guild leader.' }); return; }
+    if (actor.rank === 'Officer' && target.rank === 'Officer') {
+      socket.emit('guild:error', { msg: 'Officers cannot kick other officers.' }); return;
+    }
+    guild.members = guild.members.filter(m => m.uname !== targetUname);
+    _unindexPlayer(targetUname);
+    await dbSaveGuild(guild);
+    const sanitized = sanitizeGuild(guild);
+    io.to('guild:' + guild.code).emit('guild:data', { guild: sanitized });
+    io.to('guild:' + guild.code).emit('guild:kicked', { uname: targetUname });
+    console.log('[GUILD] ' + uname + ' kicked ' + targetUname + ' from ' + guild.name);
+  });
+
+  // ── guild:promote ─────────────────────────────────
+  socket.on('guild:promote', async ({ targetUname } = {}) => {
+    const uname = authUname(socket.id);
+    if (!uname || !targetUname) return;
+    const guild = await dbGetPlayerGuild(uname);
+    if (!guild) { socket.emit('guild:error', { msg: 'Not in a guild.' }); return; }
+    if (guild.leaderUname !== uname) { socket.emit('guild:error', { msg: 'Only the Leader can promote members.' }); return; }
+    const target = guild.members.find(m => m.uname === targetUname);
+    if (!target) { socket.emit('guild:error', { msg: 'Member not found.' }); return; }
+    if (target.rank === 'Officer' || target.rank === 'Leader') {
+      socket.emit('guild:error', { msg: 'Member is already an Officer or Leader.' }); return;
+    }
+    target.rank = 'Officer';
+    await dbSaveGuild(guild);
+    io.to('guild:' + guild.code).emit('guild:data', { guild: sanitizeGuild(guild) });
+    console.log('[GUILD] ' + uname + ' promoted ' + targetUname + ' in ' + guild.name);
+  });
+
+  // ── guild:demote ──────────────────────────────────
+  socket.on('guild:demote', async ({ targetUname } = {}) => {
+    const uname = authUname(socket.id);
+    if (!uname || !targetUname) return;
+    const guild = await dbGetPlayerGuild(uname);
+    if (!guild) { socket.emit('guild:error', { msg: 'Not in a guild.' }); return; }
+    if (guild.leaderUname !== uname) { socket.emit('guild:error', { msg: 'Only the Leader can demote members.' }); return; }
+    const target = guild.members.find(m => m.uname === targetUname);
+    if (!target) { socket.emit('guild:error', { msg: 'Member not found.' }); return; }
+    if (target.rank !== 'Officer') { socket.emit('guild:error', { msg: 'Member is not an Officer.' }); return; }
+    target.rank = 'Member';
+    await dbSaveGuild(guild);
+    io.to('guild:' + guild.code).emit('guild:data', { guild: sanitizeGuild(guild) });
+    console.log('[GUILD] ' + uname + ' demoted ' + targetUname + ' in ' + guild.name);
+  });
+
+  // ── guild:transfer ────────────────────────────────
+  socket.on('guild:transfer', async ({ targetUname } = {}) => {
+    const uname = authUname(socket.id);
+    if (!uname || !targetUname) return;
+    const guild = await dbGetPlayerGuild(uname);
+    if (!guild) { socket.emit('guild:error', { msg: 'Not in a guild.' }); return; }
+    if (guild.leaderUname !== uname) { socket.emit('guild:error', { msg: 'Only the current Leader can transfer ownership.' }); return; }
+    const target = guild.members.find(m => m.uname === targetUname);
+    if (!target) { socket.emit('guild:error', { msg: 'Member not found.' }); return; }
+    // Demote old leader, promote new
+    const oldLeader = guild.members.find(m => m.uname === uname);
+    if (oldLeader) oldLeader.rank = 'Member';
+    target.rank = 'Leader';
+    guild.leaderUname = targetUname;
+    await dbSaveGuild(guild);
+    io.to('guild:' + guild.code).emit('guild:data', { guild: sanitizeGuild(guild) });
+    console.log('[GUILD] Leadership transferred: ' + uname + ' → ' + targetUname);
+  });
+
+  // ── guild:kill ───────────────────────────────────
+  // Kills are batched in memory and flushed to DB every 30s to avoid
+  // a DB write on every single battle. Critical ops (create/join/leave/disband)
+  // still persist immediately.
+  async function recordGuildKill(uname, isBoss) {
+    // O(1) lookup via reverse index
+    const code = playerGuildIndex.get(uname);
+    let guild = code ? guildCache.get(code) : null;
+    if (!guild) {
+      guild = await dbGetPlayerGuild(uname);
+      if (!guild) return;
+    }
     guild.totalKills = (guild.totalKills||0) + 1;
     if (isBoss) guild.totalBossKills = (guild.totalBossKills||0) + 1;
     guild.xp = (guild.xp||0) + (isBoss ? 50 : 5);
-    const member = guild.members.find(m => m.uname === uname);
-    if (member) { member.kills = (member.kills||0) + 1; if(isBoss) member.bossKills = (member.bossKills||0) + 1; }
-    // Level up
+    const member = guild.members && guild.members.find(m => m.uname === uname);
+    if (member) {
+      member.kills = (member.kills||0) + 1;
+      if(isBoss) member.bossKills = (member.bossKills||0) + 1;
+    }
     while (guild.xp >= guild.xpToNext) {
       guild.xp -= guild.xpToNext;
       guild.level = (guild.level||1) + 1;
       guild.xpToNext = Math.floor((guild.xpToNext||500) * 1.5);
     }
-    await dbSaveGuild(guild);
+    // Update cache with mutated guild — DB flush happens on schedule
+    guildCache.set(guild.code, guild);
+    guildDirtySet.add(guild.code);
   }
-  // Store recordGuildKill so battle handlers can call it
   socket._recordGuildKill = recordGuildKill;
 
   // ── Sanitize guild for client (escape all text fields) ──
@@ -2307,6 +2595,189 @@ io.on('connection', (socket) => {
       })),
     };
   }
+
+  // ════════════════════════════════════════════════════
+  //  FRIEND SYSTEM — server-authoritative, persistent
+  // ════════════════════════════════════════════════════
+
+  // ── friend:list ──────────────────────────────────────
+  socket.on('friend:list', async (_, cb) => {
+    const uname = authUname(socket.id);
+    if (!uname) { cb?.({ ok: false, error: 'Not logged in.' }); return; }
+    try {
+      const payload = await buildFriendPayload(uname);
+      cb?.({ ok: true, ...payload });
+    } catch(e) {
+      console.error('[FRIEND] list error:', e.message);
+      cb?.({ ok: false, error: 'Could not load friends.' });
+    }
+  });
+
+  // ── friend:search ─────────────────────────────────────
+  socket.on('friend:search', async ({ query } = {}, cb) => {
+    const uname = authUname(socket.id);
+    if (!uname) { cb?.({ ok: false, error: 'Not logged in.' }); return; }
+    const q = String(query||'').trim().toLowerCase();
+    if (!q || q.length < 2) { cb?.({ ok: false, error: 'Enter at least 2 characters.' }); return; }
+    if (q === uname) { cb?.({ ok: false, error: "That's you!" }); return; }
+    try {
+      let found = null;
+      if (MONGO_URI) {
+        const acc = await Account.findOne({ uname: q }).lean();
+        if (acc) found = { uname: acc.uname, display: acc.username };
+      } else {
+        const acc = accounts.get(q);
+        if (acc) found = { uname: acc.uname || q, display: acc.username || q };
+      }
+      if (!found) { cb?.({ ok: false, error: 'Player not found.' }); return; }
+
+      // Check existing relationship
+      const existing = await dbGetFriendship(uname, found.uname);
+      let relationStatus = 'none';
+      if (existing) {
+        if (existing.status === 'accepted') relationStatus = 'friends';
+        else if (existing.fromUname === uname) relationStatus = 'outgoing';
+        else relationStatus = 'incoming';
+      }
+      // Is the player online?
+      const isOnline = !!getSocketOfPlayer(found.uname);
+      cb?.({ ok: true, player: { ...found, online: isOnline, relationStatus } });
+    } catch(e) {
+      console.error('[FRIEND] search error:', e.message);
+      cb?.({ ok: false, error: 'Search failed.' });
+    }
+  });
+
+  // ── friend:request:send ───────────────────────────────
+  socket.on('friend:request:send', async ({ toUname } = {}, cb) => {
+    const fromUname = authUname(socket.id);
+    if (!fromUname) { cb?.({ ok: false, error: 'Not logged in.' }); return; }
+    const to = String(toUname||'').trim().toLowerCase();
+    if (!to) { cb?.({ ok: false, error: 'Invalid player.' }); return; }
+    if (to === fromUname) { cb?.({ ok: false, error: 'You cannot add yourself.' }); return; }
+
+    try {
+      // Confirm target account exists
+      const targetAcc = MONGO_URI
+        ? await Account.findOne({ uname: to }).lean()
+        : accounts.get(to);
+      if (!targetAcc) { cb?.({ ok: false, error: 'Player not found.' }); return; }
+
+      const existing = await dbGetFriendship(fromUname, to);
+      if (existing) {
+        if (existing.status === 'accepted') { cb?.({ ok: false, error: 'Already friends.' }); return; }
+        if (existing.fromUname === fromUname) { cb?.({ ok: false, error: 'Request already sent.' }); return; }
+        // They already sent us a request → auto-accept
+        await dbUpsertFriendship(existing.fromUname, existing.toUname, 'accepted');
+        cb?.({ ok: true, autoAccepted: true });
+        // Notify both sides
+        socket.emit('friend:list:update');
+        const theirSid = getSocketOfPlayer(to);
+        if (theirSid) io.to(theirSid).emit('friend:list:update');
+        console.log('[FRIEND] Auto-accepted:', fromUname, '↔', to);
+        return;
+      }
+
+      await dbUpsertFriendship(fromUname, to, 'pending');
+      cb?.({ ok: true });
+
+      // Notify recipient in real time if online
+      const recipientSid = getSocketOfPlayer(to);
+      if (recipientSid) {
+        io.to(recipientSid).emit('friend:request:received', {
+          fromUname,
+          fromDisplay: authName(socket.id) || fromUname,
+        });
+      }
+      console.log('[FRIEND] Request sent:', fromUname, '→', to);
+    } catch(e) {
+      console.error('[FRIEND] send error:', e.message);
+      cb?.({ ok: false, error: 'Could not send request.' });
+    }
+  });
+
+  // ── friend:request:cancel ─────────────────────────────
+  socket.on('friend:request:cancel', async ({ toUname } = {}, cb) => {
+    const fromUname = authUname(socket.id);
+    if (!fromUname) { cb?.({ ok: false, error: 'Not logged in.' }); return; }
+    const to = String(toUname||'').trim().toLowerCase();
+    try {
+      const existing = await dbGetFriendship(fromUname, to);
+      if (!existing || existing.status !== 'pending' || existing.fromUname !== fromUname) {
+        cb?.({ ok: false, error: 'No outgoing request found.' }); return;
+      }
+      await dbDeleteFriendship(fromUname, to);
+      cb?.({ ok: true });
+      const theirSid = getSocketOfPlayer(to);
+      if (theirSid) io.to(theirSid).emit('friend:list:update');
+      console.log('[FRIEND] Cancelled:', fromUname, '→', to);
+    } catch(e) {
+      cb?.({ ok: false, error: 'Could not cancel request.' });
+    }
+  });
+
+  // ── friend:request:accept ─────────────────────────────
+  socket.on('friend:request:accept', async ({ fromUname: reqFrom } = {}, cb) => {
+    const uname = authUname(socket.id);
+    if (!uname) { cb?.({ ok: false, error: 'Not logged in.' }); return; }
+    const from = String(reqFrom||'').trim().toLowerCase();
+    try {
+      const existing = await dbGetFriendship(from, uname);
+      // Must be a pending request where 'uname' is the recipient
+      if (!existing || existing.status !== 'pending' || existing.toUname !== uname) {
+        cb?.({ ok: false, error: 'No pending request from that player.' }); return;
+      }
+      await dbUpsertFriendship(existing.fromUname, existing.toUname, 'accepted');
+      cb?.({ ok: true });
+      // Notify both
+      socket.emit('friend:list:update');
+      const theirSid = getSocketOfPlayer(from);
+      if (theirSid) io.to(theirSid).emit('friend:list:update');
+      console.log('[FRIEND] Accepted:', from, '↔', uname);
+    } catch(e) {
+      cb?.({ ok: false, error: 'Could not accept request.' });
+    }
+  });
+
+  // ── friend:request:reject ─────────────────────────────
+  socket.on('friend:request:reject', async ({ fromUname: reqFrom } = {}, cb) => {
+    const uname = authUname(socket.id);
+    if (!uname) { cb?.({ ok: false, error: 'Not logged in.' }); return; }
+    const from = String(reqFrom||'').trim().toLowerCase();
+    try {
+      const existing = await dbGetFriendship(from, uname);
+      if (!existing || existing.status !== 'pending' || existing.toUname !== uname) {
+        cb?.({ ok: false, error: 'No pending request from that player.' }); return;
+      }
+      await dbDeleteFriendship(from, uname);
+      cb?.({ ok: true });
+      const theirSid = getSocketOfPlayer(from);
+      if (theirSid) io.to(theirSid).emit('friend:list:update');
+      console.log('[FRIEND] Rejected:', from, '→', uname);
+    } catch(e) {
+      cb?.({ ok: false, error: 'Could not reject request.' });
+    }
+  });
+
+  // ── friend:remove ─────────────────────────────────────
+  socket.on('friend:remove', async ({ otherUname } = {}, cb) => {
+    const uname = authUname(socket.id);
+    if (!uname) { cb?.({ ok: false, error: 'Not logged in.' }); return; }
+    const other = String(otherUname||'').trim().toLowerCase();
+    try {
+      const existing = await dbGetFriendship(uname, other);
+      if (!existing || existing.status !== 'accepted') {
+        cb?.({ ok: false, error: 'Not friends with that player.' }); return;
+      }
+      await dbDeleteFriendship(uname, other);
+      cb?.({ ok: true });
+      const theirSid = getSocketOfPlayer(other);
+      if (theirSid) io.to(theirSid).emit('friend:list:update');
+      console.log('[FRIEND] Removed:', uname, '↔', other);
+    } catch(e) {
+      cb?.({ ok: false, error: 'Could not remove friend.' });
+    }
+  });
 
   // ── DISCONNECT ────────────────────────────────────────
   socket.on('disconnect', () => {
