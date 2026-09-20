@@ -5015,6 +5015,256 @@ const IS_PRODUCTION = window.IS_PRODUCTION || false;
 // ── Socket connection ──
 let socket = null;
 let onlineRoomPlayers = [];   // real players in current room
+let tradeSelected = { cardIdx: -1, targetIdx: -1 };
+let _tradeTargetId = '';
+let _tradeTargetName = '';
+let pendingTrades = [];
+
+function getSocket() {
+  if (socket && socket.connected) return socket;
+  if (typeof io === 'undefined') {
+    toast('⚠️ Multiplayer not available in offline mode.');
+    return { emit: ()=>{}, on: ()=>{}, once: ()=>{}, off: ()=>{}, connected: false };
+  }
+  // Connect to the same server serving this page
+  socket = io({ transports: ['websocket', 'polling'] });
+
+  // ── Connected ──
+  socket.on('connect', () => {
+    console.log('[Socket] Connected:', socket.id);
+    socket.emit('player:register', {
+      username: gameState.username || 'Hero',
+      level:    gameState.playerLevel || 1,
+      deckSize: gameState.deck.length,
+      gold:     gameState.playerGold,
+    });
+
+    // SECURITY: no password is ever cached or resent here. If this socket
+    // already has a server-side session for this browser tab (see
+    // session:restore on the server — it's keyed off the live connection,
+    // not a persisted token), try to silently pick that back up. If not,
+    // the player just needs to log in again — that's correct behavior, not
+    // a bug: there is no stored credential this could fall back to.
+    const sessionToken = sessionStorage.getItem('aetherion_session');
+    if (sessionToken) {
+      socket.emit('session:restore', { token: sessionToken }, (res) => {
+        if (res?.ok && res.player?.username) {
+          gameState.username = res.player.username;
+          updateMenuHud();
+        } else {
+          sessionStorage.removeItem('aetherion_session');
+        }
+      });
+    }
+
+    // Setup listeners (each guards against double-registration internally)
+    setupVeylorListeners();
+    setupDuelResultListener();
+    setupGuildListeners();
+    setupFriendListeners();
+    // Check if account is on hold
+    if(gameState.username) checkAntiCheatStatus();
+  });
+
+  socket.on('connect_error', (error) => {
+    console.error('[Socket] Connection error:', error);
+  });
+
+  // Save blocked — account is banned or suspended
+  socket.on('account:save:blocked', ({ reason }) => {
+    if(reason === 'banned'){
+      console.warn('[Save blocked] Account permanently banned');
+    } else if(reason === 'suspended'){
+      toast('⚖️ Account suspended — progress will not be saved.');
+    }
+  });
+
+  // ── SERVER AUTHORITATIVE STATE ──────────────────────────
+  // Whenever the server processes an action it sends back the truth
+  socket.on('player:state', (state) => {
+    applyServerState(state);
+    updateMenuHud();
+    // Refresh shop gold display if open
+    const shopGoldEl = document.getElementById('shop-gold-display');
+    if(shopGoldEl) shopGoldEl.textContent = gameState.playerGold;
+  });
+
+  // Server confirms battle reward (shows actual amounts)
+  socket.on('player:battleRewardResult', ({ gold, xp, drop }) => {
+    bLog(`🏆 <b>Victory!</b> +${xp} XP, +${gold} Gold!${drop?` 🎁 Found ${drop}!`:''}`, 'w');
+    updateMenuHud();
+    if(drop) setTimeout(()=>showLootPopup([{item:drop,rarity:'Common',qty:1}]),800);
+  });
+
+  // Server confirms quest reward
+  socket.on('player:questClaimed', ({ questId, reward }) => {
+    const msg = `🎁 Claimed! +${reward.gold}💰 +${reward.xp}⭐${reward.item?' +1 '+reward.item:''}!`;
+    toast(msg);
+    updateMenuHud();
+  });
+
+  // Server confirms dungeon reward
+  socket.on('player:dungeonRewardResult', ({ gold, xp, bonusItem }) => {
+    toast(`🏰 Dungeon reward: +${gold} Gold, +${xp} XP!${bonusItem?' 🎁 '+bonusItem:''}`)
+    updateMenuHud();
+  });
+
+  // Server rejects an action
+  socket.on('player:actionError', ({ msg }) => {
+    toast(`⚠️ ${msg}`);
+    // NOTE: this used to silently re-run account:login with a cached
+    // plaintext password to "resync" — removed. If the session actually
+    // dropped, the next protected action will fail with a clear
+    // "not logged in" error and the player logs in again normally.
+  });
+
+  socket.on('disconnect', () => {
+    console.log('[Socket] Disconnected');
+    toast('⚠️ Disconnected from server. Reconnecting...');
+  });
+
+  socket.on('error', ({ msg }) => toast(`⚠️ ${msg}`));
+
+  // ── Room events ──
+  socket.on('room:hosted', ({ code }) => {
+    gameState.onlineRoomCode = code;
+    document.getElementById('room-code-display').textContent = code;
+    document.getElementById('online-status').textContent = 'Waiting for players...';
+    document.getElementById('online-status').className = 'online-status';
+    updateChatRoomLabel();
+    addSystemChatMsg(`🏠 Room <b>${code}</b> created. Share the code with friends!`);
+  });
+
+  socket.on('room:joined', ({ code }) => {
+    gameState.onlineRoomCode = code;
+    document.getElementById('join-status').textContent = `✅ Joined room ${code}!`;
+    document.getElementById('join-status').className = 'online-status ok';
+    toast(`Connected to room ${code}!`);
+    updateChatRoomLabel();
+    addSystemChatMsg(`✅ You joined room <b>${code}</b>.`);
+  });
+
+  socket.on('room:update', ({ players }) => {
+    onlineRoomPlayers = players;
+    renderPlayerList();
+    renderTradeParty();
+    renderTradePlayers();
+  });
+
+  socket.on('player:joined', ({ username }) => {
+    document.getElementById('online-status').textContent = `${username} joined!`;
+    document.getElementById('online-status').className = 'online-status ok';
+    toast(`👤 ${username} joined the room!`);
+    addSystemChatMsg(`👤 ${username} joined the room.`);
+  });
+
+  socket.on('player:left', ({ username }) => {
+    toast(`👤 ${username} left the room.`);
+    addSystemChatMsg(`👤 ${username} left the room.`);
+  });
+
+  socket.on('host:transferred', ({ username }) => {
+    toast(`👑 ${username} is now the host.`);
+  });
+
+  // ── Lobby (online player list) ──
+  socket.on('lobby:players', (list) => {
+    renderOnlinePlayers(list);
+    renderTradePlayers(list);
+  });
+
+  socket.on('player:registered', () => {
+    // Request lobby list once registered
+    socket.emit('lobby:request');
+    // Sync our own leaderboard score immediately
+    const wins = parseInt(localStorage.getItem('aetherion_duel_wins')||'0');
+    const { rank } = getRankData();
+    if(wins > 0) syncLeaderboardToServer(gameState.username||'', wins, rank.name);
+  });
+
+  // ── Battle ──
+  socket.on('game:started', ({ mode, battleState }) => {
+    if (mode === 'duel' && battleState) {
+      startOnlineDuel(battleState);
+    } else if (mode === 'story') {
+      showScreen('screen-sp'); initSP();
+      spLog(`🌐 <b>Online Story Mode</b>`,'l');
+    }
+  });
+
+  socket.on('battle:update', ({ battleState, message }) => {
+    updateOnlineDuel(battleState, message);
+  });
+
+  socket.on('battle:over', ({ winnerName, log }) => {
+    // NOTE: win/loss is no longer recorded here. The server has already
+    // decided the real outcome (it ran the whole duel) and will follow up
+    // with an authoritative 'duel:result' event — see setupDuelResultListener().
+    const iWon = winnerName === (gameState.username||'Hero');
+    const { rank, wins } = getRankData();
+    const msg = winnerName ? `🏆 ${winnerName} wins!` : '🏃 Duel ended.';
+    showModal('⚔️ Duel Over', `
+      <div style="text-align:center;padding:10px 0 16px;">
+        <div style="font-size:2.5rem;">${iWon?'🏆':'💀'}</div>
+        <div style="font-family:'Cinzel Decorative',serif;font-size:1rem;color:var(--gold);margin:8px 0;">${msg}</div>
+        ${winnerName?`<div style="margin-top:6px;">${getRankBadgeHTML(rank,wins)}</div>`:''}
+        ${iWon?`<div style="font-size:.62rem;color:#60d060;margin-top:6px;">+1 Duel Win!</div>`:`<div style="font-size:.62rem;color:#d06060;margin-top:6px;">Better luck next time!</div>`}
+      </div>
+      <div style="max-height:160px;overflow-y:auto;font-size:.6rem;color:var(--text);">
+        ${log.map(l=>`<div style="padding:3px 0;border-bottom:1px solid rgba(255,255,255,.05);">${l}</div>`).join('')}
+      </div>`,
+      [
+        {label:'🏆 Leaderboard', cls:'btn-ghost', cb:()=>{ closeModal(); openLeaderboard(); }},
+        {label:'Back to Lobby', cls:'btn', cb:()=>{ closeModal(); onlineTab('lobby'); }}
+      ]
+    );
+  });
+
+  // ── Trade ──
+  socket.on('trade:incoming', ({ tradeId, from, fromId, card }) => {
+    pendingTrades.push({ tradeId, from, fromId, card });
+    renderTradeIncoming();
+    toast(`🤝 ${from} wants to trade ${card.emoji||'⚔️'} ${card.name}!`);
+  });
+
+  socket.on('trade:sent', () => {
+    const el = document.getElementById('trade-status');
+    if (el) { el.textContent = 'Trade offer sent! Waiting for response...'; el.style.color='var(--dim)'; }
+  });
+
+  socket.on('trade:complete', ({ receivedCard, fromUsername }) => {
+    if (gameState.deck.length < 4) {
+      const newCard = { ...receivedCard, statuses:[], abilityCooldown:0, fainted:false };
+      gameState.deck.push(newCard);
+      if (gameState.activeCardIdx >= gameState.deck.length) gameState.activeCardIdx = 0;
+      updateMenuHud(); renderSPDeckList(); saveGame();
+    }
+    const el = document.getElementById('trade-status');
+    if (el) { el.textContent = `✅ Trade complete! Got ${receivedCard.emoji||'⚔️'} ${receivedCard.name}!`; el.style.color='#60d060'; }
+    toast(`🤝 Trade complete! Received ${receivedCard.name} from ${fromUsername}!`);
+    tradeSelected = { cardIdx:-1, targetIdx:-1 };
+    renderTradeParty();
+  });
+
+  socket.on('trade:declined', () => {
+    const el = document.getElementById('trade-status');
+    if (el) { el.textContent = 'Trade was declined.'; el.style.color='#d06060'; }
+    toast('Trade declined.');
+  });
+
+  // ── Chat ──
+  socket.on('chat:message', ({ from, message, time }) => {
+    appendChatMessage(from, message, time, from === (gameState.username||'Hero'));
+    // Toast only if chat tab is not open
+    const chatTab = document.getElementById('online-tab-chat');
+    if(!chatTab || chatTab.style.display==='none'){
+      toast(`💬 ${from}: ${message.substring(0,40)}${message.length>40?'...':''}`);
+    }
+  });
+
+  return socket;
+}
+
 // ═══════════════════════════════════════════════════
 //  FRIEND SYSTEM — server-authoritative
 // ═══════════════════════════════════════════════════
