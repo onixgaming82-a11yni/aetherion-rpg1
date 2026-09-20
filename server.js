@@ -43,19 +43,6 @@ const io     = new Server(server, {
 
 // ── Static files ──────────────────────────────────────────
 app.use(express.static(path.join(__dirname, 'public')));
-
-// Serve index.html with IS_PRODUCTION injected so the client can gate debug tools
-const IS_PROD = process.env.NODE_ENV === 'production';
-app.get('/', (req, res) => {
-  const fs = require('fs');
-  let html = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8');
-  // Inject a tiny script right before </head> so IS_PRODUCTION is available globally
-  html = html.replace(
-    '</head>',
-    `<script>window.IS_PRODUCTION = ${IS_PROD};</script></head>`
-  );
-  res.send(html);
-});
 app.get('/', (_req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
@@ -722,10 +709,7 @@ async function buildFriendPayload(uname) {
     if (s.status === 'accepted') {
       const otherUname = s.fromUname === uname ? s.toUname : s.fromUname;
       // Check if online
-      let isOnline = false;
-      for (const [, p] of onlinePlayers) {
-        if ((p.uname||p.username||'').toLowerCase() === otherUname) { isOnline = true; break; }
-      }
+      const isOnline = !!getSocketOfPlayer(otherUname);   // verified-login lookup (see getSocketOfPlayer)
       friends.push({ uname: otherUname, online: isOnline, since: s.updatedAt });
     } else if (s.status === 'pending') {
       if (s.fromUname === uname) {
@@ -740,8 +724,9 @@ async function buildFriendPayload(uname) {
 
 // Find the socket.id of an online player by uname (for real-time notifications)
 function getSocketOfPlayer(uname) {
-  for (const [sid, p] of onlinePlayers) {
-    if ((p.uname||p.username||'').toLowerCase() === uname) return sid;
+  // Match on the server-verified account name (socket.data.uname), never on a client-declared display name.
+  for (const [sid, s] of io.sockets.sockets) {
+    if (s.data && s.data.uname === uname) return sid;
   }
   return null;
 }
@@ -882,18 +867,14 @@ async function dbGetAccount(uname) {
 }
 
 async function dbSaveAccount(data) {
-  if (!MONGO_URI) return true; // memory-only mode — always succeeds
+  if (!MONGO_URI) return;
   try {
     await Account.findOneAndUpdate(
       { uname: data.uname },
       data,
       { upsert: true, new: true }
     );
-    return true;
-  } catch(e) {
-    console.error('[DB] Save error:', e.message);
-    return false;
-  }
+  } catch(e) { console.warn('[DB] Save error:', e.message); }
 }
 
 async function dbDeleteAccount(uname) {
@@ -907,11 +888,6 @@ const accounts = new Map();
 // ─────────────────────────────────────────────────────────
 //  HELPERS
 // ─────────────────────────────────────────────────────────
-// Normalize usernames consistently everywhere — register, login, friend lookup, etc.
-function normalizeUsername(u) {
-  return String(u || '').trim().toLowerCase().slice(0, 20);
-}
-
 function genCode() {
   let code;
   do { code = crypto.randomBytes(3).toString('hex').toUpperCase(); }
@@ -1499,7 +1475,7 @@ io.on('connection', (socket) => {
     }
 
     let base  = username.trim().substring(0, 20);
-    let uname = normalizeUsername(base);
+    let uname = base.toLowerCase();
 
     // Only allow safe username characters
     if (!/^[a-zA-Z0-9_\- ]+$/.test(base)) {
@@ -1523,13 +1499,11 @@ io.on('connection', (socket) => {
     const hashed = await hashPassword(pw);
     const data   = { username: base, uname, password: hashed, save: null, createdAt: Date.now(), lastLogin: Date.now() };
 
-    const saved = await dbSaveAccount(data);
-    if (!saved && MONGO_URI) {
-      socket.emit('account:error', { msg: 'Account could not be saved. Please try again.' });
-      return;
-    }
+    await dbSaveAccount(data);
     accounts.set(uname, data);
 
+    // Registration logs the player in immediately client-side, so bind the
+    // session here too — see the matching comment in account:login.
     socket.data.uname    = uname;
     socket.data.username = base;
 
@@ -1548,12 +1522,8 @@ io.on('connection', (socket) => {
     if (!checkLoginIpRateLimit(ip)) { socket.emit('account:error', { msg: 'Too many attempts. Please wait a moment and try again.' }); return; }
 
     if (!username?.trim()) { socket.emit('account:error', { msg: 'Username required' }); return; }
-    const uname = normalizeUsername(username);
-    if (typeof password !== 'string' || password.length < 1) {
-      socket.emit('account:error', { msg: 'Password required.' });
-      return;
-    }
-    const pw = password; // do not trim — spaces may be intentional
+    const uname = username.trim().toLowerCase();
+    const pw    = password?.trim();
 
     // SECURITY: checked before touching the DB, and before the dummy-hash
     // timing guard below, so a locked-out account and an account mid-guess
