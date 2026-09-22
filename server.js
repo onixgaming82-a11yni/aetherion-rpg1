@@ -51,6 +51,9 @@ app.get('/health', (_req, res) => {
     rooms:       rooms.size,
     connections: io.engine.clientsCount,
     uptime:      Math.floor(process.uptime()) + 's',
+    // Quick way to confirm registration/login will actually work without
+    // digging through server logs — see connectDB()/dbConnected.
+    database: !MONGO_URI ? 'not configured (memory-only mode)' : (dbConnected ? 'connected' : 'DISCONNECTED — accounts cannot be saved'),
   });
 });
 
@@ -841,12 +844,36 @@ async function dbGetPlayerGuild(uname) {
 // ── Connect to MongoDB ─────────────────────────────────────
 const MONGO_URI = process.env.MONGO_URI || '';
 
+// RELIABILITY: MONGO_URI being *set* and the connection actually *being up*
+// are two different things. Track the real state via mongoose's own
+// connection events (not just the one-time connect() promise), so a later
+// disconnect (Atlas restart, network blip) is caught too, and so DB helpers
+// below can refuse fast instead of buffering ops against a dead connection.
+let dbConnected = false;
+
 async function connectDB() {
   if (!MONGO_URI) {
     console.warn('[DB] No MONGO_URI set — accounts will not persist between restarts!');
     console.warn('[DB] Set MONGO_URI in Render environment variables to enable persistence.');
     return false;
   }
+
+  // Fail fast instead of buffering ops silently against a dead connection.
+  mongoose.set('bufferCommands', false);
+
+  mongoose.connection.on('connected', () => {
+    dbConnected = true;
+    console.log('[DB] ✅ Connected to MongoDB Atlas — accounts will persist forever!');
+  });
+  mongoose.connection.on('error', (err) => {
+    dbConnected = false;
+    console.error('[DB] ❌ MongoDB connection error:', err.message);
+  });
+  mongoose.connection.on('disconnected', () => {
+    dbConnected = false;
+    console.warn('[DB] ⚠️ MongoDB disconnected — will keep retrying in the background.');
+  });
+
   try {
     await mongoose.connect(MONGO_URI, {
       serverSelectionTimeoutMS: 4000,
@@ -855,17 +882,19 @@ async function connectDB() {
       maxPoolSize: 10,
       minPoolSize: 1,
     });
-    console.log('[DB] ✅ Connected to MongoDB Atlas — accounts will persist forever!');
-    return true;
+    return true; // 'connected' listener above already logged success and set dbConnected
   } catch(e) {
+    dbConnected = false;
     console.error('[DB] ❌ MongoDB connection failed:', e.message);
+    console.error('[DB] The server will still start, but accounts cannot be saved until this is fixed.');
+    console.error('[DB] Common causes: wrong MONGO_URI, Atlas IP allowlist missing Render\'s egress IP, or a paused free-tier cluster.');
     return false;
   }
 }
 
 // ── DB helper functions ────────────────────────────────────
 async function dbGetAccount(uname) {
-  if (!MONGO_URI) return null;
+  if (!MONGO_URI || !dbConnected) return null;
   try {
     return await Account.findOne({ uname }).lean().maxTimeMS(3000);
   } catch(e) {
@@ -876,6 +905,11 @@ async function dbGetAccount(uname) {
 
 async function dbSaveAccount(data) {
   if (!MONGO_URI) return true; // memory-only mode — always succeeds
+  if (!dbConnected) {
+    console.error(`[DB] ❌ Refused to save account '${data.uname}': MongoDB is not connected.`);
+    console.error('[DB] Check the [DB] connection logs above/at startup for the real cause.');
+    return false;
+  }
   try {
     await Account.findOneAndUpdate(
       { uname: data.uname },
@@ -890,7 +924,7 @@ async function dbSaveAccount(data) {
 }
 
 async function dbDeleteAccount(uname) {
-  if (!MONGO_URI) return;
+  if (!MONGO_URI || !dbConnected) return;
   try { await Account.deleteOne({ uname }); } catch(e) {}
 }
 
@@ -926,7 +960,6 @@ function broadcastRoom(room) {
       maxHp:    p.maxHp,
     })),
     mode:          room.mode,
-    storyProgress: room.storyProgress,
     battleState:   room.battleState,
   });
 }
@@ -1002,8 +1035,6 @@ io.on('connection', (socket) => {
       }],
       mode:          null,
       battleState:   null,
-      storyProgress: 0,
-      storyBlocks:   [],
       created:       Date.now(),
     };
 
@@ -1052,50 +1083,15 @@ io.on('connection', (socket) => {
   });
 
   // ── START GAME ────────────────────────────────────────
-  // Payload: { mode: 'duel'|'story', storyBlocks? }
-  socket.on('game:start', ({ mode, storyBlocks } = {}) => {
+  // Payload: { mode: 'duel' }
+  socket.on('game:start', ({ mode } = {}) => {
     const room = getRoomOf(socket.id);
     if (!room)                   { socket.emit('error', { msg: 'Not in a room' }); return; }
     if (socket.id !== room.host) { socket.emit('error', { msg: 'Only host can start' }); return; }
     if (room.players.length < 2) { socket.emit('error', { msg: 'Need at least 2 players' }); return; }
 
+    if (mode !== 'duel') { socket.emit('error', { msg: 'Invalid game mode.' }); return; }
     room.mode = mode;
-
-    // Validate storyBlocks — strip HTML and clamp values so client can't inject scripts
-    if (storyBlocks && Array.isArray(storyBlocks)) {
-      room.storyBlocks = storyBlocks.slice(0, 200).map(b => {
-        if (!b || typeof b !== 'object') return null;
-        const safe = {};
-        if (typeof b.type    === 'string') safe.type    = b.type.substring(0,30);
-        if (typeof b.text    === 'string') safe.text    = b.text.substring(0,1000).replace(/<[^>]*>/g,'');
-        if (typeof b.speaker === 'string') safe.speaker = b.speaker.substring(0,50).replace(/<[^>]*>/g,'');
-        if (b.monster && typeof b.monster === 'object') {
-          safe.monster = {
-            name:    String(b.monster.name||'').substring(0,50),
-            hp:      safeNum(b.monster.hp,    1,99999,100),
-            attack:  safeNum(b.monster.attack,0,9999,10),
-            defense: safeNum(b.monster.defense,0,9999,5),
-            magic:   safeNum(b.monster.magic, 0,9999,5),
-            speed:   safeNum(b.monster.speed, 0,9999,5),
-            emoji:   typeof b.monster.emoji==='string'?b.monster.emoji.substring(0,4):'👾',
-          };
-          safe.monster.maxHp = safe.monster.hp;
-        }
-        if (b.boss && typeof b.boss === 'object') {
-          safe.boss = {
-            name:    String(b.boss.name||'').substring(0,50),
-            hp:      safeNum(b.boss.hp,    1,99999,500),
-            attack:  safeNum(b.boss.attack,0,9999,20),
-            defense: safeNum(b.boss.defense,0,9999,10),
-            magic:   safeNum(b.boss.magic, 0,9999,10),
-            speed:   safeNum(b.boss.speed, 0,9999,5),
-            emoji:   typeof b.boss.emoji==='string'?b.boss.emoji.substring(0,4):'👿',
-          };
-          safe.boss.maxHp = safe.boss.hp;
-        }
-        return Object.keys(safe).length ? safe : null;
-      }).filter(Boolean);
-    }
 
     if (mode === 'duel') {
       // Duel only supports 2 combatants — guard against rooms with more players
@@ -1337,18 +1333,6 @@ io.on('connection', (socket) => {
     }
   }
 
-  // ── STORY PROGRESS ────────────────────────────────────
-  socket.on('story:progress', ({ blockResult } = {}) => {
-    const room = getRoomOf(socket.id);
-    if (!room || socket.id !== room.host) return;
-    if (blockResult === 'complete') room.storyProgress++;
-    io.to(room.code).emit('story:update', {
-      progress:  room.storyProgress,
-      total:     room.storyBlocks.length,
-      completed: room.storyProgress >= room.storyBlocks.length,
-    });
-  });
-
   // ── PLAYER SYNC ───────────────────────────────────────
   // Payload: { hp, level, deckSize }
   // NOTE: gold is intentionally NOT accepted here — it's display-only in rooms
@@ -1526,8 +1510,13 @@ io.on('connection', (socket) => {
     const saved = await dbSaveAccount(data);
     console.log(`[AUTH] Register account save: ${Date.now() - saveStartedAt}ms`);
     if (saved === false && MONGO_URI) {
-      // DB is configured but write failed — do not tell client account was created
-      socket.emit('account:error', { msg: 'Account could not be saved. Please try again.' });
+      // DB is configured but write failed — do not tell client account was created.
+      // dbSaveAccount already logged the real cause (connection state or the
+      // full mongoose error) to the server console.
+      socket.emit('account:error', { msg: dbConnected
+        ? 'Account could not be saved. Please try again.'
+        : 'Server database is temporarily unavailable. Please try again in a moment.'
+      });
       return;
     }
     accounts.set(uname, data);
