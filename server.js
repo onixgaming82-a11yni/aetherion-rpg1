@@ -599,7 +599,7 @@ async function requireSession(socket) {
     socket.emit('player:actionError', { msg: 'Not logged in — please log in again.' });
     return null;
   }
-  const acc = await dbGetAccount(uname) || accounts.get(uname);
+  const acc = accounts.get(uname) || await dbGetAccount(uname);
   if (!acc) {
     socket.emit('player:actionError', { msg: 'Account not found.' });
     return null;
@@ -674,7 +674,7 @@ async function dbUpsertFriendship(fromUname, toUname, status) {
         { fromUname, toUname },
         { fromUname, toUname, status, updatedAt: now,
           $setOnInsert: { createdAt: now } },
-        { upsert: true, new: true }
+        { upsert: true, new: true, maxTimeMS: 3000 }
       );
     } catch(e) { console.warn('[FRIEND DB upsert]', e.message); }
   }
@@ -804,7 +804,7 @@ async function dbGetGuildByName(nameLower) {
 async function dbSaveGuild(guild) {
   guildCache.set(guild.code, guild);
   _indexGuild(guild); // keep O(1) reverse index in sync
-  if (MONGO_URI) { try { await Guild.findOneAndUpdate({ code: guild.code }, guild, { upsert: true, new: true }); } catch(e){ console.warn('[GUILD DB]', e.message); } }
+  if (MONGO_URI) { try { await Guild.findOneAndUpdate({ code: guild.code }, guild, { upsert: true, new: true, maxTimeMS: 3000 }); } catch(e){ console.warn('[GUILD DB]', e.message); } }
 }
 async function dbDeleteGuild(code) {
   const g = guildCache.get(code);
@@ -848,7 +848,13 @@ async function connectDB() {
     return false;
   }
   try {
-    await mongoose.connect(MONGO_URI);
+    await mongoose.connect(MONGO_URI, {
+      serverSelectionTimeoutMS: 4000,
+      connectTimeoutMS: 4000,
+      socketTimeoutMS: 4000,
+      maxPoolSize: 10,
+      minPoolSize: 1,
+    });
     console.log('[DB] ✅ Connected to MongoDB Atlas — accounts will persist forever!');
     return true;
   } catch(e) {
@@ -860,7 +866,12 @@ async function connectDB() {
 // ── DB helper functions ────────────────────────────────────
 async function dbGetAccount(uname) {
   if (!MONGO_URI) return null;
-  try { return await Account.findOne({ uname }); } catch(e) { return null; }
+  try {
+    return await Account.findOne({ uname }).lean().maxTimeMS(3000);
+  } catch(e) {
+    console.warn('[DB] account lookup failed:', e.message);
+    return null;
+  }
 }
 
 async function dbSaveAccount(data) {
@@ -869,7 +880,7 @@ async function dbSaveAccount(data) {
     await Account.findOneAndUpdate(
       { uname: data.uname },
       data,
-      { upsert: true, new: true }
+      { upsert: true, new: true, maxTimeMS: 3000 }
     );
     return true;
   } catch(e) {
@@ -1457,6 +1468,7 @@ io.on('connection', (socket) => {
   // ── ACCOUNT: REGISTER ────────────────────────────────
   // Payload: { username, password }
   socket.on('account:register', async ({ username, password } = {}) => {
+    const authStartedAt = Date.now();
     // SECURITY: throttle registration spam per IP (account:register has no
     // password to brute-force, but nothing previously stopped a script from
     // mass-creating accounts as fast as the network allowed).
@@ -1486,7 +1498,9 @@ io.on('connection', (socket) => {
 
     // Check if taken (MongoDB first, fallback to memory)
     const existsMem = accounts.has(uname);
+    const lookupStartedAt = Date.now();
     const existsDB  = existsMem ? null : await dbGetAccount(uname);
+    console.log(`[AUTH] Register account lookup: ${Date.now() - lookupStartedAt}ms`);
 
     // Bug 10 fix: server-side username character validation
     if (!/^[a-zA-Z0-9_\- ]+$/.test(base)) {
@@ -1503,10 +1517,14 @@ io.on('connection', (socket) => {
       return;
     }
 
+    const hashStartedAt = Date.now();
     const hashed = await hashPassword(pw);
+    console.log(`[AUTH] Register password hash: ${Date.now() - hashStartedAt}ms`);
     const data   = { username: base, uname, password: hashed, save: null, createdAt: Date.now(), lastLogin: Date.now() };
 
+    const saveStartedAt = Date.now();
     const saved = await dbSaveAccount(data);
+    console.log(`[AUTH] Register account save: ${Date.now() - saveStartedAt}ms`);
     if (saved === false && MONGO_URI) {
       // DB is configured but write failed — do not tell client account was created
       socket.emit('account:error', { msg: 'Account could not be saved. Please try again.' });
@@ -1520,11 +1538,13 @@ io.on('connection', (socket) => {
     socket.data.username = base;
 
     socket.emit('account:registered', { username: base, isNew: true });
+    console.log(`[AUTH] Register total: ${Date.now() - authStartedAt}ms`);
     console.log(`[ACCOUNT] Registered: ${base}`);
   });
 
   // ── ACCOUNT: LOGIN ────────────────────────────────────
   socket.on('account:login', async ({ username, password } = {}) => {
+    const authStartedAt = Date.now();
     // SECURITY: two independent throttles. The per-IP one stops a script
     // from spraying many different usernames from one connection; the
     // per-username lockout (below, after uname is known) stops repeated
@@ -1548,7 +1568,9 @@ io.on('connection', (socket) => {
     }
 
     // Check memory cache first — avoids DB round trip for active players
+    const lookupStartedAt = Date.now();
     let acc = accounts.get(uname) || await dbGetAccount(uname);
+    console.log(`[AUTH] Login account lookup: ${Date.now() - lookupStartedAt}ms`);
 
     // SECURITY: use identical error message whether account missing or password wrong
     // to prevent username enumeration
@@ -1569,7 +1591,9 @@ io.on('connection', (socket) => {
       return;
     }
 
+    const verifyStartedAt = Date.now();
     const ok = pw ? await verifyPassword(pw, acc.password) : false;
+    console.log(`[AUTH] Login password verify: ${Date.now() - verifyStartedAt}ms`);
     if (!ok) {
       recordLoginFailure(uname);
       socket.emit('account:error', { msg: INVALID_MSG });
@@ -1591,6 +1615,7 @@ io.on('connection', (socket) => {
     const loginSave = loadPlayerSave(acc);
     socket.emit('account:loggedin', { username: acc.username, save: acc.save, isNew: false });
     socket.emit('player:state', buildClientState(loginSave));
+    console.log(`[AUTH] Login total: ${Date.now() - authStartedAt}ms`);
     console.log(`[ACCOUNT] Login: ${username}`);
   });
 
@@ -1937,7 +1962,9 @@ io.on('connection', (socket) => {
     const uname = username.trim().toLowerCase();
     const lockedMs = getLoginLockoutRemaining(uname);
     if (lockedMs > 0) { socket.emit('account:error', { msg: `Too many failed attempts. Try again in ${Math.ceil(lockedMs / 1000)}s.` }); return; }
+    const lookupStartedAt = Date.now();
     let acc = accounts.get(uname) || await dbGetAccount(uname);
+    console.log(`[AUTH] Login account lookup: ${Date.now() - lookupStartedAt}ms`);
     if (!acc) { socket.emit('account:error', { msg: 'Account not found' }); return; }
     const oldPw = oldPassword ?? ''; // do NOT trim
     if (!oldPw || !(await verifyPassword(oldPw, acc.password))) { recordLoginFailure(uname); socket.emit('account:error', { msg: 'Current password is wrong!' }); return; }
@@ -1957,7 +1984,9 @@ io.on('connection', (socket) => {
     const uname = username.trim().toLowerCase();
     const lockedMs = getLoginLockoutRemaining(uname);
     if (lockedMs > 0) { socket.emit('account:error', { msg: `Too many failed attempts. Try again in ${Math.ceil(lockedMs / 1000)}s.` }); return; }
+    const lookupStartedAt = Date.now();
     let acc = accounts.get(uname) || await dbGetAccount(uname);
+    console.log(`[AUTH] Login account lookup: ${Date.now() - lookupStartedAt}ms`);
     if (!acc) { socket.emit('account:error', { msg: 'Account not found' }); return; }
     const pw = password ?? ''; // do NOT trim
     if (!pw || !(await verifyPassword(pw, acc.password))) { recordLoginFailure(uname); socket.emit('account:error', { msg: 'Wrong password! Cannot delete account.' }); return; }
