@@ -2381,7 +2381,7 @@ function doLogin(){
     cleanup();
     errEl.style.color = '#d06060';
     errEl.textContent = 'Server took too long to respond. Please try again.';
-  }, 12000);
+  }, 5000);
 
   const _finishLogin = () => {
     clearTimeout(_loginTimeout);
@@ -2474,7 +2474,7 @@ function doRegister(){
     cleanup();
     errEl.style.color = '#d06060';
     errEl.textContent = 'Server took too long to respond. Please try again.';
-  }, 12000);
+  }, 5000);
 
   const _finishReg = () => {
     clearTimeout(_regTimeout);
@@ -5178,7 +5178,7 @@ function getSocket() {
     reconnectionAttempts: Infinity,
     reconnectionDelay: 500,
     reconnectionDelayMax: 5000,
-    timeout: 10000,
+    timeout: 4500,
   });
 
   socket.on('connect', () => {
@@ -5203,6 +5203,16 @@ function getSocket() {
 
   return socket;
 }
+
+// Pre-connect as soon as the page is ready so the Socket.IO handshake happens
+// before the player clicks Login or Register. Later calls to getSocket() reuse
+// this same connection.
+setTimeout(() => {
+  try { getSocket(); } catch (e) {
+    console.error('[Socket] Pre-connect failed:', e);
+  }
+}, 0);
+
 // ═══════════════════════════════════════════════════
 //  FRIEND SYSTEM — server-authoritative
 // ═══════════════════════════════════════════════════
