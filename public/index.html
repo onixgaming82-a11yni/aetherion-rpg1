@@ -747,142 +747,6 @@ body::before{
 .droom.cleared{border-color:#1e7040;opacity:.5;}
 
 /* ═══════════════════════════════════════════════════
-   LEVEL EDITOR
-═══════════════════════════════════════════════════ */
-/* ═══════════════════════════════════════════════════
-   STORY EDITOR — NEW DRAG-DROP LAYOUT
-═══════════════════════════════════════════════════ */
-#screen-editor{padding:0;overflow:hidden;flex-direction:column;width:100%;height:100vh;}
-.editor-topbar{width:100%;max-width:1200px;margin:0 auto;padding:10px 14px 6px;
-  display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex-shrink:0;}
-.editor-layout{display:grid;grid-template-columns:1fr 280px;
-  gap:0;width:100%;max-width:1200px;margin:0 auto;
-  flex:1;overflow:hidden;}
-@media(max-width:700px){.editor-layout{grid-template-columns:1fr;}}
-
-/* The big story text/canvas area */
-.story-canvas-wrap{
-  display:flex;flex-direction:column;
-  border-right:1px solid var(--border);
-  overflow:hidden;height:100%;
-}
-.story-canvas-toolbar{
-  display:flex;align-items:center;gap:6px;padding:8px 12px;
-  border-bottom:1px solid var(--border);background:rgba(0,0,0,.4);
-  flex-wrap:wrap;
-}
-.story-title-field{
-  flex:1;min-width:140px;background:transparent;
-  border:none;border-bottom:1px solid rgba(201,154,69,.3);
-  color:var(--gold);font-family:'Cinzel',serif;font-size:.9rem;
-  padding:4px 6px;outline:none;
-}
-.story-title-field::placeholder{color:var(--dim);}
-/* The actual editable story body */
-#story-canvas{
-  flex:1;min-height:500px;padding:20px 24px;
-  outline:none;font-family:'IM Fell English',serif;
-  font-size:1rem;line-height:1.9;color:var(--text);
-  background:transparent;overflow-y:auto;
-  white-space:pre-wrap;word-break:break-word;
-  cursor:text;
-}
-#story-canvas:empty::before{
-  content:'Start writing your story here...\n\nDrag monsters from the library on the right to insert them into your story at any point.';
-  color:rgba(180,160,120,.25);font-style:italic;pointer-events:none;
-  white-space:pre-wrap;
-}
-/* Monster chips inside the story canvas */
-.story-mob-chip{
-  display:inline-flex;align-items:center;gap:5px;
-  background:rgba(120,20,20,.5);border:1px solid rgba(200,60,60,.4);
-  border-radius:20px;padding:2px 10px 2px 6px;
-  font-family:'Cinzel',serif;font-size:.68rem;color:#f08080;
-  cursor:default;user-select:none;vertical-align:middle;
-  margin:0 2px;position:relative;
-}
-.story-mob-chip .chip-del{
-  margin-left:4px;opacity:.5;cursor:pointer;font-size:.75rem;
-  transition:opacity .15s;
-}
-.story-mob-chip .chip-del:hover{opacity:1;color:#ff4040;}
-.story-boss-chip{
-  background:rgba(100,10,120,.5);border-color:rgba(180,40,200,.4);color:#e080ff;
-}
-/* Drop zone indicator that appears when dragging over canvas */
-#story-canvas.drag-over{
-  background:rgba(201,154,69,.04);
-  box-shadow:inset 0 0 0 2px rgba(201,154,69,.25);
-}
-.drop-cursor-line{
-  display:inline-block;width:2px;height:1.2em;
-  background:var(--gold);animation:blinkCursor .7s step-end infinite;
-  vertical-align:middle;margin:0 1px;
-}
-@keyframes blinkCursor{0%,100%{opacity:1}50%{opacity:0}}
-
-/* Monster Library sidebar */
-.monster-sidebar{
-  display:flex;flex-direction:column;
-  background:rgba(4,6,10,.7);
-  overflow:hidden;height:100%;
-}
-.monster-sidebar-title{
-  font-family:'Cinzel',serif;font-size:.7rem;letter-spacing:.1em;
-  color:var(--gold);padding:10px 14px 8px;
-  border-bottom:1px solid var(--border);
-  display:flex;align-items:center;gap:8px;
-}
-.mob-search-input{
-  flex:1;background:rgba(0,0,0,.5);border:1px solid var(--border);
-  border-radius:20px;padding:4px 10px;color:var(--text);
-  font-size:.65rem;outline:none;
-}
-.mob-search-input:focus{border-color:rgba(201,154,69,.4);}
-.monster-lib{flex:1;overflow-y:auto;padding:6px;}
-.mob-entry{
-  display:flex;align-items:center;gap:8px;padding:8px 10px;
-  border-radius:8px;cursor:grab;transition:all .15s;margin-bottom:3px;
-  border:1px solid transparent;user-select:none;
-}
-.mob-entry:hover{background:rgba(201,154,69,.07);border-color:rgba(201,154,69,.15);}
-.mob-entry:active{cursor:grabbing;}
-.mob-entry.dragging-src{opacity:.4;}
-.mob-entry .mob-name{font-family:'Cinzel',serif;font-size:.66rem;color:var(--text);flex:1;}
-.mob-entry .mob-lvl{font-family:'Share Tech Mono',monospace;font-size:.58rem;color:var(--dim);}
-.mob-entry .mob-drag-hint{font-size:.55rem;color:rgba(201,154,69,.4);margin-left:2px;}
-/* Boss section in library */
-.mob-section-title{
-  font-family:'Cinzel',serif;font-size:.55rem;letter-spacing:.12em;
-  color:var(--dim);padding:8px 6px 4px;text-transform:uppercase;
-}
-.mob-entry.boss-entry{border-color:rgba(160,20,160,.2);background:rgba(80,5,80,.15);}
-.mob-entry.boss-entry:hover{background:rgba(160,20,160,.1);border-color:rgba(160,20,160,.3);}
-
-/* Story blocks in sidebar (saved) */
-.story-block{background:rgba(0,0,0,.5);border:1px solid var(--border);
-  border-radius:8px;padding:10px;margin-bottom:8px;position:relative;}
-.story-block-header{font-family:'Cinzel',serif;font-size:.62rem;
-  color:var(--gold);margin-bottom:6px;display:flex;justify-content:space-between;}
-.story-block-type{display:inline-block;padding:2px 8px;border-radius:12px;
-  font-size:.5rem;letter-spacing:.1em;}
-.sbt-text{background:rgba(20,40,80,.4);border:1px solid #1a3060;color:#6090d0;}
-.sbt-battle{background:rgba(120,20,20,.4);border:1px solid #a01010;color:#d04040;}
-.sbt-reward{background:rgba(20,80,20,.4);border:1px solid #1a6020;color:#40a050;}
-.sbt-boss{background:rgba(100,10,100,.4);border:1px solid #800880;color:#c040c0;}
-/* Saved stories panel */
-.saved-stories-panel{
-  border-top:1px solid var(--border);padding:10px 12px;
-  max-height:220px;overflow-y:auto;
-}
-.saved-story-entry{
-  display:flex;align-items:center;justify-content:space-between;
-  padding:6px 8px;border-radius:6px;margin-bottom:4px;
-  border:1px solid var(--border);background:rgba(0,0,0,.3);
-  font-size:.68rem;
-}
-
-/* ═══════════════════════════════════════════════════
    ONLINE LOBBY
 ═══════════════════════════════════════════════════ */
 #screen-online{padding:20px 16px 40px;gap:14px;overflow:auto;}
@@ -1191,10 +1055,6 @@ input, textarea { font-size: 16px !important; } /* Prevents iOS zoom on focus */
   .room-code { font-size: 2rem !important; }
   .player-entry { padding: 8px !important; }
 
-  /* ── Story editor ── */
-  .editor-layout { grid-template-columns: 1fr !important; }
-  #story-canvas { min-height: 160px !important; font-size: .75rem !important; }
-
   /* ── Skill tree ── */
   .skill-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 6px !important; }
 
@@ -1454,13 +1314,6 @@ input, textarea { font-size: 16px !important; } /* Prevents iOS zoom on focus */
         <div class="mode-desc">Procedurally generated dungeons with random loot & enemies</div>
       </div>
     </button>
-    <button class="mode-btn" onclick="goDuel()">
-      <span class="mode-icon">🗡️</span>
-      <div class="mode-info">
-        <div class="mode-name">Duel Mode</div>
-        <div class="mode-desc">Quick 1v1 battle with a random character vs random enemy</div>
-      </div>
-    </button>
     <button class="mode-btn" onclick="goOnline()">
       <span class="mode-icon">🌐</span>
       <div class="mode-info">
@@ -1473,13 +1326,6 @@ input, textarea { font-size: 16px !important; } /* Prevents iOS zoom on focus */
       <div class="mode-info">
         <div class="mode-name">Ranks</div>
         <div class="mode-desc">Leaderboard &amp; your duel rank</div>
-      </div>
-    </button>
-    <button class="mode-btn" onclick="goEditor()">
-      <span class="mode-icon">📖</span>
-      <div class="mode-info">
-        <div class="mode-name">Story Editor</div>
-        <div class="mode-desc">Create custom stories with monsters, bosses, and rewards</div>
       </div>
     </button>
     <button class="mode-btn" onclick="goSkills()">
@@ -1720,53 +1566,6 @@ input, textarea { font-size: 16px !important; } /* Prevents iOS zoom on focus */
     <div class="skill-grid" id="skill-grid"></div>
     <div style="margin-top:14px;padding:12px;background:rgba(0,0,0,.4);border:1px solid var(--border);border-radius:10px;font-size:.8rem;color:var(--dim);font-style:italic;">
       Skills persist across battles. Unlock them with XP earned in combat.
-    </div>
-  </div>
-</div>
-
-<!-- ═══════════════════════ LEVEL EDITOR SCREEN ═══════════════════════ -->
-<div id="screen-editor" class="screen">
-  <!-- Top bar -->
-  <div class="editor-topbar">
-    <button class="back-btn" onclick="showMenu()">← Menu</button>
-    <span style="font-family:'Cinzel Decorative',serif;font-size:.85rem;color:var(--gold);">📖 Story Editor</span>
-    <button class="btn-sm" onclick="saveStory()" style="margin-left:auto;">💾 Save</button>
-    <button class="btn-sm" onclick="playStory()" style="background:linear-gradient(135deg,#0a4820,#1e8040);">▶ Play Story</button>
-  </div>
-
-  <div class="editor-layout">
-    <!-- LEFT: Big story canvas -->
-    <div class="story-canvas-wrap">
-      <div class="story-canvas-toolbar">
-        <input class="story-title-field" id="story-title-input" placeholder="Story title...">
-        <div style="display:flex;gap:5px;margin-left:auto;flex-wrap:wrap;">
-          <button class="btn-sm" onclick="editorInsertReward()" style="font-size:.55rem;padding:5px 9px;background:linear-gradient(135deg,#1a5010,#3a9020);">🎁 Reward</button>
-          <button class="btn-sm" onclick="loadStory()" style="font-size:.55rem;padding:5px 9px;background:rgba(0,0,0,.4);">📂 Load</button>
-        </div>
-      </div>
-      <!-- The main story writing area -->
-      <div id="story-canvas" contenteditable="true" spellcheck="false"
-        ondragover="editorDragOver(event)"
-        ondragleave="editorDragLeave(event)"
-        ondrop="editorDrop(event)">
-      </div>
-      <div style="padding:6px 14px 10px;font-size:.58rem;color:var(--dim);font-style:italic;border-top:1px solid var(--border);background:rgba(0,0,0,.3);">
-        ✍️ Type freely · Drag monsters from the right panel to insert them anywhere in your story · 🎁 Reward adds a gold reward at cursor
-      </div>
-    </div>
-
-    <!-- RIGHT: Monster library sidebar -->
-    <div class="monster-sidebar">
-      <div class="monster-sidebar-title">
-        ⚔️ Monster Library
-        <input class="mob-search-input" id="mob-search" oninput="filterMonsters()" placeholder="Search...">
-      </div>
-      <div class="monster-lib" id="monster-lib"></div>
-      <!-- Saved stories at the bottom -->
-      <div class="saved-stories-panel" id="saved-stories-panel">
-        <div style="font-family:'Cinzel',serif;font-size:.6rem;color:var(--gold);margin-bottom:8px;letter-spacing:.1em;">SAVED STORIES</div>
-        <div id="saved-stories-list"></div>
-      </div>
     </div>
   </div>
 </div>
@@ -2140,9 +1939,6 @@ let gameState = {
   dungeonFloor: 1,
   dungeonRooms: [],
   dungeonCurrent: -1,
-
-  // Story editor
-  storyBlocks: [],
 
   // Online
   onlineUsername: '',
@@ -3198,16 +2994,10 @@ function shopBuy(itemId, cat){
   shopTab(cat, activeBtn);
 }
 function goSkills(){renderSkillTree();showScreen('screen-skills');}
-function goEditor(){renderEditor();showScreen('screen-editor');}
 function goDungeon(){
   if(!gameState.deck.length){goCardPick('dungeon');return;}
   generateDungeon();
   showScreen('screen-dungeon');
-}
-function goDuel(){
-  if(!gameState.deck.length){goCardPick('duel');return;}
-  const mon = randomMonsterForLevel(gameState.playerLevel);
-  startBattle(mon, 'screen-menu', false);
 }
 
 // ─────────────────────────────────────────
@@ -3369,7 +3159,6 @@ function confirmDeck(){
   saveGame();
 
   if(_afterDeck === 'dungeon'){generateDungeon();showScreen('screen-dungeon');}
-  else if(_afterDeck === 'duel'){const mon=randomMonsterForLevel(1);startBattle(mon,'screen-menu',false);}
   else if(_afterDeck === 'menu' || _afterDeck === 'online_return' || _afterDeck === 'online_host' || _afterDeck === 'online_join'){showMenu();}
   else { showScreen('screen-sp'); initSP(); }
 }
@@ -3948,8 +3737,6 @@ function spBattleEnd(won){
   gameState.isBoss=false;gameState.bossPhase=0;gameState.bossRebirthed=false;
   updateSPHud();setSPBtns();
   saveGame(); // auto-save after every battle
-  // Continue story if we were in a story run
-  if(won && gameState._storyQueue) setTimeout(continueStoryQueue, 800);
 }
 
 // ─────────────────────────────────────────
@@ -4433,403 +4220,6 @@ function renderSkillTree(){
     grid.appendChild(d);
   });
 }
-
-// ─────────────────────────────────────────
-//  LEVEL EDITOR
-// ─────────────────────────────────────────
-// ─────────────────────────────────────────
-//  STORY EDITOR — DRAG-DROP CANVAS
-// ─────────────────────────────────────────
-
-// storyBlocks are derived from canvas DOM on save/play
-// Each monster chip in the canvas carries data-mid (monster id) and data-type (monster|boss)
-
-let _dragMobId = null;
-let _dragMobType = 'monster'; // 'monster' or 'boss'
-let _savedRange = null; // for drop cursor position
-
-function renderEditor(){
-  renderMonsterLibrary();
-  loadSavedStories();
-  // If storyBlocks exist (loaded story), rebuild canvas HTML
-  if(gameState.storyBlocks && gameState.storyBlocks.length){
-    buildCanvasFromBlocks(gameState.storyBlocks);
-  }
-}
-
-function renderMonsterLibrary(){
-  const lib = document.getElementById('monster-lib');
-  const q = (document.getElementById('mob-search').value||'').toLowerCase();
-  const filteredMon = MONSTERS.filter(m=>m.name.toLowerCase().includes(q));
-  const filteredBoss = BOSSES.filter(b=>b.name.toLowerCase().includes(q));
-  let html = '';
-  if(filteredMon.length){
-    html += `<div class="mob-section-title">Monsters</div>`;
-    html += filteredMon.map(m=>`
-      <div class="mob-entry" draggable="true"
-        ondragstart="mobDragStart(event,'${m.id}','monster')"
-        ondragend="mobDragEnd(event)"
-        onclick="insertMobAtCursor('${m.id}','monster')"
-        title="Drag into story or click to insert at cursor">
-        <span style="font-size:1.2rem;">${m.emoji||'👾'}</span>
-        <span class="mob-name">${m.name}</span>
-        <span class="mob-lvl">Lv.${m.levelRequirement}</span>
-        <span class="mob-drag-hint">⠿</span>
-      </div>`).join('');
-  }
-  if(filteredBoss.length){
-    html += `<div class="mob-section-title" style="color:rgba(200,100,200,.6);">Bosses</div>`;
-    html += filteredBoss.map(b=>`
-      <div class="mob-entry boss-entry" draggable="true"
-        ondragstart="mobDragStart(event,'${b.id}','boss')"
-        ondragend="mobDragEnd(event)"
-        onclick="insertMobAtCursor('${b.id}','boss')"
-        title="Drag into story or click to insert at cursor">
-        <span style="font-size:1.2rem;">${b.emoji||'👑'}</span>
-        <span class="mob-name">${b.name}</span>
-        <span class="mob-lvl" style="color:rgba(200,100,200,.7);">BOSS</span>
-        <span class="mob-drag-hint">⠿</span>
-      </div>`).join('');
-  }
-  if(!html) html = `<div style="color:var(--dim);font-style:italic;font-size:.7rem;padding:10px;">No results.</div>`;
-  lib.innerHTML = html;
-}
-
-function filterMonsters(){ renderMonsterLibrary(); }
-
-// ── Drag handlers ──
-function mobDragStart(e, id, type){
-  _dragMobId = id;
-  _dragMobType = type;
-  e.dataTransfer.effectAllowed = 'copy';
-  e.dataTransfer.setData('text/plain', id);
-  e.currentTarget.classList.add('dragging-src');
-}
-function mobDragEnd(e){
-  e.currentTarget.classList.remove('dragging-src');
-}
-function editorDragOver(e){
-  e.preventDefault();
-  e.dataTransfer.dropEffect = 'copy';
-  document.getElementById('story-canvas').classList.add('drag-over');
-  // Track caret position for drop
-  if(document.caretRangeFromPoint){
-    const r = document.caretRangeFromPoint(e.clientX, e.clientY);
-    if(r){ _savedRange = r; }
-  } else if(document.caretPositionFromPoint){
-    const p = document.caretPositionFromPoint(e.clientX, e.clientY);
-    if(p){
-      const r = document.createRange();
-      r.setStart(p.offsetNode, p.offset);
-      r.collapse(true);
-      _savedRange = r;
-    }
-  }
-}
-function editorDragLeave(e){
-  if(!e.currentTarget.contains(e.relatedTarget))
-    document.getElementById('story-canvas').classList.remove('drag-over');
-}
-function editorDrop(e){
-  e.preventDefault();
-  document.getElementById('story-canvas').classList.remove('drag-over');
-  const id = _dragMobId || e.dataTransfer.getData('text/plain');
-  const type = _dragMobType || 'monster';
-  if(!id) return;
-  insertMobAtPosition(id, type, _savedRange);
-  _dragMobId = null;
-}
-
-// ── Insert chip helpers ──
-function insertMobAtCursor(id, type){
-  // Save current selection
-  const sel = window.getSelection();
-  let range = null;
-  if(sel && sel.rangeCount > 0){
-    const r = sel.getRangeAt(0);
-    const canvas = document.getElementById('story-canvas');
-    if(canvas.contains(r.startContainer)) range = r;
-  }
-  insertMobAtPosition(id, type, range);
-}
-
-function insertMobAtPosition(id, type, range){
-  const canvas = document.getElementById('story-canvas');
-  const mob = type==='boss'
-    ? BOSSES.find(b=>b.id===id)
-    : MONSTERS.find(m=>m.id===id);
-  if(!mob) return;
-
-  const chip = document.createElement('span');
-  chip.className = 'story-mob-chip' + (type==='boss'?' story-boss-chip':'');
-  chip.contentEditable = 'false';
-  chip.dataset.mid = id;
-  chip.dataset.mtype = type;
-  chip.innerHTML = `${mob.emoji||'👾'} ${mob.name}<span class="chip-del" onclick="this.parentNode.remove()">✕</span>`;
-
-  if(range){
-    range.deleteContents();
-    range.insertNode(chip);
-    // Move cursor after chip
-    const after = document.createRange();
-    after.setStartAfter(chip);
-    after.collapse(true);
-    const sel = window.getSelection();
-    sel.removeAllRanges();
-    sel.addRange(after);
-  } else {
-    canvas.appendChild(chip);
-  }
-  canvas.focus();
-  toast(`${mob.emoji||''} ${mob.name} inserted!`);
-}
-
-// ── Reward button ──
-function editorInsertReward(){
-  showModal('Insert Reward',`
-    <div style="margin-bottom:10px;font-size:.75rem;color:var(--text);">Gold amount:</div>
-    <input id="reward-gold-input" type="number" value="50" min="0" style="
-      background:rgba(0,0,0,.5);border:1px solid var(--border);border-radius:6px;
-      color:var(--gold);font-size:1rem;padding:8px 12px;width:100%;outline:none;">`,
-    [{label:'Insert 🎁', cls:'btn', cb:()=>{
-      const g = parseInt(document.getElementById('reward-gold-input').value)||50;
-      const canvas = document.getElementById('story-canvas');
-      const chip = document.createElement('span');
-      chip.className = 'story-mob-chip';
-      chip.contentEditable = 'false';
-      chip.dataset.mtype = 'reward';
-      chip.dataset.gold = g;
-      chip.style.background = 'rgba(20,80,20,.5)';
-      chip.style.borderColor = 'rgba(40,160,40,.4)';
-      chip.style.color = '#70e070';
-      chip.innerHTML = `🎁 +${g} Gold<span class="chip-del" onclick="this.parentNode.remove()">✕</span>`;
-      const sel = window.getSelection();
-      if(sel && sel.rangeCount > 0){
-        const r = sel.getRangeAt(0);
-        if(canvas.contains(r.startContainer)){
-          r.deleteContents(); r.insertNode(chip);
-          const after = document.createRange();
-          after.setStartAfter(chip); after.collapse(true);
-          sel.removeAllRanges(); sel.addRange(after);
-          closeModal(); return;
-        }
-      }
-      canvas.appendChild(chip);
-      closeModal();
-    }},
-    {label:'Cancel', cls:'btn-ghost', cb:closeModal}]
-  );
-}
-
-// ── Parse canvas → storyBlocks array ──
-function parseCanvasToBlocks(){
-  const canvas = document.getElementById('story-canvas');
-  const blocks = [];
-  let textBuffer = '';
-
-  function flushText(){
-    const t = textBuffer.trim();
-    if(t) blocks.push({type:'text', text:t});
-    textBuffer = '';
-  }
-
-  function walk(node){
-    if(node.nodeType === Node.TEXT_NODE){
-      textBuffer += node.textContent;
-    } else if(node.nodeType === Node.ELEMENT_NODE){
-      const el = node;
-      if(el.dataset && el.dataset.mtype){
-        flushText();
-        if(el.dataset.mtype === 'monster'){
-          const mon = MONSTERS.find(m=>m.id===el.dataset.mid);
-          if(mon) blocks.push({type:'battle', monster:mon, reward:{xp:mon.xp||20, gold:mon.gold||10}});
-        } else if(el.dataset.mtype === 'boss'){
-          const boss = BOSSES.find(b=>b.id===el.dataset.mid);
-          if(boss) blocks.push({type:'boss', boss:boss});
-        } else if(el.dataset.mtype === 'reward'){
-          blocks.push({type:'reward', gold:parseInt(el.dataset.gold)||50});
-        }
-      } else if(el.tagName === 'BR' || el.tagName === 'DIV' || el.tagName === 'P'){
-        textBuffer += '\n';
-        el.childNodes.forEach(walk);
-      } else {
-        el.childNodes.forEach(walk);
-      }
-    }
-  }
-  canvas.childNodes.forEach(walk);
-  flushText();
-  return blocks;
-}
-
-// ── Build canvas from saved blocks ──
-function buildCanvasFromBlocks(blocks){
-  const canvas = document.getElementById('story-canvas');
-  canvas.innerHTML = '';
-  blocks.forEach(b=>{
-    if(b.type === 'text'){
-      canvas.appendChild(document.createTextNode(b.text + ' '));
-    } else if(b.type === 'battle' && b.monster){
-      const chip = document.createElement('span');
-      chip.className = 'story-mob-chip';
-      chip.contentEditable = 'false';
-      chip.dataset.mid = b.monster.id;
-      chip.dataset.mtype = 'monster';
-      chip.innerHTML = `${b.monster.emoji||'👾'} ${b.monster.name}<span class="chip-del" onclick="this.parentNode.remove()">✕</span>`;
-      canvas.appendChild(chip);
-      canvas.appendChild(document.createTextNode(' '));
-    } else if(b.type === 'boss' && b.boss){
-      const chip = document.createElement('span');
-      chip.className = 'story-mob-chip story-boss-chip';
-      chip.contentEditable = 'false';
-      chip.dataset.mid = b.boss.id;
-      chip.dataset.mtype = 'boss';
-      chip.innerHTML = `${b.boss.emoji||'👑'} ${b.boss.name}<span class="chip-del" onclick="this.parentNode.remove()">✕</span>`;
-      canvas.appendChild(chip);
-      canvas.appendChild(document.createTextNode(' '));
-    } else if(b.type === 'reward'){
-      const chip = document.createElement('span');
-      chip.className = 'story-mob-chip';
-      chip.contentEditable = 'false';
-      chip.dataset.mtype = 'reward';
-      chip.dataset.gold = b.gold||50;
-      chip.style.cssText = 'background:rgba(20,80,20,.5);border-color:rgba(40,160,40,.4);color:#70e070;';
-      chip.innerHTML = `🎁 +${b.gold||50} Gold<span class="chip-del" onclick="this.parentNode.remove()">✕</span>`;
-      canvas.appendChild(chip);
-      canvas.appendChild(document.createTextNode(' '));
-    }
-  });
-}
-
-function saveStory(){
-  const title = document.getElementById('story-title-input').value || 'Untitled';
-  const blocks = parseCanvasToBlocks();
-  if(!blocks.length){toast('Write something first!');return;}
-  gameState.storyBlocks = blocks;
-  const stories = JSON.parse(localStorage.getItem('aetherion_stories')||'[]');
-  stories.push({title, blocks, date:Date.now()});
-  localStorage.setItem('aetherion_stories', JSON.stringify(stories));
-  toast(`💾 Saved "${title}"!`); loadSavedStories();
-}
-
-function loadStory(){
-  const stories = JSON.parse(localStorage.getItem('aetherion_stories')||'[]');
-  if(!stories.length){toast('No saved stories yet.');return;}
-  showModal('Load Story',
-    stories.map((s,i)=>`<div style="margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:8px;">
-      <span style="font-size:.75rem;color:var(--text);">${s.title}</span>
-      <button class="btn-sm" onclick="doLoadStory(${i});closeModal();" style="font-size:.6rem;">Load</button>
-    </div>`).join(''),
-    [{label:'Cancel', cls:'btn-ghost', cb:closeModal}]);
-}
-
-function doLoadStory(i){
-  const stories = JSON.parse(localStorage.getItem('aetherion_stories')||'[]');
-  const story = stories[i]; if(!story) return;
-  gameState.storyBlocks = [...story.blocks];
-  document.getElementById('story-title-input').value = story.title;
-  buildCanvasFromBlocks(story.blocks);
-  toast(`Loaded: ${story.title}`);
-}
-
-function loadSavedStories(){
-  const el = document.getElementById('saved-stories-list');
-  const stories = JSON.parse(localStorage.getItem('aetherion_stories')||'[]');
-  el.innerHTML = stories.length
-    ? stories.map((s,i)=>`<div class="saved-story-entry">
-        <span style="color:var(--text);font-family:'Cinzel',serif;font-size:.62rem;">${s.title}</span>
-        <button class="btn-sm" onclick="doLoadStory(${i})" style="font-size:.5rem;padding:4px 8px;">Load</button>
-      </div>`).join('')
-    : `<div style="color:var(--dim);font-size:.68rem;font-style:italic;padding:4px;">No saved stories.</div>`;
-}
-
-function playStory(){
-  const blocks = parseCanvasToBlocks();
-  if(!blocks.length){toast('Write a story first!');return;}
-  if(!gameState.deck.length){goCardPick('sp');return;}
-  gameState.storyBlocks = blocks;
-  const title = document.getElementById('story-title-input').value || 'Untitled';
-  showScreen('screen-sp'); initSP();
-  spLog(`📖 <b>${title}</b>`,'l');
-  let idx = 0;
-  function runBlock(){
-    if(idx >= gameState.storyBlocks.length){spLog('📖 <b>The End.</b>','w');return;}
-    const b = gameState.storyBlocks[idx++];
-    if(b.type==='text'){
-      if(b.text.trim()) spLog(b.text,'s');
-      setTimeout(runBlock, 150);
-    } else if(b.type==='battle'){
-      spLog(`⚔️ <b>${b.monster?.name}</b> appears!`,'c');
-      gameState._storyQueue = {blocks:gameState.storyBlocks, idx};
-      startBattle({...b.monster, maxHp:b.monster.hp}, 'screen-sp', false);
-    } else if(b.type==='boss'){
-      spLog(`👑 <b>BOSS: ${b.boss?.name}!</b>`,'d');
-      gameState._storyQueue = {blocks:gameState.storyBlocks, idx};
-      startBattle({...b.boss, hp:b.boss.hp, maxHp:b.boss.hp}, 'screen-sp', true);
-    } else if(b.type==='reward'){
-      // Only give gold rewards if playing online story mode
-      if(gameState.onlineRoomCode){
-        gameState.playerGold += b.gold||0;
-        spLog(`🎁 <b>+${b.gold} Gold!</b> (Online reward)`,'l');
-        updateSPHud();
-      } else {
-        spLog(`🎁 Story reward: <b>+${b.gold} Gold</b> — <span style="color:#a04040;">only granted in Online Story mode!</span>`,'mn');
-      }
-      setTimeout(runBlock, 600);
-    } else if(b.type==='village'||b.type==='merchant'){
-      storyRandomEvent(b.type, idx);
-      return;
-    } else {
-      // Random chance of village or merchant mid-story
-      if(Math.random()<0.12) storyRandomEvent(Math.random()<0.5?'village':'merchant', idx);
-      else setTimeout(runBlock, 150);
-    }
-  }
-  gameState._storyRunner = runBlock;
-  setTimeout(runBlock, 400);
-}
-
-// Called after a story battle ends to continue the queue
-function continueStoryQueue(){
-  if(gameState._storyQueue){
-    const q = gameState._storyQueue;
-    gameState.storyBlocks = q.blocks;
-    gameState._storyQueue = null;
-    // rebuild runner
-    let idx = q.idx;
-    function runBlock(){
-      if(idx >= gameState.storyBlocks.length){spLog('📖 <b>The End.</b>','w');return;}
-      const b = gameState.storyBlocks[idx++];
-      if(b.type==='text'){if(b.text.trim())spLog(b.text,'s');setTimeout(runBlock,150);}
-      else if(b.type==='battle'){
-        spLog(`⚔️ <b>${b.monster?.name}</b> appears!`,'c');
-        gameState._storyQueue={blocks:gameState.storyBlocks,idx};
-        startBattle({...b.monster,maxHp:b.monster.hp},'screen-sp',false);
-      } else if(b.type==='boss'){
-        spLog(`👑 <b>BOSS: ${b.boss?.name}!</b>`,'d');
-        gameState._storyQueue={blocks:gameState.storyBlocks,idx};
-        startBattle({...b.boss,hp:b.boss.hp,maxHp:b.boss.hp},'screen-sp',true);
-      } else if(b.type==='reward'){
-        if(gameState.onlineRoomCode){
-          gameState.playerGold+=b.gold||0;
-          spLog(`🎁 <b>+${b.gold} Gold!</b> (Online reward)`,'l');
-          updateSPHud();
-        } else {
-          spLog(`🎁 Story reward: <b>+${b.gold} Gold</b> — <span style="color:#a04040;">only granted in Online Story mode!</span>`,'mn');
-        }
-        setTimeout(runBlock,600);
-      } else if(b.type==='village'||b.type==='merchant'){
-        storyRandomEvent(b.type,idx);return;
-      }
-    }
-    setTimeout(runBlock, 500);
-  }
-}
-
-// Stubs to keep old references working
-function addBlock(){}
-function removeBlock(){}
-function renderStoryBlocks(){}
 
 // ─────────────────────────────────────────
 //  VILLAGE & TRADER SYSTEM
@@ -5698,124 +5088,6 @@ function buyItem(name,cost){
   if(gameState.playerGold<cost){toast(`Need ${cost} Gold!`);return;}
   gameState.playerGold-=cost;gameState.inventory.push({item:name,rarity:'Common',qty:1});
   updateSPHud();toast(`Bought ${name}!`);
-}
-
-// ─────────────────────────────────────────
-//  STORY RANDOM EVENTS
-// ─────────────────────────────────────────
-function storyRandomEvent(type, resumeIdx){
-  // Pause the story queue, show event, resume after
-  const MERCHANT_NAMES = ['Corvin the Wanderer','Mira of the Roads','Old Jax','Tessa Quickfingers','Brother Aldous'];
-  const mName = MERCHANT_NAMES[Math.floor(Math.random()*MERCHANT_NAMES.length)];
-
-  if(type==='merchant'){
-    spLog(`🛒 <b>${mName}</b> steps out from the shadows — "Care to trade, traveller?"`,'loc');
-    // Pick 3 random items for the merchant
-    const MERCH_POOL = [
-      {icon:'🧪',name:'Health Potion',cost:12,desc:'Heals 40 HP'},
-      {icon:'⚗️',name:'Elixir',cost:40,desc:'Heals all 60 HP'},
-      {icon:'🔮',name:'Mana Crystal',cost:30,desc:'Resets cooldown'},
-      {icon:'📜',name:'Spell Scroll',cost:50,desc:'+5 Magic'},
-      {icon:'🗡️',name:'Sharp Stone',cost:35,desc:'+3 Attack'},
-      {icon:'⛓️',name:'Iron Links',cost:35,desc:'+4 Defense'},
-      {icon:'📚',name:'XP Tome',cost:50,desc:'+150 Card XP'},
-      {icon:'🪤',name:'Monster Bait',cost:70,desc:'Tame a monster'},
-      {icon:'💊',name:'Mega Potion',cost:65,desc:'Full heal active'},
-      {icon:'🪶',name:'Phoenix Feather',cost:180,desc:'Revive fainted card'},
-    ];
-    const stock = [...MERCH_POOL].sort(()=>Math.random()-.5).slice(0,3);
-    const body = `<div style="font-size:.65rem;color:var(--gold);margin-bottom:10px;">💰 Your Gold: <b id="merch-gold-disp">${gameState.playerGold}</b></div>
-      <div style="font-size:.62rem;color:var(--dim);margin-bottom:10px;font-style:italic;">"I've been travelling far — these are all I have left."</div>
-      ${stock.map(item=>`
-        <div class="trader-item">
-          <span style="font-size:1.5rem;">${item.icon}</span>
-          <div class="trader-item-info">
-            <div class="trader-item-name">${item.name}</div>
-            <div class="trader-item-desc">${item.desc}</div>
-          </div>
-          <button class="btn-sm" onclick="traderBuy('${item.name}',${item.cost},'${JSON.stringify({type:'item',stat:'hp',val:40}).replace(/'/g,"\\'")}',this);document.getElementById('merch-gold-disp').textContent=gameState.playerGold;"
-            ${gameState.playerGold<item.cost?'disabled':''} style="font-size:.58rem;flex-shrink:0;">💰${item.cost}</button>
-        </div>`).join('')}
-      <div style="margin-top:14px;padding-top:10px;border-top:1px solid var(--border);">
-        <div style="font-family:'Cinzel',serif;font-size:.6rem;color:var(--gold2);margin-bottom:8px;">📦 Sell from your Bag</div>
-        ${gameState.inventory.length
-          ? gameState.inventory.slice(0,4).map(i=>{
-              const sellP=getSellPrices();
-              const sp=sellP[i.item]||getSellPriceForItem(i);
-              return `<div class="trader-item">
-                <div class="trader-item-info"><div class="trader-item-name">${i.item}</div><div class="trader-item-desc">x${i.qty||1}</div></div>
-                <button class="btn-sm" onclick="sellItemFromBag('${i.item}',${sp});document.getElementById('merch-gold-disp').textContent=gameState.playerGold;this.closest('.trader-item').style.opacity='.4';this.disabled=true;" style="font-size:.58rem;flex-shrink:0;background:rgba(60,40,10,.8);">💰${sp}</button>
-              </div>`;
-            }).join('')
-          : '<div style="font-size:.62rem;color:var(--dim);font-style:italic;">Bag is empty.</div>'}
-      </div>`;
-    showModal(`🛒 ${mName}`, body, [
-      {label:'Continue Journey →', cls:'btn', cb:()=>{ closeModal(); storyResume(resumeIdx); }}
-    ]);
-
-  } else if(type==='village'){
-    const VILLAGE_NAMES = ['Ashford','Goldenholm','Riverwatch','Stonegate','Mistveil','Brightwick'];
-    const vName = VILLAGE_NAMES[Math.floor(Math.random()*VILLAGE_NAMES.length)];
-    spLog(`🏘️ <b>Village of ${vName}</b> — The story leads through a peaceful settlement.`,'loc');
-    gameState.currentVillage = vName;
-    const html = `<div class="village-panel">
-      <div class="village-title">🏘️ ${vName}</div>
-      <div class="village-sub">Your journey passes through here. Take a moment...</div>
-      <div class="village-actions">
-        <button class="btn-sm" onclick="villageRest();" style="background:linear-gradient(135deg,#1a4010,#3a8020);">🛏️ Rest (Free)</button>
-        <button class="btn-sm" onclick="closeModal();villageTrader();">🛒 Trader</button>
-        <button class="btn-sm" onclick="closeModal();villageRecruit();">⚔️ Recruit</button>
-      </div>
-    </div>`;
-    showModal(`🏘️ Village of ${vName}`, html, [
-      {label:'Continue Story →', cls:'btn', cb:()=>{ closeModal(); storyResume(resumeIdx); }}
-    ]);
-  }
-}
-
-function storyResume(idx){
-  // Resume story from saved index
-  if(!gameState.storyBlocks) return;
-  let i = idx;
-  function runBlock(){
-    if(i>=gameState.storyBlocks.length){spLog('📖 <b>The End.</b>','w');return;}
-    const b=gameState.storyBlocks[i++];
-    if(b.type==='text'){if(b.text.trim())spLog(b.text,'s');setTimeout(runBlock,150);}
-    else if(b.type==='battle'){
-      spLog(`⚔️ <b>${b.monster?.name}</b> appears!`,'c');
-      gameState._storyQueue={blocks:gameState.storyBlocks,idx:i};
-      startBattle({...b.monster,maxHp:b.monster.hp},'screen-sp',false);
-    } else if(b.type==='boss'){
-      spLog(`👑 <b>BOSS: ${b.boss?.name}!</b>`,'d');
-      gameState._storyQueue={blocks:gameState.storyBlocks,idx:i};
-      startBattle({...b.boss,hp:b.boss.hp,maxHp:b.boss.hp},'screen-sp',true);
-    } else if(b.type==='reward'){
-      if(gameState.onlineRoomCode){
-        gameState.playerGold+=b.gold||0;
-        spLog(`🎁 <b>+${b.gold} Gold!</b> (Online reward)`,'l');
-        updateSPHud();
-      } else {
-        spLog(`🎁 Story reward: <b>+${b.gold} Gold</b> — <span style="color:#a04040;">only granted in Online Story mode!</span>`,'mn');
-      }
-      setTimeout(runBlock,600);
-    } else if(b.type==='village'||b.type==='merchant'){
-      storyRandomEvent(b.type,i);return;
-    } else {
-      if(Math.random()<0.001){
-        const claude=BOSSES.find(b=>b.id==='claude_oracle');
-        if(claude){
-          const d=claude.dialogs.intro[Math.floor(Math.random()*claude.dialogs.intro.length)];
-          spLog(`🌌 <b>The story tears open... Claude the Oracle appears!</b>`,'d');
-          spLog(`🤖 "${d}"`,'sk');
-          gameState._storyQueue={blocks:gameState.storyBlocks,idx:i};
-          setTimeout(()=>startBattle({...claude,hp:claude.hp,maxHp:claude.hp,isBoss:true,isSecretBoss:true},'screen-sp',true),1200);
-          return;
-        }
-      }
-      setTimeout(runBlock,150);
-    }
-  }
-  setTimeout(runBlock,400);
 }
 
 // ─────────────────────────────────────────
