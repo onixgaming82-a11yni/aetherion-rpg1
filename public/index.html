@@ -5158,6 +5158,51 @@ const IS_PRODUCTION = window.IS_PRODUCTION || false;
 // ── Socket connection ──
 let socket = null;
 let onlineRoomPlayers = [];   // real players in current room
+
+// ── Socket initializer ───────────────────────────────────
+// Keep one Socket.IO client for the whole page.  Authentication, friends,
+// guilds, duels and Veylor all share this connection.  Login/register call
+// getSocket() before emitting their account events, so this function MUST
+// exist and return a live Socket.IO instance.
+function getSocket() {
+  if (socket) return socket;
+
+  if (typeof io !== 'function') {
+    console.error('[Socket] Socket.IO client library is not loaded.');
+    throw new Error('Socket.IO client is unavailable.');
+  }
+
+  socket = io({
+    autoConnect: true,
+    reconnection: true,
+    reconnectionAttempts: Infinity,
+    reconnectionDelay: 500,
+    reconnectionDelayMax: 5000,
+    timeout: 10000,
+  });
+
+  socket.on('connect', () => {
+    console.log('[Socket] Connected:', socket.id);
+
+    // These systems register their persistent listeners once the actual
+    // socket exists. Their own setup functions remove duplicates where
+    // necessary, so reconnects are safe.
+    setupFriendListeners();
+    setupGuildListeners();
+    setupVeylorListeners();
+    setupDuelResultListener();
+  });
+
+  socket.on('connect_error', (err) => {
+    console.error('[Socket] Connection error:', err?.message || err);
+  });
+
+  socket.on('disconnect', (reason) => {
+    console.warn('[Socket] Disconnected:', reason);
+  });
+
+  return socket;
+}
 // ═══════════════════════════════════════════════════
 //  FRIEND SYSTEM — server-authoritative
 // ═══════════════════════════════════════════════════
