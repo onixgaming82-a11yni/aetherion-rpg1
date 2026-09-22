@@ -43,9 +43,6 @@ const io     = new Server(server, {
 
 // ── Static files ──────────────────────────────────────────
 app.use(express.static(path.join(__dirname, 'public')));
-app.get('/', (_req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
 
 // ── Health check (used by UptimeRobot to keep server awake)
 app.get('/health', (_req, res) => {
@@ -867,14 +864,18 @@ async function dbGetAccount(uname) {
 }
 
 async function dbSaveAccount(data) {
-  if (!MONGO_URI) return;
+  if (!MONGO_URI) return true; // memory-only mode — always succeeds
   try {
     await Account.findOneAndUpdate(
       { uname: data.uname },
       data,
       { upsert: true, new: true }
     );
-  } catch(e) { console.warn('[DB] Save error:', e.message); }
+    return true;
+  } catch(e) {
+    console.error('[DB] dbSaveAccount error:', e.message);
+    return false;
+  }
 }
 
 async function dbDeleteAccount(uname) {
@@ -1464,7 +1465,7 @@ io.on('connection', (socket) => {
 
     if (!username?.trim()) { socket.emit('account:error', { msg: 'Username required' }); return; }
 
-    const pw = password?.trim();
+    const pw = password ?? ''; // do NOT trim — preserve intentional spaces
     if (!pw || pw.length < 6) {
       socket.emit('account:error', { msg: 'Password must be at least 6 characters.' });
       return;
@@ -1487,6 +1488,12 @@ io.on('connection', (socket) => {
     const existsMem = accounts.has(uname);
     const existsDB  = existsMem ? null : await dbGetAccount(uname);
 
+    // Bug 10 fix: server-side username character validation
+    if (!/^[a-zA-Z0-9_\- ]+$/.test(base)) {
+      socket.emit('account:error', { msg: 'Username may only contain letters, numbers, spaces, _ and -.' });
+      return;
+    }
+
     if (existsDB || existsMem) {
       // Suggest a free name rather than auto-creating silently
       let counter = 2;
@@ -1499,7 +1506,12 @@ io.on('connection', (socket) => {
     const hashed = await hashPassword(pw);
     const data   = { username: base, uname, password: hashed, save: null, createdAt: Date.now(), lastLogin: Date.now() };
 
-    await dbSaveAccount(data);
+    const saved = await dbSaveAccount(data);
+    if (saved === false && MONGO_URI) {
+      // DB is configured but write failed — do not tell client account was created
+      socket.emit('account:error', { msg: 'Account could not be saved. Please try again.' });
+      return;
+    }
     accounts.set(uname, data);
 
     // Registration logs the player in immediately client-side, so bind the
@@ -1523,7 +1535,7 @@ io.on('connection', (socket) => {
 
     if (!username?.trim()) { socket.emit('account:error', { msg: 'Username required' }); return; }
     const uname = username.trim().toLowerCase();
-    const pw    = password?.trim();
+    const pw    = password ?? ''; // do NOT trim — client doesn't trim, must match
 
     // SECURITY: checked before touching the DB, and before the dummy-hash
     // timing guard below, so a locked-out account and an account mid-guess
@@ -1565,10 +1577,10 @@ io.on('connection', (socket) => {
     }
     recordLoginSuccess(uname);
 
-    // Update last login
+    // Update last login — fire-and-forget so it never delays the login response
     acc.lastLogin = Date.now();
-    await dbSaveAccount({ ...acc, uname });
     accounts.set(uname, acc);
+    dbSaveAccount({ ...acc, uname }).catch(e => console.warn('[AUTH] lastLogin save failed:', e.message));
 
     // SECURITY: bind this socket to the verified account identity.
     // Everything downstream (rooms, duels, wins) should trust socket.data,
@@ -1927,7 +1939,7 @@ io.on('connection', (socket) => {
     if (lockedMs > 0) { socket.emit('account:error', { msg: `Too many failed attempts. Try again in ${Math.ceil(lockedMs / 1000)}s.` }); return; }
     let acc = accounts.get(uname) || await dbGetAccount(uname);
     if (!acc) { socket.emit('account:error', { msg: 'Account not found' }); return; }
-    const oldPw = oldPassword?.trim();
+    const oldPw = oldPassword ?? ''; // do NOT trim
     if (!oldPw || !(await verifyPassword(oldPw, acc.password))) { recordLoginFailure(uname); socket.emit('account:error', { msg: 'Current password is wrong!' }); return; }
     recordLoginSuccess(uname);
     const newPw = newPassword?.trim();
@@ -1947,7 +1959,7 @@ io.on('connection', (socket) => {
     if (lockedMs > 0) { socket.emit('account:error', { msg: `Too many failed attempts. Try again in ${Math.ceil(lockedMs / 1000)}s.` }); return; }
     let acc = accounts.get(uname) || await dbGetAccount(uname);
     if (!acc) { socket.emit('account:error', { msg: 'Account not found' }); return; }
-    const pw = password?.trim();
+    const pw = password ?? ''; // do NOT trim
     if (!pw || !(await verifyPassword(pw, acc.password))) { recordLoginFailure(uname); socket.emit('account:error', { msg: 'Wrong password! Cannot delete account.' }); return; }
     recordLoginSuccess(uname);
     await dbDeleteAccount(uname);
