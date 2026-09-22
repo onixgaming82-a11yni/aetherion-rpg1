@@ -2338,6 +2338,12 @@ function showLoginPanel(){
   document.getElementById('login-error').textContent='';
   const tl=document.getElementById('tab-login-btn'), tr=document.getElementById('tab-reg-btn');
   if(tl)tl.classList.add('active'); if(tr)tr.classList.remove('active');
+  // Bug 13: re-apply the remembered username when switching back to login panel
+  const savedName = localStorage.getItem('aetherion_hero_name');
+  if (savedName) {
+    const el = document.getElementById('login-username');
+    if (el && !el.value) el.value = savedName;
+  }
 }
 
 function showRegisterPanel(){
@@ -2358,29 +2364,45 @@ function doLogin(){
   const errEl    = document.getElementById('login-error');
   const loginBtn = document.querySelector('.btn-start[onclick="doLogin()"]');
 
+  // Bug 8 fix: always reset error style before showing new message
+  errEl.style.color = '#d06060';
+  errEl.textContent = '';
+
   if (!username) { errEl.textContent = 'Enter your username.'; return; }
   if (!password) { errEl.textContent = 'Enter your password.'; return; }
 
   _loginInProgress = true;
+  errEl.style.color = 'var(--dim)';
   errEl.textContent = 'Connecting...';
   if (loginBtn) loginBtn.disabled = true;
 
+  // Bug 5 fix: timeout so UI never stays stuck forever
+  const _loginTimeout = setTimeout(() => {
+    cleanup();
+    errEl.style.color = '#d06060';
+    errEl.textContent = 'Server took too long to respond. Please try again.';
+  }, 12000);
+
   const _finishLogin = () => {
+    clearTimeout(_loginTimeout);
     _loginInProgress = false;
     if (loginBtn) loginBtn.disabled = false;
   };
 
-  const s = getSocket();
-
-  // ── IMPORTANT: listeners registered BEFORE emit ──────────
-  const onLoggedIn = ({ username: uname, save, isNew }) => {
+  // Bug 9 fix: cleanup removes ALL listeners including disconnect
+  const cleanup = () => {
     s.off('account:loggedin', onLoggedIn);
     s.off('account:error',    onErr);
-    s.off('disconnect',       onDisconnect);
+    s.off('disconnect',       onDisconnect); // Bug 9: was missing here
     _finishLogin();
-    // Store only the username — never the password
+  };
+
+  const s = getSocket();
+
+  const onLoggedIn = ({ username: uname, save, isNew }) => {
+    cleanup();
     localStorage.setItem('aetherion_hero_name', uname);
-    localStorage.removeItem('aetherion_hero_pass'); // remove any stale password
+    localStorage.removeItem('aetherion_hero_pass');
     gameState.username = uname;
     gameState.onlineUsername = uname;
     if (save && !isNew) {
@@ -2400,24 +2422,21 @@ function doLogin(){
     }
     if (gameState.deck.length > 0) {
       updateMenuHud(); showScreen('screen-menu');
-      toast(`⚔️ Welcome back, ${uname}!`);
+      toast('⚔️ Welcome back, ' + uname + '!');
     } else {
       goCardPick('menu');
     }
   };
 
   const onErr = ({ msg }) => {
-    s.off('account:loggedin', onLoggedIn);
-    s.off('account:error',    onErr);
-    s.off('disconnect',       onDisconnect);
-    _finishLogin();
+    cleanup();
+    errEl.style.color = '#d06060';
     errEl.textContent = msg || 'Login failed. Please try again.';
   };
 
   const onDisconnect = () => {
-    s.off('account:loggedin', onLoggedIn);
-    s.off('account:error',    onErr);
-    _finishLogin();
+    cleanup();
+    errEl.style.color = '#d06060';
     errEl.textContent = 'Connection lost. Please try again.';
   };
 
@@ -2439,31 +2458,43 @@ function doRegister(){
   const regBtn   = document.querySelector('.btn-start[onclick="doRegister()"]');
 
   errEl.style.color = '#d06060';
-  if (!username)             { errEl.textContent = 'Choose a username.'; return; }
-  if (username.length < 3)   { errEl.textContent = 'Username must be at least 3 characters.'; return; }
-  if (!password)             { errEl.textContent = 'Choose a password.'; return; }
-  if (password.length < 6)   { errEl.textContent = 'Password must be at least 6 characters.'; return; }
+  errEl.textContent = '';
+  if (!username)           { errEl.textContent = 'Choose a username.'; return; }
+  if (username.length < 3) { errEl.textContent = 'Username must be at least 3 characters.'; return; }
+  if (!password)           { errEl.textContent = 'Choose a password.'; return; }
+  if (password.length < 6) { errEl.textContent = 'Password must be at least 6 characters.'; return; }
 
   _registerInProgress = true;
   errEl.textContent = 'Creating account...';
   errEl.style.color = 'var(--dim)';
   if (regBtn) regBtn.disabled = true;
 
+  // Bug 5 fix: timeout so UI never stays stuck
+  const _regTimeout = setTimeout(() => {
+    cleanup();
+    errEl.style.color = '#d06060';
+    errEl.textContent = 'Server took too long to respond. Please try again.';
+  }, 12000);
+
   const _finishReg = () => {
+    clearTimeout(_regTimeout);
     _registerInProgress = false;
     if (regBtn) regBtn.disabled = false;
   };
 
-  const s = getSocket();
-
-  // ── IMPORTANT: listeners registered BEFORE emit ──────────
-  const onRegistered = ({ username: uname }) => {
+  // Bug 6+7 fix: single cleanup removes ALL four listeners every time
+  const cleanup = () => {
     s.off('account:registered', onRegistered);
     s.off('account:nameTaken',  onNameTaken);
     s.off('account:error',      onErr);
-    s.off('disconnect',         onDisconnect);
+    s.off('disconnect',         onDisconnect); // Bug 6: was missing in onDisconnect
     _finishReg();
-    // Store only the username — never the password
+  };
+
+  const s = getSocket();
+
+  const onRegistered = ({ username: uname }) => {
+    cleanup(); // Bug 7: was not calling cleanup, left 3 stale listeners
     localStorage.setItem('aetherion_hero_name', uname);
     localStorage.removeItem('aetherion_hero_pass');
     gameState.username = uname;
@@ -2471,34 +2502,27 @@ function doRegister(){
     gameState.playerLevel=1; gameState.playerXp=0; gameState.xpToNext=100;
     gameState.playerGold=0; gameState.inventory=[]; gameState.deck=[];
     gameState.unlockedSkills=[]; gameState.skillXp=0; gameState.shopOwned={};
-    toast(`🎉 Account created! Welcome, ${uname}!`);
+    toast('🎉 Account created! Welcome, ' + uname + '!');
     goCardPick('menu');
   };
 
-  // Server sends account:nameTaken (not account:renamed) when name is taken
+  // Bug 7 fix: onNameTaken now calls cleanup() to remove all 4 listeners
   const onNameTaken = ({ suggestedName }) => {
-    _finishReg();
+    cleanup(); // Bug 7: previously left registered/error/nameTaken listeners dangling
     errEl.style.color = 'var(--gold)';
-    errEl.textContent = `"${username}" is taken. Try "${suggestedName}" or choose another name.`;
+    errEl.textContent = '"' + username + '" is taken. Try "' + suggestedName + '" or choose another name.';
     const input = document.getElementById('reg-username');
     if (input) input.value = suggestedName;
   };
 
   const onErr = ({ msg }) => {
-    s.off('account:registered', onRegistered);
-    s.off('account:nameTaken',  onNameTaken);
-    s.off('account:error',      onErr);
-    s.off('disconnect',         onDisconnect);
-    _finishReg();
+    cleanup();
     errEl.style.color = '#d06060';
     errEl.textContent = msg || 'Registration failed. Please try again.';
   };
 
   const onDisconnect = () => {
-    s.off('account:registered', onRegistered);
-    s.off('account:nameTaken',  onNameTaken);
-    s.off('account:error',      onErr);
-    _finishReg();
+    cleanup(); // Bug 6: was missing s.off('disconnect', onDisconnect)
     errEl.style.color = '#d06060';
     errEl.textContent = 'Connection lost. Please try again.';
   };
@@ -2521,10 +2545,14 @@ function initIntroScreen(){
   }
 }
 
-// Legacy functions kept for compatibility
-function continueAsHero(){ doLogin(); }
+// Legacy functions — guard against calling doLogin with empty fields
+function continueAsHero(){
+  const u = document.getElementById('login-username')?.value?.trim();
+  const p = document.getElementById('login-password')?.value;
+  if (u && p) { doLogin(); } else { showLoginPanel(); }
+}
 function showNewHero(){ showRegisterPanel(); }
-function startIntro(){ doLogin(); }
+function startIntro(){ showLoginPanel(); } // just show panel, don't auto-submit
 
 // ── SETTINGS (change password) ──
 function openSettings(){
