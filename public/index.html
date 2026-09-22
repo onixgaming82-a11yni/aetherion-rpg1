@@ -11,20 +11,27 @@
    GLOBAL VARS & RESET
 ═══════════════════════════════════════════════════ */
 :root{
-  --ink:#04060a;
-  --panel:#080b10;
-  --border:#1a2535;
-  --border2:#2a3a50;
-  --gold:#c8973a;
-  --gold2:#f0c060;
+  --ink:#05060a;
+  --bg-purple:#10091d;
+  --panel:#111722;
+  --panel-dark:#090d14;
+  --panel-light:#151c28;
+  --border:rgba(190,145,55,.30);
+  --border2:rgba(190,145,55,.45);
+  --border-soft:rgba(190,145,55,.15);
+  --gold:#c99a45;
+  --gold2:#e7b85b;
+  --amber:#a96020;
+  --amber-bright:#c87828;
   --crimson:#c0392b;
   --teal:#1e8a78;
   --blue:#1a5a9a;
   --purple:#6a2aaa;
   --green:#1e7040;
-  --dim:#3a5068;
-  --text:#b8ccd8;
-  --bright:#d8eaf8;
+  --dim:#647389;
+  --text:#c7d0dc;
+  --bright:#e5edf5;
+  --text-muted:#647389;
   --parchment:#f0e6c8;
   --common:#8a9aaa;
   --rare:#4a8abe;
@@ -91,9 +98,9 @@ html,body{
 body::before{
   content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
   background:
-    radial-gradient(ellipse at 15% 0%,rgba(100,30,160,.18) 0%,transparent 50%),
-    radial-gradient(ellipse at 85% 100%,rgba(20,60,120,.18) 0%,transparent 50%),
-    radial-gradient(ellipse at 50% 50%,rgba(140,50,0,.1) 0%,transparent 65%);
+    radial-gradient(ellipse at 15% 0%,rgba(90,50,150,.16) 0%,transparent 55%),
+    radial-gradient(ellipse at 85% 100%,rgba(60,30,110,.12) 0%,transparent 55%),
+    radial-gradient(ellipse at 50% 50%,var(--bg-purple) 0%,transparent 70%);
 }
 
 /* ═══════════════════════════════════════════════════
@@ -105,44 +112,124 @@ body::before{
 /* ═══════════════════════════════════════════════════
    USERNAME / INTRO SCREEN
 ═══════════════════════════════════════════════════ */
-#screen-intro{justify-content:center;padding:30px 20px;}
-.intro-card{
-  background:linear-gradient(160deg,rgba(10,15,25,.97),rgba(20,30,50,.95));
-  border:2px solid rgba(200,151,58,.25);border-radius:20px;
-  padding:40px 36px;width:100%;max-width:420px;text-align:center;
-  box-shadow:0 30px 80px rgba(0,0,0,.8),0 0 60px rgba(200,151,58,.06);
+/* ── Login / Intro Screen — "The Empire" style ── */
+#screen-intro{
+  justify-content:center;align-items:center;padding:24px;
+  background:transparent; /* body::before already provides the near-black + purple atmosphere */
   position:relative;overflow:hidden;
 }
-.intro-card::before{
-  content:'';position:absolute;inset:0;border-radius:20px;
-  background:linear-gradient(135deg,rgba(200,151,58,.05),transparent 60%);
-  pointer-events:none;
+/* Gentle pulsing purple glow, scoped to just the login screen */
+#screen-intro::before{
+  content:'';position:absolute;inset:0;pointer-events:none;z-index:0;
+  background:radial-gradient(ellipse 60% 50% at 50% 32%,rgba(120,80,190,.22) 0%,transparent 65%);
+  animation:introGlowPulse 6s ease-in-out infinite;
 }
-.intro-logo-emoji{font-size:4.5rem;display:block;margin-bottom:14px;
-  filter:drop-shadow(0 0 28px rgba(200,151,58,.7));
-  animation:logoPulse 3s ease-in-out infinite;}
-.intro-title{font-family:'Cinzel Decorative',serif;font-size:clamp(1.4rem,6vw,2.2rem);
-  color:var(--gold2);text-shadow:0 0 30px rgba(200,151,58,.5);margin-bottom:4px;}
-.intro-sub{font-size:.75rem;color:var(--dim);font-style:italic;margin-bottom:28px;}
+@keyframes introGlowPulse{
+  0%,100%{opacity:.55;transform:scale(1);}
+  50%{opacity:1;transform:scale(1.08);}
+}
+
+.intro-card{
+  background:transparent;
+  border:none;border-radius:0;
+  padding:0 24px;width:100%;max-width:420px;text-align:center;
+  box-shadow:none;position:relative;z-index:1;
+  display:flex;flex-direction:column;align-items:center;
+}
+.intro-card::before{ display:none; }
+
+/* Crossed-swords emoji logo — no image/SVG, just a styled emoji */
+.intro-logo-emoji{
+  font-size:3.6rem;display:block;margin-bottom:14px;line-height:1;
+  filter:
+    drop-shadow(0 0 8px rgba(150,120,220,.45))
+    drop-shadow(0 0 22px rgba(100,70,160,.25))
+    drop-shadow(0 2px 3px rgba(0,0,0,.6));
+}
+
+/* "AETHERION" title */
+.intro-title{
+  font-family:'Cinzel Decorative',serif;
+  font-size:clamp(1.9rem,7vw,2.6rem);
+  letter-spacing:.12em;
+  color:var(--gold);
+  text-shadow:0 0 30px rgba(201,154,69,.35),0 2px 4px rgba(0,0,0,.9);
+  margin-bottom:4px;line-height:1.1;
+}
+
+/* Tagline */
+.intro-sub{
+  font-size:.74rem;letter-spacing:.04em;
+  color:var(--text-muted);
+  font-style:italic;text-transform:none;
+  margin-bottom:18px;
+}
+.intro-greeting{
+  font-size:.62rem;color:var(--text-muted);opacity:.75;
+  margin-bottom:26px;letter-spacing:.01em;
+}
+
+/* Tab switcher — LOGIN / REGISTER */
+.intro-tabs{
+  display:flex;width:100%;border:1px solid var(--border);
+  border-radius:8px;overflow:hidden;margin-bottom:24px;
+  background:var(--panel-dark);
+}
+.intro-tab{
+  flex:1;padding:12px 0;font-family:'Cinzel',serif;font-size:.68rem;
+  letter-spacing:.12em;text-transform:uppercase;border:none;cursor:pointer;
+  transition:all .2s;color:var(--text-muted);background:transparent;
+}
+.intro-tab.active{
+  background:rgba(201,154,69,.12);color:var(--gold2);
+  box-shadow:inset 0 -2px 0 var(--gold);
+}
+
+/* Input fields */
 .username-input{
-  width:100%;background:rgba(0,0,0,.6);
-  border:2px solid rgba(200,151,58,.2);border-radius:12px;
-  color:var(--bright);font-family:'Cinzel',serif;font-size:1rem;
-  padding:14px 18px;outline:none;text-align:center;
-  transition:border-color .2s;letter-spacing:.05em;
-  margin-bottom:12px;
+  width:100%;background:var(--panel-dark);
+  border:1px solid var(--border);border-radius:10px;
+  color:var(--text);font-family:'Cinzel',serif;font-size:.85rem;
+  padding:14px 16px;outline:none;text-align:left;
+  transition:border-color .2s,background .2s,box-shadow .2s;letter-spacing:.02em;
+  margin-bottom:0;box-sizing:border-box;
 }
-.username-input:focus{border-color:rgba(200,151,58,.55);}
-.username-input::placeholder{color:rgba(180,160,120,.3);font-style:italic;letter-spacing:.02em;}
+.username-input:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(201,154,69,.12);}
+.username-input::placeholder{color:var(--text-muted);opacity:.65;font-style:normal;letter-spacing:.01em;font-size:.8rem;}
+
+/* Input label */
+.intro-label{
+  font-family:'Cinzel',serif;font-size:.56rem;letter-spacing:.14em;
+  color:var(--text-muted);text-transform:uppercase;
+  text-align:left;width:100%;margin-bottom:6px;
+}
+
+/* Main CTA button */
 .btn-start{
-  width:100%;padding:16px;font-family:'Cinzel',serif;font-size:1rem;
-  letter-spacing:.12em;background:linear-gradient(135deg,#6a3a10,#c8793a,#6a3a10);
-  border:1px solid rgba(200,151,58,.4);border-radius:12px;
-  color:var(--gold2);cursor:pointer;transition:all .2s;
+  width:100%;padding:16px;font-family:'Cinzel',serif;font-size:.8rem;
+  letter-spacing:.14em;
+  background:linear-gradient(135deg,var(--amber) 0%,var(--amber-bright) 50%,var(--amber) 100%);
+  border:1px solid rgba(201,154,69,.5);border-radius:10px;
+  color:#fcefd6;cursor:pointer;transition:all .2s;
   text-transform:uppercase;
+  box-shadow:0 4px 20px rgba(169,96,32,.3),inset 0 1px 0 rgba(255,220,170,.18);
+  margin-top:4px;position:relative;overflow:hidden;
 }
-.btn-start:hover{background:linear-gradient(135deg,#8a5020,#e89550,#8a5020);
-  box-shadow:0 0 30px rgba(200,151,58,.3);}
+.btn-start:hover{
+  background:linear-gradient(135deg,var(--amber-bright) 0%,#e08838 50%,var(--amber-bright) 100%);
+  box-shadow:0 6px 28px rgba(169,96,32,.45),inset 0 1px 0 rgba(255,230,180,.25);
+  transform:translateY(-1px);
+}
+.btn-start:active{transform:translateY(0);}
+
+/* Forgot password link */
+.intro-forgot{
+  background:none;border:none;color:var(--text-muted);
+  font-size:.6rem;cursor:pointer;text-decoration:underline;
+  font-family:'Cinzel',serif;letter-spacing:.03em;
+  float:right;margin-top:6px;transition:color .2s;
+}
+.intro-forgot:hover{color:var(--gold);}
 
 /* ═══════════════════════════════════════════════════
    SHOP SCREEN
@@ -155,7 +242,7 @@ body::before{
 }
 .shop-gold-badge{
   display:flex;align-items:center;gap:6px;
-  background:rgba(0,0,0,.5);border:1px solid rgba(200,151,58,.25);
+  background:rgba(0,0,0,.5);border:1px solid rgba(201,154,69,.25);
   border-radius:20px;padding:6px 14px;margin-left:auto;
   font-family:'Share Tech Mono',monospace;font-size:.85rem;color:var(--gold2);
 }
@@ -175,9 +262,9 @@ body::before{
   color:var(--text);font-family:'Cinzel',serif;font-size:.65rem;
   cursor:pointer;transition:all .15s;text-align:left;width:100%;
 }
-.shop-cat-btn:hover{background:rgba(200,151,58,.06);border-color:rgba(200,151,58,.15);}
+.shop-cat-btn:hover{background:rgba(201,154,69,.06);border-color:rgba(201,154,69,.15);}
 .shop-cat-btn.active-cat{
-  background:rgba(200,151,58,.1);border-color:rgba(200,151,58,.3);color:var(--gold);
+  background:rgba(201,154,69,.1);border-color:rgba(201,154,69,.3);color:var(--gold);
 }
 .shop-cat-icon{font-size:1.1rem;}
 .shop-items-panel{padding:16px;overflow-y:auto;min-height:60vh;}
@@ -195,10 +282,10 @@ body::before{
 }
 .shop-item::before{
   content:'';position:absolute;inset:0;border-radius:12px;
-  background:linear-gradient(135deg,rgba(200,151,58,.04),transparent 60%);
+  background:linear-gradient(135deg,rgba(201,154,69,.04),transparent 60%);
   pointer-events:none;
 }
-.shop-item:hover{border-color:rgba(200,151,58,.3);box-shadow:0 8px 24px rgba(0,0,0,.4);}
+.shop-item:hover{border-color:rgba(201,154,69,.3);box-shadow:0 8px 24px rgba(0,0,0,.4);}
 .shop-item-icon{font-size:2rem;text-align:center;}
 .shop-item-name{font-family:'Cinzel',serif;font-size:.72rem;color:var(--bright);text-align:center;}
 .shop-item-desc{font-size:.6rem;color:var(--dim);font-style:italic;text-align:center;line-height:1.5;}
@@ -210,11 +297,11 @@ body::before{
 .shop-buy-btn{
   width:100%;padding:8px;border-radius:8px;
   background:linear-gradient(135deg,#3a2008,#7a4818);
-  border:1px solid rgba(200,151,58,.3);color:var(--gold2);
+  border:1px solid rgba(201,154,69,.3);color:var(--gold2);
   font-family:'Cinzel',serif;font-size:.62rem;letter-spacing:.05em;
   cursor:pointer;transition:all .15s;
 }
-.shop-buy-btn:hover:not(:disabled){background:linear-gradient(135deg,#5a3010,#a86020);box-shadow:0 0 14px rgba(200,151,58,.2);}
+.shop-buy-btn:hover:not(:disabled){background:linear-gradient(135deg,#5a3010,#a86020);box-shadow:0 0 14px rgba(201,154,69,.2);}
 .shop-buy-btn:disabled{opacity:.35;cursor:not-allowed;}
 
 /* ═══════════════════════════════════════════════════
@@ -230,35 +317,35 @@ body::before{
 #screen-menu{padding:30px 20px 40px;gap:0;}
 
 .logo-wrap{text-align:center;margin-bottom:6px;}
-.logo-emoji{font-size:4rem;filter:drop-shadow(0 0 28px rgba(200,151,58,.8));
+.logo-emoji{font-size:4rem;filter:drop-shadow(0 0 28px rgba(201,154,69,.8));
   animation:logoPulse 3s ease-in-out infinite;display:block;}
-@keyframes logoPulse{0%,100%{filter:drop-shadow(0 0 14px rgba(200,151,58,.5))}
-  50%{filter:drop-shadow(0 0 42px rgba(200,151,58,1));}}
+@keyframes logoPulse{0%,100%{filter:drop-shadow(0 0 14px rgba(201,154,69,.5))}
+  50%{filter:drop-shadow(0 0 42px rgba(201,154,69,1));}}
 .logo-title{font-family:'Cinzel Decorative',serif;
   font-size:clamp(1.6rem,6vw,2.8rem);color:var(--gold2);
-  text-shadow:0 0 40px rgba(200,151,58,.6),0 2px 8px #000;
+  text-shadow:0 0 40px rgba(201,154,69,.6),0 2px 8px #000;
   animation:titleGlow 3s ease-in-out infinite;letter-spacing:4px;}
-@keyframes titleGlow{0%,100%{text-shadow:0 0 16px rgba(200,151,58,.4)}
-  50%{text-shadow:0 0 50px rgba(200,151,58,.95),0 0 80px rgba(200,151,58,.25)}}
-.logo-sub{font-family:'Cinzel',serif;font-size:.75rem;color:rgba(240,230,200,.32);
+@keyframes titleGlow{0%,100%{text-shadow:0 0 16px rgba(201,154,69,.4)}
+  50%{text-shadow:0 0 50px rgba(201,154,69,.95),0 0 80px rgba(201,154,69,.25)}}
+.logo-sub{font-family:'Cinzel',serif;font-size:.75rem;color:rgba(100,115,137,.32);
   font-style:italic;letter-spacing:6px;margin-top:6px;margin-bottom:28px;}
 
 .menu-modes{display:flex;flex-direction:column;gap:10px;width:100%;max-width:420px;}
 .mode-btn{
   display:flex;align-items:center;gap:16px;padding:16px 18px;border-radius:14px;
-  cursor:pointer;background:rgba(0,0,0,.5);border:1.5px solid rgba(200,151,58,.18);
+  cursor:pointer;background:rgba(0,0,0,.5);border:1.5px solid rgba(201,154,69,.18);
   transition:all .2s;width:100%;text-align:left;
 }
-.mode-btn:hover{border-color:rgba(200,151,58,.5);background:rgba(200,151,58,.07);}
+.mode-btn:hover{border-color:rgba(201,154,69,.5);background:rgba(201,154,69,.07);}
 .mode-btn:active{transform:scale(.97);}
-.mode-btn.featured{border-color:rgba(200,151,58,.4);
-  background:linear-gradient(135deg,rgba(140,90,10,.2),rgba(200,151,58,.08));}
+.mode-btn.featured{border-color:rgba(201,154,69,.4);
+  background:linear-gradient(135deg,rgba(140,90,10,.2),rgba(201,154,69,.08));}
 .mode-icon{font-size:2.2rem;flex-shrink:0;}
 .mode-info .mode-name{font-family:'Cinzel',serif;font-size:.84rem;
   color:var(--gold);letter-spacing:.08em;margin-bottom:3px;}
-.mode-info .mode-desc{font-size:.62rem;color:rgba(240,230,200,.38);
+.mode-info .mode-desc{font-size:.62rem;color:rgba(100,115,137,.38);
   font-style:italic;line-height:1.5;}
-.menu-footer{font-size:.52rem;color:rgba(240,230,200,.15);
+.menu-footer{font-size:.52rem;color:rgba(100,115,137,.15);
   font-style:italic;text-align:center;margin-top:20px;}
 
 /* ═══════════════════════════════════════════════════
@@ -271,11 +358,11 @@ body::before{
 .btn{
   font-family:'Cinzel',serif;font-size:.82rem;letter-spacing:.1em;
   padding:13px 18px;border-radius:8px;cursor:pointer;
-  background:linear-gradient(135deg,#7a5010,#c8973a);
+  background:linear-gradient(135deg,var(--amber) 0%,var(--gold) 100%);
   border:1px solid var(--gold2);color:#050300;font-weight:700;
   transition:all .15s;text-transform:uppercase;width:100%;display:block;
 }
-.btn:hover{background:linear-gradient(135deg,#9a6010,#e0a840);}
+.btn:hover{background:linear-gradient(135deg,var(--amber-bright) 0%,var(--gold2) 100%);}
 .btn:active{transform:scale(.97);}
 .btn:disabled{opacity:.3;pointer-events:none;}
 .btn-ghost{background:transparent;border:1px solid var(--border2);
@@ -284,7 +371,7 @@ body::before{
 .btn-ghost:hover{border-color:var(--gold);color:var(--gold);}
 .btn-sm{font-family:'Cinzel',serif;font-size:.7rem;letter-spacing:.08em;
   padding:9px 16px;border-radius:6px;cursor:pointer;
-  background:linear-gradient(135deg,#7a5010,#c8973a);
+  background:linear-gradient(135deg,var(--amber) 0%,var(--gold) 100%);
   border:1px solid var(--gold2);color:#050300;font-weight:700;}
 .btn-sm:active{transform:scale(.96);}
 .btn-sm:disabled{opacity:.3;pointer-events:none;}
@@ -292,7 +379,7 @@ body::before{
 .form-field label{font-family:'Cinzel',serif;font-size:.6rem;
   letter-spacing:.12em;color:var(--gold);}
 .form-field input,.form-field select,.form-field textarea{
-  background:rgba(0,0,0,.55);border:1px solid rgba(200,151,58,.25);
+  background:rgba(0,0,0,.55);border:1px solid rgba(201,154,69,.25);
   border-radius:7px;padding:11px 13px;color:var(--parchment);
   font-family:'IM Fell English',serif;font-size:1rem;outline:none;width:100%;
 }
@@ -308,7 +395,7 @@ body::before{
 
 /* HP Bars */
 .bar-wrap{width:100%;height:8px;background:rgba(0,0,0,.6);
-  border:1px solid rgba(200,151,58,.1);border-radius:4px;overflow:hidden;}
+  border:1px solid rgba(201,154,69,.1);border-radius:4px;overflow:hidden;}
 .bar-fill{height:100%;border-radius:4px;transition:width .4s;}
 .bar-hp{background:linear-gradient(90deg,#6a1010,#c02020);}
 .bar-xp{background:linear-gradient(90deg,#0c2850,#1a68c0);}
@@ -340,12 +427,12 @@ body::before{
 ═══════════════════════════════════════════════════ */
 .char-card{
   background:linear-gradient(135deg,rgba(0,0,0,.7),rgba(20,30,50,.5));
-  border:2px solid rgba(200,151,58,.25);border-radius:14px;
+  border:2px solid rgba(201,154,69,.25);border-radius:14px;
   padding:14px;position:relative;overflow:hidden;
 }
 .char-card::before{
   content:'';position:absolute;inset:0;border-radius:14px;
-  background:linear-gradient(135deg,rgba(200,151,58,.04),transparent 60%);
+  background:linear-gradient(135deg,rgba(201,154,69,.04),transparent 60%);
   pointer-events:none;
 }
 .char-emoji{font-size:3rem;display:block;text-align:center;
@@ -359,7 +446,7 @@ body::before{
 .stat-label{font-family:'Cinzel',serif;font-size:.58rem;
   letter-spacing:.12em;color:var(--dim);}
 .stat-value{font-family:'Share Tech Mono',monospace;font-size:.8rem;color:var(--gold2);}
-.ability-box{background:rgba(200,151,58,.05);border:1px solid rgba(200,151,58,.15);
+.ability-box{background:rgba(201,154,69,.05);border:1px solid rgba(201,154,69,.15);
   border-radius:8px;padding:8px 10px;margin-top:8px;}
 .ability-name{font-family:'Cinzel',serif;font-size:.62rem;color:var(--gold);}
 .ability-desc{font-size:.62rem;color:var(--dim);font-style:italic;margin-top:2px;}
@@ -372,8 +459,8 @@ body::before{
 #screen-cardpick{padding:20px 16px 40px;gap:0;overflow:auto;}
 .cardpick-title{font-family:'Cinzel Decorative',serif;
   font-size:clamp(1.2rem,5vw,2rem);color:var(--gold2);text-align:center;
-  text-shadow:0 0 30px rgba(200,151,58,.5);margin-bottom:6px;}
-.cardpick-sub{font-size:.75rem;color:rgba(240,230,200,.35);
+  text-shadow:0 0 30px rgba(201,154,69,.5);margin-bottom:6px;}
+.cardpick-sub{font-size:.75rem;color:rgba(100,115,137,.35);
   font-style:italic;text-align:center;margin-bottom:24px;}
 .card-deal-row{display:flex;gap:14px;justify-content:center;
   flex-wrap:wrap;width:100%;max-width:800px;margin-bottom:24px;}
@@ -382,24 +469,24 @@ body::before{
 .pick-card{
   width:200px;flex-shrink:0;
   background:linear-gradient(160deg,rgba(10,15,25,.95),rgba(20,30,50,.9));
-  border:2px solid rgba(200,151,58,.2);border-radius:18px;
+  border:2px solid rgba(201,154,69,.2);border-radius:18px;
   padding:18px 14px 14px;cursor:pointer;
   transition:all .25s cubic-bezier(.34,1.2,.64,1);
   position:relative;overflow:hidden;
 }
 .pick-card::before{
   content:'';position:absolute;inset:0;border-radius:18px;
-  background:linear-gradient(135deg,rgba(200,151,58,.06),transparent 55%);
+  background:linear-gradient(135deg,rgba(201,154,69,.06),transparent 55%);
   pointer-events:none;
 }
 .pick-card:hover{
   transform:translateY(-8px) scale(1.03);
   border-color:var(--gold);
-  box-shadow:0 16px 40px rgba(0,0,0,.6),0 0 30px rgba(200,151,58,.2);
+  box-shadow:0 16px 40px rgba(0,0,0,.6),0 0 30px rgba(201,154,69,.2);
 }
 .pick-card.selected{
   border-color:var(--gold2);
-  box-shadow:0 0 0 3px rgba(200,151,58,.4),0 16px 40px rgba(0,0,0,.6);
+  box-shadow:0 0 0 3px rgba(201,154,69,.4),0 16px 40px rgba(0,0,0,.6);
   transform:translateY(-10px) scale(1.04);
 }
 .pick-card.selected::after{
@@ -427,7 +514,7 @@ body::before{
   letter-spacing:.1em;color:var(--dim);}
 .pcsv{font-family:'Share Tech Mono',monospace;font-size:.7rem;color:var(--gold2);}
 .pick-card-ability{
-  background:rgba(200,151,58,.06);border:1px solid rgba(200,151,58,.15);
+  background:rgba(201,154,69,.06);border:1px solid rgba(201,154,69,.15);
   border-radius:8px;padding:6px 8px;margin-top:4px;
 }
 .pca-name{font-family:'Cinzel',serif;font-size:.58rem;color:var(--gold);}
@@ -460,7 +547,7 @@ body::before{
 }
 .deck-card-mini.active-card{
   border-color:var(--gold);
-  background:rgba(200,151,58,.1);
+  background:rgba(201,154,69,.1);
 }
 .deck-card-mini.active-card::before{
   content:'▶';position:absolute;top:-8px;left:50%;transform:translateX(-50%);
@@ -481,7 +568,7 @@ body::before{
   border:2px solid var(--border);margin-bottom:6px;
 }
 .sp-deck-panel .deck-card-thumb.active-thumb{
-  border-color:var(--gold);background:rgba(200,151,58,.08);}
+  border-color:var(--gold);background:rgba(201,154,69,.08);}
 .sp-deck-panel .deck-card-thumb.fainted-thumb{
   opacity:.35;cursor:not-allowed;}
 .dct-emoji{font-size:1.6rem;flex-shrink:0;}
@@ -558,17 +645,17 @@ body::before{
 .battle-arena{width:100%;max-width:760px;}
 .battle-header{text-align:center;margin-bottom:14px;}
 .battle-header h2{font-family:'Cinzel Decorative',serif;font-size:1.2rem;
-  color:var(--gold);text-shadow:0 0 20px rgba(200,151,58,.5);}
+  color:var(--gold);text-shadow:0 0 20px rgba(201,154,69,.5);}
 .battle-turn-badge{font-family:'Cinzel',serif;font-size:.6rem;
-  letter-spacing:.15em;color:rgba(240,230,200,.4);margin-top:4px;}
+  letter-spacing:.15em;color:rgba(100,115,137,.4);margin-top:4px;}
 
 .combatant-row{display:flex;gap:10px;margin-bottom:12px;}
 @media(max-width:520px){.combatant-row{flex-direction:column;}}
 .combatant-card{flex:1;background:rgba(0,0,0,.6);
   border:2px solid var(--border);border-radius:12px;padding:12px;
   transition:border-color .3s;}
-.combatant-card.active-turn{border-color:rgba(200,151,58,.6);
-  box-shadow:0 0 14px rgba(200,151,58,.15);}
+.combatant-card.active-turn{border-color:rgba(201,154,69,.6);
+  box-shadow:0 0 14px rgba(201,154,69,.15);}
 .combatant-card.hurt{animation:hurtFlash .35s;}
 @keyframes hurtFlash{0%,100%{background:rgba(0,0,0,.6)}
   50%{background:rgba(200,20,20,.18);}}
@@ -594,7 +681,7 @@ body::before{
 .battle-log p.sk{color:#a080d8;border-color:#402870;}
 .battle-log p.mn{color:#506070;font-size:.8rem;font-style:italic;}
 .battle-log p.boss{color:#e040e0;border-color:#800880;font-weight:700;}
-.battle-log p.ph{color:#f0c060;border-color:#a08010;font-weight:700;font-style:italic;}
+.battle-log p.ph{color:#e7b85b;border-color:#a08010;font-weight:700;font-style:italic;}
 
 .battle-btns{display:flex;flex-wrap:wrap;gap:7px;}
 .b-btn{
@@ -633,7 +720,7 @@ body::before{
   border-radius:10px;padding:12px;text-align:center;cursor:pointer;
   transition:all .2s;}
 .skill-node.unlocked{border-color:var(--gold);
-  background:linear-gradient(135deg,rgba(140,90,10,.15),rgba(200,151,58,.06));}
+  background:linear-gradient(135deg,rgba(140,90,10,.15),rgba(201,154,69,.06));}
 .skill-node.locked{opacity:.5;cursor:not-allowed;}
 .skill-node:hover:not(.locked):not(.unlocked){border-color:var(--border2);}
 .skill-node .sk-icon{font-size:2rem;margin-bottom:6px;}
@@ -652,9 +739,9 @@ body::before{
   border-radius:8px;aspect-ratio:1;display:flex;align-items:center;
   justify-content:center;font-size:1.4rem;cursor:pointer;transition:all .2s;}
 .droom.current{border-color:var(--gold);
-  box-shadow:0 0 14px rgba(200,151,58,.3);animation:roomPulse 1.5s infinite;}
-@keyframes roomPulse{0%,100%{box-shadow:0 0 10px rgba(200,151,58,.3)}
-  50%{box-shadow:0 0 25px rgba(200,151,58,.6)}}
+  box-shadow:0 0 14px rgba(201,154,69,.3);animation:roomPulse 1.5s infinite;}
+@keyframes roomPulse{0%,100%{box-shadow:0 0 10px rgba(201,154,69,.3)}
+  50%{box-shadow:0 0 25px rgba(201,154,69,.6)}}
 .droom.visited{opacity:.4;}
 .droom.locked{opacity:.2;cursor:not-allowed;}
 .droom.cleared{border-color:#1e7040;opacity:.5;}
@@ -686,7 +773,7 @@ body::before{
 }
 .story-title-field{
   flex:1;min-width:140px;background:transparent;
-  border:none;border-bottom:1px solid rgba(200,151,58,.3);
+  border:none;border-bottom:1px solid rgba(201,154,69,.3);
   color:var(--gold);font-family:'Cinzel',serif;font-size:.9rem;
   padding:4px 6px;outline:none;
 }
@@ -724,8 +811,8 @@ body::before{
 }
 /* Drop zone indicator that appears when dragging over canvas */
 #story-canvas.drag-over{
-  background:rgba(200,151,58,.04);
-  box-shadow:inset 0 0 0 2px rgba(200,151,58,.25);
+  background:rgba(201,154,69,.04);
+  box-shadow:inset 0 0 0 2px rgba(201,154,69,.25);
 }
 .drop-cursor-line{
   display:inline-block;width:2px;height:1.2em;
@@ -751,19 +838,19 @@ body::before{
   border-radius:20px;padding:4px 10px;color:var(--text);
   font-size:.65rem;outline:none;
 }
-.mob-search-input:focus{border-color:rgba(200,151,58,.4);}
+.mob-search-input:focus{border-color:rgba(201,154,69,.4);}
 .monster-lib{flex:1;overflow-y:auto;padding:6px;}
 .mob-entry{
   display:flex;align-items:center;gap:8px;padding:8px 10px;
   border-radius:8px;cursor:grab;transition:all .15s;margin-bottom:3px;
   border:1px solid transparent;user-select:none;
 }
-.mob-entry:hover{background:rgba(200,151,58,.07);border-color:rgba(200,151,58,.15);}
+.mob-entry:hover{background:rgba(201,154,69,.07);border-color:rgba(201,154,69,.15);}
 .mob-entry:active{cursor:grabbing;}
 .mob-entry.dragging-src{opacity:.4;}
 .mob-entry .mob-name{font-family:'Cinzel',serif;font-size:.66rem;color:var(--text);flex:1;}
 .mob-entry .mob-lvl{font-family:'Share Tech Mono',monospace;font-size:.58rem;color:var(--dim);}
-.mob-entry .mob-drag-hint{font-size:.55rem;color:rgba(200,151,58,.4);margin-left:2px;}
+.mob-entry .mob-drag-hint{font-size:.55rem;color:rgba(201,154,69,.4);margin-left:2px;}
 /* Boss section in library */
 .mob-section-title{
   font-family:'Cinzel',serif;font-size:.55rem;letter-spacing:.12em;
@@ -802,9 +889,9 @@ body::before{
 .room-code{font-family:'Cinzel Decorative',serif;font-size:2.6rem;
   color:var(--gold2);text-align:center;letter-spacing:.22em;
   padding:16px;background:rgba(0,0,0,.6);
-  border:2px solid rgba(200,151,58,.35);border-radius:12px;
-  text-shadow:0 0 25px rgba(200,151,58,.5);}
-.online-status{font-size:.68rem;color:rgba(240,230,200,.4);
+  border:2px solid rgba(201,154,69,.35);border-radius:12px;
+  text-shadow:0 0 25px rgba(201,154,69,.5);}
+.online-status{font-size:.68rem;color:rgba(100,115,137,.4);
   font-style:italic;text-align:center;min-height:22px;}
 .online-status.ok{color:#60e080;}.online-status.err{color:#e06060;}
 .player-list{display:flex;flex-direction:column;gap:6px;}
@@ -909,8 +996,8 @@ body::before{
   background:rgba(0,0,0,.5);border:2px solid var(--border);
   border-radius:10px;margin-bottom:8px;cursor:pointer;transition:all .15s;
 }
-.party-member-card:hover{border-color:rgba(200,151,58,.4);}
-.party-member-card.selected-member{border-color:var(--gold);background:rgba(200,151,58,.08);}
+.party-member-card:hover{border-color:rgba(201,154,69,.4);}
+.party-member-card.selected-member{border-color:var(--gold);background:rgba(201,154,69,.08);}
 .party-member-card.max-party{opacity:.5;cursor:not-allowed;}
 .pmc-emoji{font-size:1.8rem;flex-shrink:0;}
 .pmc-info{flex:1;}
@@ -933,8 +1020,8 @@ body::before{
   border:2px solid var(--border);border-radius:8px;margin-bottom:5px;
   cursor:pointer;transition:all .15s;
 }
-.trade-card-option:hover{border-color:rgba(200,151,58,.4);}
-.trade-card-option.selected-trade{border-color:var(--gold);background:rgba(200,151,58,.08);}
+.trade-card-option:hover{border-color:rgba(201,154,69,.4);}
+.trade-card-option.selected-trade{border-color:var(--gold);background:rgba(201,154,69,.08);}
 .trade-player-option{
   padding:8px 10px;border:2px solid var(--border);border-radius:8px;
   margin-bottom:5px;cursor:pointer;transition:all .15s;
@@ -956,7 +1043,7 @@ body::before{
 .rank-iron   {background:linear-gradient(135deg,#3a3060,#6050a0);color:#c0b0ff;}
 .rank-bronze {background:linear-gradient(135deg,#5a3010,#b06020);color:#ffd0a0;}
 .rank-silver {background:linear-gradient(135deg,#404050,#8090b0);color:#e0eeff;}
-.rank-gold   {background:linear-gradient(135deg,#604010,#c8973a);color:#fff8d0;}
+.rank-gold   {background:linear-gradient(135deg,#604010,#c99a45);color:#fff8d0;}
 .rank-diamond{background:linear-gradient(135deg,#104060,#20a0d0);color:#d0f8ff;box-shadow:0 0 10px rgba(32,160,208,.4);}
 .rank-legend {background:linear-gradient(135deg,#600060,#c000c0);color:#ffd0ff;box-shadow:0 0 14px rgba(200,0,200,.5);animation:rankPulse 2s infinite;}
 @keyframes rankPulse{0%,100%{box-shadow:0 0 14px rgba(200,0,200,.5);}50%{box-shadow:0 0 24px rgba(200,0,200,.9);}}
@@ -990,7 +1077,7 @@ body::before{
 .chat-msg.mine{
   align-self:flex-end;
   background:linear-gradient(135deg,rgba(60,40,10,.9),rgba(100,70,20,.8));
-  border:1px solid rgba(200,151,58,.3);
+  border:1px solid rgba(201,154,69,.3);
   border-bottom-right-radius:3px;
 }
 .chat-msg.theirs{
@@ -1029,7 +1116,9 @@ input, textarea { font-size: 16px !important; } /* Prevents iOS zoom on focus */
 
   /* ── Screens ── */
   .screen { padding: 10px 10px 80px !important; }
-  #screen-intro { padding: 20px 14px !important; }
+  #screen-intro { padding: 0 !important; }
+  .intro-title { font-size: clamp(1.6rem,10vw,2.4rem) !important; }
+  .intro-card { padding: 0 20px !important; }
 
   /* ── Intro card ── */
   .intro-card { padding: 24px 16px !important; }
@@ -1188,8 +1277,8 @@ input, textarea { font-size: 16px !important; } /* Prevents iOS zoom on focus */
 }
 .menu-profile-btn:hover {
   border-color:var(--gold);
-  background:rgba(200,151,58,.10);
-  box-shadow:0 0 12px rgba(200,151,58,.15);
+  background:rgba(201,154,69,.10);
+  box-shadow:0 0 12px rgba(201,154,69,.15);
   transform:translateY(-1px);
 }
 .menu-profile-btn:active { transform:scale(.96); }
@@ -1197,7 +1286,6 @@ input, textarea { font-size: 16px !important; } /* Prevents iOS zoom on focus */
   #menu-player-bar { gap:6px; }
   .menu-profile-btn { width:40px; height:40px; min-width:40px; font-size:1.1rem; }
 }
-@keyframes spin { to { transform: rotate(360deg); } }
 </style>
 <!-- Socket.io client — loaded from CDN -->
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
@@ -1210,67 +1298,89 @@ input, textarea { font-size: 16px !important; } /* Prevents iOS zoom on focus */
 <!-- ═══════════════════════ INTRO / USERNAME SCREEN ═══════════════════════ -->
 <div id="screen-intro" class="screen active">
   <div class="intro-card">
-    <span class="intro-logo-emoji" id="debug-logo-btn" onclick="debugLogoClick()" title="" style="cursor:default;user-select:none;">⚔️</span>
+
+    <!-- Crossed swords emoji logo (triple-click for debug) -->
+    <div id="debug-logo-btn" class="intro-logo-emoji" onclick="debugLogoClick()"
+      style="cursor:default;user-select:none;">⚔️</div>
+
     <div class="intro-title">AETHERION</div>
     <div class="intro-sub">Realm of Legends</div>
+    <div class="intro-greeting">Sign in to save your progress across all devices</div>
 
-    <!-- LOGIN PANEL -->
+    <!-- Tab switcher -->
+    <div class="intro-tabs" style="width:100%;">
+      <button class="intro-tab active" id="tab-login-btn" onclick="showLoginPanel()">Login</button>
+      <button class="intro-tab" id="tab-reg-btn" onclick="showRegisterPanel()">Register</button>
+    </div>
+
+    <!-- ── LOGIN PANEL ───────────────────────────────── -->
     <div id="intro-login" style="width:100%;">
-      <div style="font-size:.65rem;color:var(--dim);text-align:center;margin-bottom:14px;">
-        Sign in to save your progress across all devices
-      </div>
-      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
-        <input class="username-input" id="login-username" maxlength="20"
-          placeholder="Username" autocomplete="username"
-          onkeydown="if(event.key==='Enter')document.getElementById('login-password').focus()"
-          style="margin-bottom:0;">
-        <div style="position:relative;">
-          <input class="username-input" id="login-password" maxlength="30" type="password"
-            placeholder="Password (default: 12345)" autocomplete="current-password"
-            onkeydown="if(event.key==='Enter')doLogin()"
-            style="margin-bottom:0;padding-right:44px;">
-          <button onclick="togglePassVis('login-password',this)"
-            style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--dim);cursor:pointer;font-size:1rem;min-height:unset;">👁️</button>
+      <div style="display:flex;flex-direction:column;gap:14px;margin-bottom:20px;">
+
+        <div>
+          <div class="intro-label">Username</div>
+          <input class="username-input" id="login-username" maxlength="20"
+            placeholder="Enter your username" autocomplete="username"
+            onkeydown="if(event.key==='Enter')document.getElementById('login-password').focus()">
+        </div>
+
+        <div>
+          <div class="intro-label">Password</div>
+          <div style="position:relative;">
+            <input class="username-input" id="login-password" maxlength="30" type="password"
+              placeholder="Your password" autocomplete="current-password"
+              onkeydown="if(event.key==='Enter')doLogin()"
+              style="padding-right:44px;width:100%;box-sizing:border-box;">
+            <button onclick="togglePassVis('login-password',this)"
+              style="position:absolute;right:12px;top:50%;transform:translateY(-50%);
+              background:none;border:none;color:rgba(201,154,69,.4);cursor:pointer;
+              font-size:.9rem;min-height:unset;padding:0;">👁</button>
+          </div>
+          <div style="text-align:right;">
+            <button class="intro-forgot">Forgot password?</button>
+          </div>
         </div>
       </div>
+
       <button class="btn-start" onclick="doLogin()">⚔️ Login</button>
-      <div id="login-error" style="color:#d06060;font-size:.62rem;text-align:center;margin-top:8px;min-height:18px;"></div>
-      <div style="text-align:center;margin-top:10px;">
-        <button onclick="showRegisterPanel()" style="background:none;border:none;color:var(--dim);font-size:.62rem;cursor:pointer;text-decoration:underline;">
-          New hero? Create account
-        </button>
-      </div>
+      <div id="login-error" style="color:#d06060;font-size:.6rem;text-align:center;
+        margin-top:10px;min-height:18px;letter-spacing:.03em;"></div>
     </div>
 
-    <!-- REGISTER PANEL -->
+    <!-- ── REGISTER PANEL ────────────────────────────── -->
     <div id="intro-register" style="width:100%;display:none;">
-      <div style="font-size:.65rem;color:var(--dim);text-align:center;margin-bottom:14px;">
-        Create your account — default password is <b style="color:var(--gold);">12345</b>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
-        <input class="username-input" id="reg-username" maxlength="20"
-          placeholder="Choose a username" autocomplete="username"
-          onkeydown="if(event.key==='Enter')document.getElementById('reg-password').focus()"
-          style="margin-bottom:0;">
-        <div style="position:relative;">
-          <input class="username-input" id="reg-password" maxlength="30" type="password"
-            placeholder="Password (leave empty for 12345)" autocomplete="new-password"
-            onkeydown="if(event.key==='Enter')doRegister()"
-            style="margin-bottom:0;padding-right:44px;">
-          <button onclick="togglePassVis('reg-password',this)"
-            style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--dim);cursor:pointer;font-size:1rem;min-height:unset;">👁️</button>
+      <div style="display:flex;flex-direction:column;gap:14px;margin-bottom:20px;">
+
+        <div>
+          <div class="intro-label">Choose a Username</div>
+          <input class="username-input" id="reg-username" maxlength="20"
+            placeholder="3–20 characters" autocomplete="username"
+            onkeydown="if(event.key==='Enter')document.getElementById('reg-password').focus()">
+        </div>
+
+        <div>
+          <div class="intro-label">Password</div>
+          <div style="position:relative;">
+            <input class="username-input" id="reg-password" maxlength="30" type="password"
+              placeholder="Minimum 6 characters" autocomplete="new-password"
+              onkeydown="if(event.key==='Enter')doRegister()"
+              style="padding-right:44px;width:100%;box-sizing:border-box;">
+            <button onclick="togglePassVis('reg-password',this)"
+              style="position:absolute;right:12px;top:50%;transform:translateY(-50%);
+              background:none;border:none;color:rgba(201,154,69,.4);cursor:pointer;
+              font-size:.9rem;min-height:unset;padding:0;">👁</button>
+          </div>
         </div>
       </div>
-      <button class="btn-start" onclick="doRegister()">⚔️ Create Account</button>
-      <div id="reg-error" style="color:#d06060;font-size:.62rem;text-align:center;margin-top:8px;min-height:18px;"></div>
-      <div style="text-align:center;margin-top:10px;">
-        <button onclick="showLoginPanel()" style="background:none;border:none;color:var(--dim);font-size:.62rem;cursor:pointer;text-decoration:underline;">
-          Already have an account? Login
-        </button>
-      </div>
+
+      <button class="btn-start" onclick="doRegister()">Create Account</button>
+      <div id="reg-error" style="font-size:.6rem;text-align:center;
+        margin-top:10px;min-height:18px;letter-spacing:.03em;"></div>
     </div>
 
-    <div style="margin-top:16px;font-size:.6rem;color:rgba(180,160,120,.25);font-style:italic;text-align:center;">
+    <!-- Footer tagline -->
+    <div style="margin-top:28px;font-size:.52rem;color:rgba(201,154,69,.2);
+      letter-spacing:.15em;text-transform:uppercase;text-align:center;">
       100 Monsters · 40 Characters · 4 Bosses · Multiplayer
     </div>
   </div>
@@ -1292,7 +1402,7 @@ input, textarea { font-size: 16px !important; } /* Prevents iOS zoom on focus */
       <button class="shop-cat-btn" onclick="shopTab('magic',this)"><span class="shop-cat-icon">✨</span> Magic</button>
       <button class="shop-cat-btn" onclick="shopTab('cards',this)"><span class="shop-cat-icon">🃏</span> Cards</button>
       <button class="shop-cat-btn" onclick="shopTab('rare',this)"><span class="shop-cat-icon">💎</span> Rare</button>
-      <button class="shop-cat-btn" onclick="shopTab('sell',this)" style="border-color:rgba(200,151,58,.3);"><span class="shop-cat-icon">💰</span> Sell</button>
+      <button class="shop-cat-btn" onclick="shopTab('sell',this)" style="border-color:rgba(201,154,69,.3);"><span class="shop-cat-icon">💰</span> Sell</button>
     </div>
     <!-- Items panel -->
     <div class="shop-items-panel" id="shop-items-panel"></div>
@@ -1315,7 +1425,7 @@ input, textarea { font-size: 16px !important; } /* Prevents iOS zoom on focus */
       </div>
     </div>
     <div style="display:flex;gap:8px;align-items:center;">
-      <div style="background:rgba(0,0,0,.5);border:1px solid rgba(200,151,58,.2);border-radius:20px;padding:5px 12px;font-family:'Share Tech Mono',monospace;font-size:.75rem;color:var(--gold2);">
+      <div style="background:rgba(0,0,0,.5);border:1px solid rgba(201,154,69,.2);border-radius:20px;padding:5px 12px;font-family:'Share Tech Mono',monospace;font-size:.75rem;color:var(--gold2);">
         💰 <span id="menu-gold-display">0</span>
       </div>
       <button class="btn-sm" onclick="goShop()" style="font-size:.65rem;">🏪 Shop</button>
@@ -2079,7 +2189,7 @@ function updateMenuHud(){
     preview.innerHTML = gameState.deck.map((c,i)=>{
       const lv = c.cardLevel||1;
       const isLead = i===gameState.activeCardIdx;
-      return `<div style="background:rgba(0,0,0,.5);border:1px solid ${isLead?'rgba(200,151,58,.5)':'var(--border)'};
+      return `<div style="background:rgba(0,0,0,.5);border:1px solid ${isLead?'rgba(201,154,69,.5)':'var(--border)'};
         border-radius:10px;padding:8px 12px;text-align:center;min-width:80px;cursor:pointer;"
         onclick="showMenu()" title="${c.name} · Lv.${lv}">
         <div style="font-size:1.6rem;">${c.emoji||'⚔️'}</div>
@@ -2109,7 +2219,12 @@ function debugLogoClick() {
   _debugClickTimer = setTimeout(() => { _debugClickCount = 0; }, 600);
   if (_debugClickCount >= 3) {
     _debugClickCount = 0;
-    debugLogin();
+    // Debug login only works when the server is not in production mode
+    if (typeof IS_PRODUCTION === 'undefined' || !IS_PRODUCTION) {
+      debugLogin();
+    } else {
+      toast('Debug mode is disabled in production.');
+    }
   }
 }
 
@@ -2208,7 +2323,7 @@ function loadGame(){
 //  ACCOUNT / LOGIN SYSTEM
 // ─────────────────────────────────────────
 
-let _accountPassword = '12345'; // stored in memory for session saves
+// _accountPassword removed — passwords are never stored client-side
 
 function togglePassVis(inputId, btn){
   const el = document.getElementById(inputId);
@@ -2221,94 +2336,136 @@ function showLoginPanel(){
   document.getElementById('intro-login').style.display='';
   document.getElementById('intro-register').style.display='none';
   document.getElementById('login-error').textContent='';
+  const tl=document.getElementById('tab-login-btn'), tr=document.getElementById('tab-reg-btn');
+  if(tl)tl.classList.add('active'); if(tr)tr.classList.remove('active');
 }
 
 function showRegisterPanel(){
   document.getElementById('intro-login').style.display='none';
   document.getElementById('intro-register').style.display='';
   document.getElementById('reg-error').textContent='';
+  const tl=document.getElementById('tab-login-btn'), tr=document.getElementById('tab-reg-btn');
+  if(tl)tl.classList.remove('active'); if(tr)tr.classList.add('active');
 }
 
+let _loginInProgress = false;
+
 function doLogin(){
+  if (_loginInProgress) return;
+
   const username = document.getElementById('login-username').value.trim();
-  const password = document.getElementById('login-password').value.trim() || '12345';
+  const password = document.getElementById('login-password').value; // no .trim() — passwords may have intentional spaces
   const errEl    = document.getElementById('login-error');
+  const loginBtn = document.querySelector('.btn-start[onclick="doLogin()"]');
 
-  if(!username){ errEl.textContent='Enter your username!'; return; }
+  if (!username) { errEl.textContent = 'Enter your username.'; return; }
+  if (!password) { errEl.textContent = 'Enter your password.'; return; }
+
+  _loginInProgress = true;
   errEl.textContent = 'Connecting...';
+  if (loginBtn) loginBtn.disabled = true;
 
-  // Connect socket and attempt login
+  const _finishLogin = () => {
+    _loginInProgress = false;
+    if (loginBtn) loginBtn.disabled = false;
+  };
+
   const s = getSocket();
-  s.emit('account:login', { username, password });
 
-  // Handle response
+  // ── IMPORTANT: listeners registered BEFORE emit ──────────
   const onLoggedIn = ({ username: uname, save, isNew }) => {
     s.off('account:loggedin', onLoggedIn);
     s.off('account:error',    onErr);
-    _accountPassword = password;
+    s.off('disconnect',       onDisconnect);
+    _finishLogin();
+    // Store only the username — never the password
     localStorage.setItem('aetherion_hero_name', uname);
-    localStorage.setItem('aetherion_hero_pass', password);
+    localStorage.removeItem('aetherion_hero_pass'); // remove any stale password
     gameState.username = uname;
     gameState.onlineUsername = uname;
-    if(save && !isNew){
-      // Load cloud save
+    if (save && !isNew) {
       try {
         const sd = typeof save === 'string' ? JSON.parse(save) : save;
-        gameState.playerLevel    = sd.playerLevel  || 1;
-        gameState.playerXp       = sd.playerXp     || 0;
-        gameState.xpToNext       = sd.xpToNext     || 100;
-        gameState.playerGold     = sd.playerGold   || 0;
-        gameState.inventory      = sd.inventory    || [];
-        gameState.deck           = sd.deck         || [];
-        gameState.unlockedSkills = sd.unlockedSkills|| [];
-        gameState.skillXp        = sd.skillXp      || 0;
-        gameState.shopOwned      = sd.shopOwned    || {};
-        gameState.activeCardIdx  = sd.activeCardIdx|| 0;
-      } catch(e){}
+        gameState.playerLevel    = sd.playerLevel    || 1;
+        gameState.playerXp       = sd.playerXp       || 0;
+        gameState.xpToNext       = sd.xpToNext       || 100;
+        gameState.playerGold     = sd.playerGold     || 0;
+        gameState.inventory      = sd.inventory      || [];
+        gameState.deck           = sd.deck           || [];
+        gameState.unlockedSkills = sd.unlockedSkills || [];
+        gameState.skillXp        = sd.skillXp        || 0;
+        gameState.shopOwned      = sd.shopOwned      || {};
+        gameState.activeCardIdx  = sd.activeCardIdx  || 0;
+      } catch(e) {}
     }
-    if(gameState.deck.length > 0){
+    if (gameState.deck.length > 0) {
       updateMenuHud(); showScreen('screen-menu');
       toast(`⚔️ Welcome back, ${uname}!`);
     } else {
       goCardPick('menu');
     }
   };
+
   const onErr = ({ msg }) => {
     s.off('account:loggedin', onLoggedIn);
     s.off('account:error',    onErr);
-    errEl.textContent = msg;
+    s.off('disconnect',       onDisconnect);
+    _finishLogin();
+    errEl.textContent = msg || 'Login failed. Please try again.';
   };
+
+  const onDisconnect = () => {
+    s.off('account:loggedin', onLoggedIn);
+    s.off('account:error',    onErr);
+    _finishLogin();
+    errEl.textContent = 'Connection lost. Please try again.';
+  };
+
   s.once('account:loggedin', onLoggedIn);
   s.once('account:error',    onErr);
+  s.once('disconnect',       onDisconnect);
+
+  s.emit('account:login', { username, password });
 }
 
-function doRegister(){
-  const username = document.getElementById('reg-username').value.trim();
-  const password = document.getElementById('reg-password').value.trim() || '12345';
-  const errEl    = document.getElementById('reg-error');
+let _registerInProgress = false;
 
-  if(!username){ errEl.textContent='Choose a username!'; return; }
-  if(username.length < 3){ errEl.textContent='Username must be at least 3 characters'; return; }
+function doRegister(){
+  if (_registerInProgress) return;
+
+  const username = document.getElementById('reg-username').value.trim();
+  const password = document.getElementById('reg-password').value;
+  const errEl    = document.getElementById('reg-error');
+  const regBtn   = document.querySelector('.btn-start[onclick="doRegister()"]');
+
+  errEl.style.color = '#d06060';
+  if (!username)             { errEl.textContent = 'Choose a username.'; return; }
+  if (username.length < 3)   { errEl.textContent = 'Username must be at least 3 characters.'; return; }
+  if (!password)             { errEl.textContent = 'Choose a password.'; return; }
+  if (password.length < 6)   { errEl.textContent = 'Password must be at least 6 characters.'; return; }
+
+  _registerInProgress = true;
   errEl.textContent = 'Creating account...';
+  errEl.style.color = 'var(--dim)';
+  if (regBtn) regBtn.disabled = true;
+
+  const _finishReg = () => {
+    _registerInProgress = false;
+    if (regBtn) regBtn.disabled = false;
+  };
 
   const s = getSocket();
-  s.emit('account:register', { username, password });
 
-  // If name was taken, server sends the new suggested name first
-  s.once('account:renamed', ({ suggestedName }) => {
-    errEl.style.color = 'var(--gold)';
-    errEl.textContent = `"${username}" was taken — your username is now "${suggestedName}"`;
-    // Update input so player can see their assigned name
-    const input = document.getElementById('reg-username');
-    if(input) input.value = suggestedName;
-  });
-
+  // ── IMPORTANT: listeners registered BEFORE emit ──────────
   const onRegistered = ({ username: uname }) => {
     s.off('account:registered', onRegistered);
+    s.off('account:nameTaken',  onNameTaken);
     s.off('account:error',      onErr);
-    _accountPassword = password;
+    s.off('disconnect',         onDisconnect);
+    _finishReg();
+    // Store only the username — never the password
     localStorage.setItem('aetherion_hero_name', uname);
-    localStorage.setItem('aetherion_hero_pass', password);
+    localStorage.removeItem('aetherion_hero_pass');
     gameState.username = uname;
     gameState.onlineUsername = uname;
     gameState.playerLevel=1; gameState.playerXp=0; gameState.xpToNext=100;
@@ -2317,25 +2474,50 @@ function doRegister(){
     toast(`🎉 Account created! Welcome, ${uname}!`);
     goCardPick('menu');
   };
+
+  // Server sends account:nameTaken (not account:renamed) when name is taken
+  const onNameTaken = ({ suggestedName }) => {
+    _finishReg();
+    errEl.style.color = 'var(--gold)';
+    errEl.textContent = `"${username}" is taken. Try "${suggestedName}" or choose another name.`;
+    const input = document.getElementById('reg-username');
+    if (input) input.value = suggestedName;
+  };
+
   const onErr = ({ msg }) => {
     s.off('account:registered', onRegistered);
+    s.off('account:nameTaken',  onNameTaken);
     s.off('account:error',      onErr);
+    s.off('disconnect',         onDisconnect);
+    _finishReg();
     errEl.style.color = '#d06060';
-    errEl.textContent = msg;
+    errEl.textContent = msg || 'Registration failed. Please try again.';
   };
+
+  const onDisconnect = () => {
+    s.off('account:registered', onRegistered);
+    s.off('account:nameTaken',  onNameTaken);
+    s.off('account:error',      onErr);
+    _finishReg();
+    errEl.style.color = '#d06060';
+    errEl.textContent = 'Connection lost. Please try again.';
+  };
+
   s.once('account:registered', onRegistered);
+  s.once('account:nameTaken',  onNameTaken);
   s.once('account:error',      onErr);
+  s.once('disconnect',         onDisconnect);
+
+  s.emit('account:register', { username, password });
 }
 
 function initIntroScreen(){
-  // Check if we have saved credentials — auto-fill username
+  // Restore only the username — never auto-fill the password
   const savedName = localStorage.getItem('aetherion_hero_name');
-  const savedPass = localStorage.getItem('aetherion_hero_pass');
-  if(savedName){
+  localStorage.removeItem('aetherion_hero_pass'); // scrub any old stored password
+  if (savedName) {
     const nameEl = document.getElementById('login-username');
-    const passEl = document.getElementById('login-password');
-    if(nameEl) nameEl.value = savedName;
-    if(passEl && savedPass) passEl.value = savedPass;
+    if (nameEl) nameEl.value = savedName;
   }
 }
 
@@ -2358,13 +2540,13 @@ function openSettings(){
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
         <button onclick="setTheme('dark')" id="btn-theme-dark"
           style="padding:10px;border-radius:8px;border:2px solid ${isDark?'var(--gold)':'var(--border)'};
-          background:${isDark?'rgba(200,151,58,.1)':'rgba(0,0,0,.3)'};cursor:pointer;
+          background:${isDark?'rgba(201,154,69,.1)':'rgba(0,0,0,.3)'};cursor:pointer;
           font-family:'Cinzel',serif;font-size:.65rem;color:var(--text);">
           🌑 Dark Mode
         </button>
         <button onclick="setTheme('light')" id="btn-theme-light"
           style="padding:10px;border-radius:8px;border:2px solid ${!isDark?'var(--gold)':'var(--border)'};
-          background:${!isDark?'rgba(200,151,58,.1)':'rgba(0,0,0,.3)'};cursor:pointer;
+          background:${!isDark?'rgba(201,154,69,.1)':'rgba(0,0,0,.3)'};cursor:pointer;
           font-family:'Cinzel',serif;font-size:.65rem;color:var(--text);">
           ☀️ Light Mode
         </button>
@@ -2425,8 +2607,7 @@ function doChangePassword(){
     newPassword: newPw,
   });
   s.once('account:passchanged', ()=>{
-    _accountPassword = newPw;
-    localStorage.setItem('aetherion_hero_pass', newPw);
+    // Password changed — do not store the new password locally
     errEl.style.color = '#60d060';
     errEl.textContent = '✓ Password changed successfully!';
     setTimeout(closeModal, 1500);
@@ -2600,7 +2781,7 @@ function applyImportedProfile(profile){
 
 function doLogout(){
   localStorage.removeItem('aetherion_hero_name');
-  localStorage.removeItem('aetherion_hero_pass');
+  localStorage.removeItem('aetherion_hero_pass'); // should already be absent
   localStorage.removeItem(SAVE_KEY);
   gameState.username = '';
   gameState.deck = [];
@@ -4941,800 +5122,222 @@ function spExplore(){
 //  ONLINE MODE  — Real Socket.io multiplayer
 // ─────────────────────────────────────────
 
+// ── Production flag (injected by server into the HTML) ──
+// The server adds window.IS_PRODUCTION = true/false via a meta tag or
+// inline script. Fallback: treat as non-production if undefined.
+const IS_PRODUCTION = window.IS_PRODUCTION || false;
+
 // ── Socket connection ──
 let socket = null;
 let onlineRoomPlayers = [];   // real players in current room
-let friendsList = [];
-let tradeSelected = { cardIdx: -1, targetIdx: -1 };
-let _tradeTargetId = '';
-let _tradeTargetName = '';
-let pendingTrades = [];
+// ═══════════════════════════════════════════════════
+//  FRIEND SYSTEM — server-authoritative
+// ═══════════════════════════════════════════════════
+let _friends = [], _incomingReqs = [], _outgoingReqs = [], _friendListLoading = false;
+let _friendListenersSet = false;
 
-function getSocket() {
-  // If socket exists (even if still connecting), return it — don't create a second one
-  if (socket) return socket;
-  if (typeof io === 'undefined') {
-    toast('⚠️ Multiplayer not available in offline mode.');
-    return { emit: ()=>{}, on: ()=>{}, once: ()=>{}, off: ()=>{}, connected: false };
-  }
-  // Connect to the same server serving this page
-  socket = io({ transports: ['websocket', 'polling'] });
-
-  // ── Connected ──
-  socket.on('connect', () => {
-    console.log('[Socket] Connected:', socket.id);
-    socket.emit('player:register', {
-      username: gameState.username || 'Hero',
-      level:    gameState.playerLevel || 1,
-      deckSize: gameState.deck.length,
-      gold:     gameState.playerGold,
-    });
-    // Re-authenticate this socket if we were already logged in (e.g. after a
-    // dropped connection/reconnect). A fresh socket has no server-side
-    // session yet — without this, the new socket would be treated as an
-    // unauthenticated guest and lose things like authoritative duel results.
-    // Re-authenticate via session token (not password) on reconnect
-    const sessionToken = sessionStorage.getItem('aetherion_session');
-    if(sessionToken){
-      socket.emit('session:restore', { token: sessionToken }, (result) => {
-        if(!result?.ok && gameState.username){
-          // Session expired — show login screen without exposing password
-          sessionStorage.removeItem('aetherion_session');
-          gameState.username = null;
-          showScreen('screen-intro');
-          toast('Session expired. Please log in again.');
-        }
-      });
-    }
-    // Setup Veylor anti-cheat listeners
-    setupVeylorListeners();
-    setupDuelResultListener();
-    setupGuildListeners();
-    // Check if account is on hold
-    if(gameState.username) checkAntiCheatStatus();
-  });
-
-  // Save blocked — account is banned or suspended
-  socket.on('account:save:blocked', ({ reason }) => {
-    if(reason === 'banned'){
-      console.warn('[Save blocked] Account permanently banned');
-    } else if(reason === 'suspended'){
-      toast('⚖️ Account suspended — progress will not be saved.');
-    }
-  });
-
-  // ── SERVER AUTHORITATIVE STATE ──────────────────────────
-  // Whenever the server processes an action it sends back the truth
-  socket.on('player:state', (state) => {
-    applyServerState(state);
-    updateMenuHud();
-    // Refresh shop gold display if open
-    const shopGoldEl = document.getElementById('shop-gold-display');
-    if(shopGoldEl) shopGoldEl.textContent = gameState.playerGold;
-  });
-
-  // Server confirms battle reward (shows actual amounts)
-  socket.on('player:battleRewardResult', ({ gold, xp, drop }) => {
-    bLog(`🏆 <b>Victory!</b> +${xp} XP, +${gold} Gold!${drop?` 🎁 Found ${drop}!`:''}`, 'w');
-    updateMenuHud();
-    if(drop) setTimeout(()=>showLootPopup([{item:drop,rarity:'Common',qty:1}]),800);
-  });
-
-  // Server confirms quest reward
-  socket.on('player:questClaimed', ({ questId, reward }) => {
-    const msg = `🎁 Claimed! +${reward.gold}💰 +${reward.xp}⭐${reward.item?' +1 '+reward.item:''}!`;
-    toast(msg);
-    updateMenuHud();
-  });
-
-  // Server confirms dungeon reward
-  socket.on('player:dungeonRewardResult', ({ gold, xp, bonusItem }) => {
-    toast(`🏰 Dungeon reward: +${gold} Gold, +${xp} XP!${bonusItem?' 🎁 '+bonusItem:''}`)
-    updateMenuHud();
-  });
-
-  // Server rejects an action
-  socket.on('player:actionError', ({ msg }) => {
-    toast(`⚠️ ${msg}`);
-    // Re-sync from server to correct any optimistic UI update
-    if(gameState.username && socket.connected){
-      socket.emit('account:login', {
-        username: gameState.username,
-        password: _accountPassword || localStorage.getItem('aetherion_hero_pass') || '12345'
-      });
-    }
-  });
-
-  socket.on('disconnect', () => {
-    console.log('[Socket] Disconnected');
-    toast('⚠️ Disconnected from server. Reconnecting...');
-  });
-
-  socket.on('error', ({ msg }) => toast(`⚠️ ${msg}`));
-
-  // ── Room events ──
-  socket.on('room:hosted', ({ code }) => {
-    gameState.onlineRoomCode = code;
-    document.getElementById('room-code-display').textContent = code;
-    document.getElementById('online-status').textContent = 'Waiting for players...';
-    document.getElementById('online-status').className = 'online-status';
-    updateChatRoomLabel();
-    addSystemChatMsg(`🏠 Room <b>${code}</b> created. Share the code with friends!`);
-  });
-
-  socket.on('room:joined', ({ code }) => {
-    gameState.onlineRoomCode = code;
-    document.getElementById('join-status').textContent = `✅ Joined room ${code}!`;
-    document.getElementById('join-status').className = 'online-status ok';
-    toast(`Connected to room ${code}!`);
-    updateChatRoomLabel();
-    addSystemChatMsg(`✅ You joined room <b>${code}</b>.`);
-  });
-
-  socket.on('room:update', ({ players }) => {
-    onlineRoomPlayers = players;
-    renderPlayerList();
-    renderTradeParty();
-    renderTradePlayers();
-  });
-
-  socket.on('player:joined', ({ username }) => {
-    document.getElementById('online-status').textContent = `${username} joined!`;
-    document.getElementById('online-status').className = 'online-status ok';
-    toast(`👤 ${username} joined the room!`);
-    addSystemChatMsg(`👤 ${username} joined the room.`);
-  });
-
-  socket.on('player:left', ({ username }) => {
-    toast(`👤 ${username} left the room.`);
-    addSystemChatMsg(`👤 ${username} left the room.`);
-  });
-
-  socket.on('host:transferred', ({ username }) => {
-    toast(`👑 ${username} is now the host.`);
-  });
-
-  // ── Lobby (online player list) ──
-  socket.on('lobby:players', (list) => {
-    renderOnlinePlayers(list);
-    renderTradePlayers(list);
-  });
-
-  socket.on('player:registered', () => {
-    // Request lobby list once registered
-    socket.emit('lobby:request');
-    // Sync our own leaderboard score immediately
-    const wins = parseInt(localStorage.getItem('aetherion_duel_wins')||'0');
-    const { rank } = getRankData();
-    if(wins > 0) syncLeaderboardToServer(gameState.username||'', wins, rank.name);
-  });
-
-  // ── Battle ──
-  socket.on('game:started', ({ mode, battleState }) => {
-    if (mode === 'duel' && battleState) {
-      startOnlineDuel(battleState);
-    } else if (mode === 'story') {
-      showScreen('screen-sp'); initSP();
-      spLog(`🌐 <b>Online Story Mode</b>`,'l');
-    }
-  });
-
-  socket.on('battle:update', ({ battleState, message }) => {
-    updateOnlineDuel(battleState, message);
-  });
-
-  socket.on('battle:over', ({ winnerName, log }) => {
-    // NOTE: win/loss is no longer recorded here. The server has already
-    // decided the real outcome (it ran the whole duel) and will follow up
-    // with an authoritative 'duel:result' event — see setupDuelResultListener().
-    const iWon = winnerName === (gameState.username||'Hero');
-    const { rank, wins } = getRankData();
-    const msg = winnerName ? `🏆 ${winnerName} wins!` : '🏃 Duel ended.';
-    showModal('⚔️ Duel Over', `
-      <div style="text-align:center;padding:10px 0 16px;">
-        <div style="font-size:2.5rem;">${iWon?'🏆':'💀'}</div>
-        <div style="font-family:'Cinzel Decorative',serif;font-size:1rem;color:var(--gold);margin:8px 0;">${msg}</div>
-        ${winnerName?`<div style="margin-top:6px;">${getRankBadgeHTML(rank,wins)}</div>`:''}
-        ${iWon?`<div style="font-size:.62rem;color:#60d060;margin-top:6px;">+1 Duel Win!</div>`:`<div style="font-size:.62rem;color:#d06060;margin-top:6px;">Better luck next time!</div>`}
-      </div>
-      <div style="max-height:160px;overflow-y:auto;font-size:.6rem;color:var(--text);">
-        ${log.map(l=>`<div style="padding:3px 0;border-bottom:1px solid rgba(255,255,255,.05);">${l}</div>`).join('')}
-      </div>`,
-      [
-        {label:'🏆 Leaderboard', cls:'btn-ghost', cb:()=>{ closeModal(); openLeaderboard(); }},
-        {label:'Back to Lobby', cls:'btn', cb:()=>{ closeModal(); onlineTab('lobby'); }}
-      ]
-    );
-  });
-
-  // ── Trade ──
-  socket.on('trade:incoming', ({ tradeId, from, fromId, card }) => {
-    pendingTrades.push({ tradeId, from, fromId, card });
-    renderTradeIncoming();
-    toast(`🤝 ${from} wants to trade ${card.emoji||'⚔️'} ${card.name}!`);
-  });
-
-  socket.on('trade:sent', () => {
-    const el = document.getElementById('trade-status');
-    if (el) { el.textContent = 'Trade offer sent! Waiting for response...'; el.style.color='var(--dim)'; }
-  });
-
-  socket.on('trade:complete', ({ receivedCard, fromUsername }) => {
-    if (gameState.deck.length < 4) {
-      const newCard = { ...receivedCard, statuses:[], abilityCooldown:0, fainted:false };
-      gameState.deck.push(newCard);
-      if (gameState.activeCardIdx >= gameState.deck.length) gameState.activeCardIdx = 0;
-      updateMenuHud(); renderSPDeckList(); saveGame();
-    }
-    const el = document.getElementById('trade-status');
-    if (el) { el.textContent = `✅ Trade complete! Got ${receivedCard.emoji||'⚔️'} ${receivedCard.name}!`; el.style.color='#60d060'; }
-    toast(`🤝 Trade complete! Received ${receivedCard.name} from ${fromUsername}!`);
-    tradeSelected = { cardIdx:-1, targetIdx:-1 };
-    renderTradeParty();
-  });
-
-  socket.on('trade:declined', () => {
-    const el = document.getElementById('trade-status');
-    if (el) { el.textContent = 'Trade was declined.'; el.style.color='#d06060'; }
-    toast('Trade declined.');
-  });
-
-  // ── Chat ──
-  socket.on('chat:message', ({ from, message, time }) => {
-    appendChatMessage(from, message, time, from === (gameState.username||'Hero'));
-    // Toast only if chat tab is not open
-    const chatTab = document.getElementById('online-tab-chat');
-    if(!chatTab || chatTab.style.display==='none'){
-      toast(`💬 ${from}: ${message.substring(0,40)}${message.length>40?'...':''}`);
-    }
-  });
-
-  return socket;
-}
-
-// ── Go Online screen ──
-function goOnline() {
-  if (!gameState.deck.length) { goCardPick('online_return'); return; }
-  const greet = document.getElementById('online-greeting-name');
-  if (greet) greet.textContent = gameState.username || 'Hero';
-  // Connect socket
-  getSocket();
-  onlineTab('lobby');
-  showScreen('screen-online');
-  renderFriendsList();
-}
-
-function onlineSetUsername() {
-  const name = document.getElementById('online-username')?.value?.trim();
-  if (name) { gameState.onlineUsername = name; gameState.username = name; }
-  goOnline();
-}
-
-function onlineTab(tab) {
-  ['lobby','trade','chat'].forEach(t => {
-    const el  = document.getElementById('online-tab-'+t);
-    const btn = document.getElementById('otab-'+t);
-    if (el)  el.style.display = t===tab ? '' : 'none';
-    if (btn) {
-      btn.style.background   = t===tab ? 'linear-gradient(135deg,#3a2008,#7a4818)' : 'rgba(0,0,0,.4)';
-      btn.style.borderColor  = t===tab ? 'rgba(200,151,58,.3)' : 'var(--border)';
-    }
-  });
-  if (tab==='trade')   { renderTradeParty(); renderTradePlayers(); renderTradeIncoming(); }
-  if (tab==='chat')    { updateChatRoomLabel(); document.getElementById('chat-input')?.focus(); }
-}
-
-// ── HOST ──
-function onlineHost() {
-  if (!gameState.deck.length) { toast('Pick your deck first!'); goCardPick('online_host'); return; }
-  const s = getSocket();
-  document.getElementById('online-user-setup').style.display = 'none';
-  document.getElementById('online-host-panel').style.display = '';
-  document.getElementById('room-code-display').textContent = '...';
-  document.getElementById('online-status').textContent = 'Creating room...';
-  s.emit('room:host', {
-    username: gameState.username || 'Hero',
-    deck:     gameState.deck.map(c=>({
-      ...c,
-      // Make sure all upgraded stats are included
-      hp:      c.hp,
-      maxHp:   c.maxHp,
-      attack:  c.attack,
-      defense: c.defense,
-      magic:   c.magic,
-      speed:   c.speed,
-      cardLevel: c.cardLevel||1,
-      cardXp:  c.cardXp||0,
-    })),
-    level:    gameState.playerLevel || 1,
+function setupFriendListeners() {
+  if (_friendListenersSet || !socket) return;
+  _friendListenersSet = true;
+  socket.on('friend:list:update', () => { _loadFriendList(); });
+  socket.on('friend:request:received', ({ fromUname, fromDisplay } = {}) => {
+    toast('👥 ' + escapeHTML(fromDisplay || fromUname) + ' sent you a friend request!');
+    updateFriendsNotifDot(true);
+    _loadFriendList();
   });
 }
 
-// ── JOIN ──
-function showJoinForm() {
-  document.getElementById('online-user-setup').style.display = 'none';
-  document.getElementById('online-join-panel').style.display = '';
-}
-
-function onlineJoin() {
-  const code = document.getElementById('join-code-input').value.trim().toUpperCase();
-  if (code.length !== 6) { document.getElementById('join-status').textContent='Code must be 6 chars.'; document.getElementById('join-status').className='online-status err'; return; }
-  if (!gameState.deck.length) { toast('Pick your deck first!'); goCardPick('online_join'); return; }
-  document.getElementById('join-status').textContent = 'Connecting...';
-  const s = getSocket();
-  s.emit('room:join', {
-    username: gameState.username || 'Hero',
-    code,
-    deck: gameState.deck.map(c=>({
-      ...c,
-      hp:      c.hp,
-      maxHp:   c.maxHp,
-      attack:  c.attack,
-      defense: c.defense,
-      magic:   c.magic,
-      speed:   c.speed,
-      cardLevel: c.cardLevel||1,
-      cardXp:  c.cardXp||0,
-    })),
-    level: gameState.playerLevel || 1,
+function _loadFriendList() {
+  if (!socket?.connected || _friendListLoading) return;
+  _friendListLoading = true;
+  socket.emit('friend:list', {}, (res) => {
+    _friendListLoading = false;
+    if (!res?.ok) return;
+    _friends      = res.friends  || [];
+    _incomingReqs = res.incoming || [];
+    _outgoingReqs = res.outgoing || [];
+    renderFriendsList();
+    renderFriendRequests();
+    updateFriendsNotifDot(_incomingReqs.length > 0);
   });
-  // Show host panel so they can see the room
-  document.getElementById('online-join-panel').style.display = 'none';
-  document.getElementById('online-host-panel').style.display = '';
-  document.getElementById('room-code-display').textContent = code;
-}
-
-// ── COPY CODE ──
-function copyRoomCode() {
-  navigator.clipboard.writeText(gameState.onlineRoomCode).then(() => toast('Code copied!')).catch(() => {
-    const el = document.createElement('textarea'); el.value = gameState.onlineRoomCode;
-    document.body.appendChild(el); el.select(); document.execCommand('copy');
-    document.body.removeChild(el); toast('Code copied!');
-  });
-}
-
-// ── RENDER PLAYER LIST ──
-function renderPlayerList() {
-  const el = document.getElementById('player-list');
-  if (!el) return;
-  if (!onlineRoomPlayers.length) {
-    el.innerHTML = '<div style="color:var(--dim);font-size:.65rem;font-style:italic;">Waiting for players...</div>';
-    return;
-  }
-  el.innerHTML = onlineRoomPlayers.map(p => `
-    <div class="player-entry" style="flex-direction:column;align-items:flex-start;gap:6px;margin-bottom:10px;">
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-        <span style="font-size:1.4rem;">⚔️</span>
-        <div style="flex:1;">
-          <div class="pe-name">${p.username}${p.isHost?' 👑':''}</div>
-          <div style="font-size:.58rem;color:var(--dim);">Party Lv.${p.level||1} · ${p.deckSize||0} cards</div>
-        </div>
-        <div class="friend-status-dot dot-online"></div>
-      </div>
-    </div>`).join('');
-}
-
-// ── START MODES ──
-function backToLobbyChoice(){
-  document.getElementById('online-host-panel').style.display = 'none';
-  document.getElementById('online-join-panel').style.display = 'none';
-  document.getElementById('online-user-setup').style.display = '';
-}
-
-function onlineStartStory() {
-  if (onlineRoomPlayers.length < 2) { toast('Need at least 2 players!'); return; }
-  // If player has a saved story, offer to use it
-  const stories = JSON.parse(localStorage.getItem('aetherion_stories')||'[]');
-  if(stories.length){
-    const body = `
-      <div style="font-size:.68rem;color:var(--dim);margin-bottom:12px;">Pick a story to play online with your party:</div>
-      ${stories.map((s,i)=>`
-        <div class="saved-story-entry" style="cursor:pointer;padding:10px 12px;border:2px solid var(--border);border-radius:8px;margin-bottom:6px;transition:all .15s;"
-          onmouseover="this.style.borderColor='rgba(200,151,58,.4)'" onmouseout="this.style.borderColor='var(--border)'"
-          onclick="launchOnlineStory(${i})">
-          <div style="font-family:'Cinzel',serif;font-size:.72rem;color:var(--gold);">📖 ${s.title}</div>
-          <div style="font-size:.58rem;color:var(--dim);margin-top:2px;">${s.blocks?.length||0} scenes</div>
-        </div>`).join('')}
-      <div style="margin-top:10px;">
-        <button class="btn-ghost" onclick="launchOnlineStoryRandom()" style="width:100%;font-size:.65rem;">🎲 Random Adventure</button>
-      </div>`;
-    showModal('📖 Pick a Story', body, [{label:'Cancel', cls:'btn-ghost', cb:closeModal}]);
-  } else {
-    launchOnlineStoryRandom();
-  }
-}
-
-function launchOnlineStory(idx){
-  closeModal();
-  const stories = JSON.parse(localStorage.getItem('aetherion_stories')||'[]');
-  const story = stories[idx];
-  if(!story) return;
-  getSocket().emit('game:start', { mode:'story', storyBlocks: story.blocks });
-  showScreen('screen-sp'); initSP();
-  spLog(`🌐 <b>Online Story: ${story.title}</b>`,'l');
-  onlineRoomPlayers.forEach(p=>spLog(`👤 <b>${p.username}</b> joined the adventure`,'mn'));
-}
-
-function launchOnlineStoryRandom(){
-  closeModal();
-  getSocket().emit('game:start', { mode:'story' });
-  showScreen('screen-sp'); initSP();
-  spLog(`🌐 <b>Online Adventure Mode</b>`,'l');
-  onlineRoomPlayers.forEach(p=>spLog(`👤 <b>${p.username}</b> joined the adventure`,'mn'));
-}
-
-function onlineStartDuel() {
-  if (onlineRoomPlayers.length < 2) { toast('Need at least 2 players!'); return; }
-  getSocket().emit('game:start', { mode: 'duel' });
-}
-
-// ── ONLINE DUEL ──
-let onlineDuelState = null;
-
-function startOnlineDuel(bs) {
-  onlineDuelState = bs;
-  const me  = bs.combatants.find(c => c.id === socket?.id);
-  const opp = bs.combatants.find(c => c.id !== socket?.id);
-  if (!me || !opp) return;
-  showModal('⚔️ Online Duel', buildDuelHTML(bs, me, opp), []);
-  // Listen for duel chat
-  if(socket) socket.on('duel:chat', ({from, message, time})=>{
-    appendDuelChat(from, message, from===(gameState.username||'Hero'));
-  });
-}
-
-function buildDuelHTML(bs, me, opp) {
-  const myTurn = bs.activePlayer === socket?.id;
-  const myDeck = me.deck || [];
-  const deckHTML = myDeck.length > 1 ? `
-    <div style="margin-bottom:10px;">
-      <div style="font-family:'Cinzel',serif;font-size:.55rem;color:var(--dim);margin-bottom:5px;">YOUR DECK — click to switch active card</div>
-      <div style="display:flex;gap:5px;flex-wrap:wrap;">
-        ${myDeck.map((c,i)=>`
-          <div onclick="${myTurn&&!c.fainted?`duelSwitch(${i})`:'void(0)'}"
-            style="background:${i===me.activeIdx?'rgba(200,151,58,.15)':'rgba(0,0,0,.4)'};
-            border:2px solid ${i===me.activeIdx?'rgba(200,151,58,.5)':c.fainted?'rgba(200,50,50,.3)':'var(--border)'};
-            border-radius:8px;padding:5px 8px;text-align:center;cursor:${myTurn&&!c.fainted?'pointer':'default'};
-            opacity:${c.fainted?'0.4':'1'};min-width:56px;transition:all .15s;">
-            <div style="font-size:1.2rem;">${c.emoji||'⚔️'}</div>
-            <div style="font-family:'Cinzel',serif;font-size:.45rem;color:${i===me.activeIdx?'var(--gold)':'var(--text)'};">${c.name?.split(' ')[0]||'?'}</div>
-            <div style="font-size:.42rem;color:${c.hp/c.maxHp<0.3?'#d06060':'#60d060'};">${c.fainted?'💀':`${c.hp}/${c.maxHp}`}</div>
-          </div>`).join('')}
-      </div>
-    </div>` : '';
-
-  return `
-    <!-- Turn indicator -->
-    <div style="text-align:center;margin-bottom:10px;padding:6px;background:${myTurn?'rgba(0,100,0,.2)':'rgba(0,0,0,.3)'};border-radius:8px;">
-      <div style="font-size:.65rem;font-family:'Cinzel',serif;color:${myTurn?'#60d060':'var(--dim)'};">
-        ${myTurn ? '⚡ YOUR TURN' : `⏳ Waiting for ${opp.name}...`}
-      </div>
-    </div>
-
-    <!-- Combatants -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
-      <div style="background:rgba(0,100,0,.15);border:2px solid rgba(0,200,0,.2);border-radius:10px;padding:10px;text-align:center;">
-        <div style="font-size:1.8rem;">${me.emoji||'⚔️'}</div>
-        <div style="font-family:'Cinzel',serif;font-size:.62rem;color:var(--gold);">${me.name}</div>
-        <div style="font-size:.55rem;color:var(--dim);margin-bottom:4px;">${me.cardName||''}</div>
-        <div style="font-family:'Share Tech Mono',monospace;font-size:.68rem;color:#60d060;">${me.hp}/${me.maxHp} HP</div>
-        <div style="height:5px;background:rgba(0,0,0,.5);border-radius:3px;margin-top:4px;">
-          <div style="height:100%;background:linear-gradient(90deg,#1a6040,#30c080);width:${Math.max(0,me.hp/me.maxHp*100)}%;border-radius:3px;transition:width .3s;"></div>
-        </div>
-        <div style="font-size:.5rem;color:var(--dim);margin-top:3px;">ATK:${me.atk} DEF:${me.def} MAG:${me.mag}</div>
-      </div>
-      <div style="background:rgba(100,0,0,.15);border:2px solid rgba(200,0,0,.2);border-radius:10px;padding:10px;text-align:center;">
-        <div style="font-size:1.8rem;">${opp.emoji||'👾'}</div>
-        <div style="font-family:'Cinzel',serif;font-size:.62rem;color:#d06060;">${opp.name}</div>
-        <div style="font-size:.55rem;color:var(--dim);margin-bottom:4px;">${opp.cardName||''}</div>
-        <div style="font-family:'Share Tech Mono',monospace;font-size:.68rem;color:#d06060;">${opp.hp}/${opp.maxHp} HP</div>
-        <div style="height:5px;background:rgba(0,0,0,.5);border-radius:3px;margin-top:4px;">
-          <div style="height:100%;background:linear-gradient(90deg,#601a1a,#c03030);width:${Math.max(0,opp.hp/opp.maxHp*100)}%;border-radius:3px;transition:width .3s;"></div>
-        </div>
-        <div style="font-size:.5rem;color:var(--dim);margin-top:3px;">ATK:${opp.atk} DEF:${opp.def} MAG:${opp.mag}</div>
-      </div>
-    </div>
-
-    <!-- Deck switcher -->
-    ${deckHTML}
-
-    <!-- Actions -->
-    ${myTurn ? `
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
-      <button class="btn" onclick="duelAction('attack')" style="font-size:.72rem;">⚔️ Attack</button>
-      <button class="btn" onclick="duelAction('ability')" style="font-size:.72rem;${me.abilityCooldown>0?'opacity:.5;':''}" ${me.abilityCooldown>0?'disabled':''}>
-        ${me.abilityCooldown>0?`✨ Cooldown (${me.abilityCooldown})`:`✨ ${me.ability}`}
-      </button>
-      <button class="btn-ghost" onclick="duelAction('heal')" style="font-size:.72rem;">🧪 Heal</button>
-      <button class="btn-ghost" onclick="duelAction('flee')" style="font-size:.72rem;border-color:rgba(200,50,50,.3);color:#d06060;">🏃 Flee</button>
-    </div>`
-    : `<div style="text-align:center;color:var(--dim);font-size:.65rem;padding:8px 0;">Waiting for ${opp.name} to move...</div>`}
-
-    <!-- Battle log -->
-    <div id="duel-log" style="max-height:80px;overflow-y:auto;font-size:.58rem;color:var(--dim);margin-bottom:8px;border-top:1px solid var(--border);padding-top:6px;">
-      ${bs.log.slice(-5).map(l=>`<div style="padding:2px 0;">${l}</div>`).join('')}
-    </div>
-
-    <!-- In-duel chat -->
-    <div style="border-top:1px solid var(--border);padding-top:8px;">
-      <div id="duel-chat-msgs" style="max-height:80px;overflow-y:auto;margin-bottom:6px;font-size:.6rem;"></div>
-      <div style="display:flex;gap:6px;">
-        <input id="duel-chat-input" placeholder="Chat with opponent..." maxlength="100"
-          style="flex:1;background:rgba(0,0,0,.5);border:1px solid var(--border);border-radius:6px;
-          color:var(--text);font-size:.62rem;padding:6px 10px;outline:none;"
-          onkeydown="if(event.key==='Enter')sendDuelChat()">
-        <button class="btn-sm" onclick="sendDuelChat()" style="font-size:.58rem;padding:6px 10px;">💬</button>
-      </div>
-    </div>`;
-}
-
-function duelAction(action) {
-  if (!socket) return;
-  socket.emit('battle:action', { action });
-}
-
-function duelSwitch(cardIdx) {
-  if (!socket) return;
-  socket.emit('battle:action', { action: 'switch', cardIdx });
-}
-
-function sendDuelChat() {
-  const input = document.getElementById('duel-chat-input');
-  const msg = input?.value?.trim();
-  if (!msg || !socket) return;
-  socket.emit('duel:chat', { message: msg });
-  appendDuelChat(gameState.username||'You', msg, true);
-  input.value = '';
-}
-
-function appendDuelChat(from, message, isMe) {
-  const el = document.getElementById('duel-chat-msgs');
-  if (!el) return;
-  const div = document.createElement('div');
-  div.style.cssText = `text-align:${isMe?'right':'left'};margin-bottom:3px;`;
-  div.innerHTML = `<span style="background:${isMe?'rgba(200,151,58,.15)':'rgba(255,255,255,.08)'};
-    border-radius:8px;padding:3px 8px;font-size:.6rem;color:var(--text);">
-    ${isMe?'':('<b style="color:var(--gold);font-size:.55rem;">'+from+'</b> ')}${escapeHTML(message)}
-  </span>`;
-  el.appendChild(div);
-  el.scrollTop = el.scrollHeight;
-}
-
-function updateOnlineDuel(bs, message) {
-  onlineDuelState = bs;
-  const me  = bs.combatants.find(c => c.id === socket?.id);
-  const opp = bs.combatants.find(c => c.id !== socket?.id);
-  if (!me || !opp) return;
-  // Preserve chat messages before re-render
-  const chatMsgs = document.getElementById('duel-chat-msgs')?.innerHTML || '';
-  document.getElementById('modal-body').innerHTML = buildDuelHTML(bs, me, opp);
-  // Restore chat
-  const chatEl = document.getElementById('duel-chat-msgs');
-  if (chatEl && chatMsgs) chatEl.innerHTML = chatMsgs;
-  toast(message.replace(/<b>|<\/b>/g,''));
-}
-
-// ── FRIENDS ──
-// Active tab in friends panel: 'friends' | 'suggested' | 'invites'
-let _friendsTab = 'friends';
-
-function openFriendsPanel() {
-  _friendsTab = 'friends';
-  try { getSocket().emit('lobby:request'); } catch(e) {}
-  updateFriendsNotifDot();
-  _renderFriendsModal();
-}
-
-function _renderFriendsModal() {
-  const myId = (gameState.username || 'HERO').toUpperCase().substring(0,8);
-
-  const body = `
-  <div style="display:flex;gap:12px;flex-wrap:wrap;">
-
-    <!-- LEFT: Add Friends panel -->
-    <div style="flex:0 0 200px;min-width:160px;background:rgba(255,255,255,.04);
-      border:1px solid rgba(200,151,58,.25);border-radius:12px;padding:14px;">
-      <div style="font-family:'Cinzel',serif;font-size:.7rem;color:var(--gold);
-        text-align:center;margin-bottom:12px;letter-spacing:.1em;">➕ ADD FRIENDS</div>
-
-      <!-- Player ID display -->
-      <div style="background:rgba(0,0,0,.4);border:1px solid rgba(200,151,58,.2);
-        border-radius:8px;padding:8px 10px;margin-bottom:10px;text-align:center;">
-        <div style="font-size:.48rem;color:var(--dim);margin-bottom:3px;">YOUR ID</div>
-        <div style="font-family:'Share Tech Mono',monospace;font-size:.75rem;
-          color:var(--gold);letter-spacing:.08em;">#${myId}</div>
-      </div>
-
-      <!-- Search input -->
-      <input id="friend-add-input" placeholder="Enter username..." maxlength="20"
-        style="width:100%;background:rgba(0,0,0,.5);border:1px solid var(--border);
-        border-radius:8px;color:var(--text);font-size:.65rem;padding:8px 10px;
-        outline:none;box-sizing:border-box;margin-bottom:6px;"
-        onkeydown="if(event.key==='Enter')addFriend()">
-      <button class="btn" onclick="addFriend()"
-        style="width:100%;font-size:.65rem;padding:8px;">
-        ADD FRIEND
-      </button>
-
-      <!-- Divider -->
-      <div style="display:flex;align-items:center;gap:6px;margin:10px 0;">
-        <div style="flex:1;height:1px;background:var(--border);"></div>
-        <div style="font-size:.55rem;color:var(--dim);">OR</div>
-        <div style="flex:1;height:1px;background:var(--border);"></div>
-      </div>
-
-      <!-- Share invite -->
-      <button class="btn-ghost" onclick="shareFriendInvite()"
-        style="width:100%;font-size:.6rem;padding:7px;margin-bottom:6px;">
-        🔗 SHARE INVITE
-      </button>
-    </div>
-
-    <!-- RIGHT: Tabs panel -->
-    <div style="flex:1;min-width:200px;">
-
-      <!-- Tab bar -->
-      <div style="display:flex;gap:4px;margin-bottom:10px;">
-        ${['friends','suggested','invites'].map(t => `
-          <button onclick="_switchFriendsTab('${t}')" id="ftab-${t}"
-            style="flex:1;padding:8px 4px;font-size:.58rem;font-family:'Cinzel',serif;
-            letter-spacing:.05em;border-radius:8px 8px 0 0;border:1px solid var(--border);
-            border-bottom:none;cursor:pointer;transition:background .15s;
-            ${_friendsTab===t
-              ? 'background:linear-gradient(135deg,rgba(200,151,58,.25),rgba(200,151,58,.1));color:var(--gold);border-color:rgba(200,151,58,.4);'
-              : 'background:rgba(0,0,0,.3);color:var(--dim);'}">
-            ${t==='friends'?'👥 FRIENDS':t==='suggested'?'✨ SUGGESTED':'📬 INVITES'}
-          </button>`).join('')}
-      </div>
-
-      <!-- Tab content area -->
-      <div id="friends-tab-body"
-        style="background:rgba(0,0,0,.25);border:1px solid rgba(200,151,58,.2);
-        border-radius:0 8px 8px 8px;padding:8px;min-height:200px;max-height:320px;overflow-y:auto;">
-        <div id="friends-list-el"></div>
-        <div id="friend-requests-el" style="display:none;"></div>
-        <div id="online-players-el" style="display:none;"></div>
-      </div>
-    </div>
-  </div>`;
-
-  showModal('👤 FRIENDS', body, [{label:'✕ Close', cls:'btn-ghost', cb:closeModal}]);
-  _switchFriendsTab(_friendsTab);
-}
-
-function _switchFriendsTab(tab) {
-  _friendsTab = tab;
-  // Update tab button styles
-  ['friends','suggested','invites'].forEach(t => {
-    const btn = document.getElementById('ftab-' + t);
-    if (!btn) return;
-    if (t === tab) {
-      btn.style.background = 'linear-gradient(135deg,rgba(200,151,58,.25),rgba(200,151,58,.1))';
-      btn.style.color = 'var(--gold)';
-      btn.style.borderColor = 'rgba(200,151,58,.4)';
-    } else {
-      btn.style.background = 'rgba(0,0,0,.3)';
-      btn.style.color = 'var(--dim)';
-      btn.style.borderColor = 'var(--border)';
-    }
-  });
-  // Show/hide panels
-  const fl = document.getElementById('friends-list-el');
-  const fr = document.getElementById('friend-requests-el');
-  const op = document.getElementById('online-players-el');
-  if (fl) fl.style.display = tab === 'friends'   ? '' : 'none';
-  if (fr) fr.style.display = tab === 'invites'   ? '' : 'none';
-  if (op) op.style.display = tab === 'suggested' ? '' : 'none';
-  // Render correct content
-  if (tab === 'friends')   renderFriendsList();
-  if (tab === 'invites')   renderFriendRequests();
-  if (tab === 'suggested') { try { getSocket().emit('lobby:request'); } catch(e) {} }
-}
-
-function shareFriendInvite() {
-  const id = (gameState.username || 'HERO').toUpperCase().substring(0,8);
-  const msg = 'Join me on Aetherion RPG! Search for #' + id;
-  if (navigator.share) { navigator.share({ text: msg }).catch(()=>{}); }
-  else if (navigator.clipboard) { navigator.clipboard.writeText(msg); toast('📋 Invite link copied!'); }
-  else toast('Your ID: #' + id);
-}
-
-function updateFriendsNotifDot() {
-  // Show red dot on profile button only when there are pending requests
-  // (renderFriendRequests currently shows none, so dot stays hidden)
-  const dot = document.getElementById('friends-notif-dot');
-  if (dot) dot.style.display = 'none'; // extend here when real requests are implemented
 }
 
 function renderFriendsList() {
   const el = document.getElementById('friends-list-el');
   if (!el) return;
-
-  // Header row: "FRIENDS (N)"
   const header = `<div style="font-family:'Cinzel',serif;font-size:.6rem;color:var(--dim);
-    padding:4px 6px 8px;letter-spacing:.08em;">FRIENDS (${friendsList.length})</div>`;
-
-  if (!friendsList.length) {
+    padding:4px 6px 8px;letter-spacing:.08em;">FRIENDS (${_friends.length})</div>`;
+  if (!_friends.length) {
     el.innerHTML = header + `<div style="color:var(--dim);font-size:.63rem;
-      font-style:italic;padding:8px 6px;">No friends yet — add someone on the left!</div>`;
+      font-style:italic;padding:8px 6px;">No friends yet — search for a player above!</div>`;
     return;
   }
-
-  const rows = friendsList.map((f, i) => {
-    const sf   = escapeHTML(f);
-    // Generate a consistent colour+emoji avatar from the username
-    const avatarEmojis = ['⚔️','🔥','❄️','⚡','🌑','👑','🐉','🛡️','✨','💎'];
-    const avatarColors = ['#3a1a6a','#1a3a6a','#1a6a3a','#6a3a1a','#4a1a1a','#1a4a4a'];
-    const seed  = f.split('').reduce((a,ch)=>a+ch.charCodeAt(0),0);
-    const aEmoji = avatarEmojis[seed % avatarEmojis.length];
-    const aColor = avatarColors[seed % avatarColors.length];
-    // Fake rank/trophy data (extend with real data when server tracks it)
-    const trophies = ((seed * 37) % 2000);
-
-    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 8px;
+  const emojis = ['⚔️','🔥','❄️','⚡','🌑','👑','🐉','🛡️','✨','💎'];
+  const colors = ['#3a1a6a','#1a3a6a','#1a6a3a','#6a3a1a','#4a1a1a','#1a4a4a'];
+  el.innerHTML = header + _friends.map((f, i) => {
+    const su = escapeHTML(f.uname);
+    const seed = f.uname.split('').reduce((a,ch)=>a+ch.charCodeAt(0),0);
+    const aE = emojis[seed % emojis.length], aC = colors[seed % colors.length];
+    const dot = f.online
+      ? '<span style="color:#60d060;font-size:.52rem;">🟢 Online</span>'
+      : '<span style="color:var(--dim);font-size:.52rem;">⚫ Offline</span>';
+    return `<div style="display:flex;align-items:center;gap:10px;padding:8px;
       background:rgba(255,255,255,.04);border-radius:10px;margin-bottom:5px;
-      border:1px solid rgba(200,151,58,.12);transition:background .15s;"
-      onmouseover="this.style.background='rgba(200,151,58,.08)'"
-      onmouseout="this.style.background='rgba(255,255,255,.04)'">
-
-      <!-- Rank number -->
-      <div style="font-family:'Share Tech Mono',monospace;font-size:.6rem;
-        color:var(--dim);min-width:16px;text-align:center;">${i+1}</div>
-
-      <!-- Avatar circle -->
-      <div style="width:36px;height:36px;min-width:36px;border-radius:50%;
-        background:${aColor};border:2px solid rgba(200,151,58,.4);
-        display:flex;align-items:center;justify-content:center;font-size:1.1rem;">
-        ${aEmoji}
-      </div>
-
-      <!-- Name + last online -->
+      border:1px solid rgba(201,154,69,.12);">
+      <div style="font-size:.55rem;color:var(--dim);min-width:14px;">${i+1}</div>
+      <div style="width:34px;height:34px;min-width:34px;border-radius:50%;
+        background:${aC};border:2px solid rgba(201,154,69,.4);
+        display:flex;align-items:center;justify-content:center;font-size:1rem;">${aE}</div>
       <div style="flex:1;min-width:0;">
-        <div style="font-family:'Cinzel',serif;font-size:.65rem;color:var(--gold);
-          white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${sf}</div>
-        <div style="font-size:.5rem;color:var(--dim);margin-top:1px;">Last online: recently</div>
+        <div style="font-family:'Cinzel',serif;font-size:.63rem;color:var(--gold);
+          white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${su}</div>
+        <div style="margin-top:1px;">${dot}</div>
       </div>
-
-      <!-- Trophy count -->
-      <div style="display:flex;align-items:center;gap:3px;margin-right:4px;">
-        <span style="font-size:.8rem;">🏆</span>
-        <span style="font-family:'Share Tech Mono',monospace;font-size:.62rem;
-          color:#e8c840;">${trophies}</span>
-      </div>
-
-      <!-- Remove button -->
-      <button onclick="removeFriend(${i})" title="Remove friend"
+      <button onclick="removeFriend('${su}')"
         style="background:rgba(80,10,10,.5);border:1px solid rgba(150,30,30,.4);
-        border-radius:6px;color:#d06060;font-size:.65rem;padding:4px 7px;
-        cursor:pointer;line-height:1;min-height:unset;">✕</button>
+        border-radius:6px;color:#d06060;font-size:.6rem;padding:4px 7px;cursor:pointer;">✕</button>
     </div>`;
   }).join('');
-
-  el.innerHTML = header + rows;
-}
-
-function addFriend() {
-  const input = document.getElementById('friend-add-input');
-  const name  = input.value.trim();
-  if (!name) { input.style.borderColor='rgba(200,50,50,.6)'; return; }
-  if (friendsList.includes(name)) { toast('Already friends!'); return; }
-  if (name === gameState.username) { toast("Can't add yourself!"); return; }
-  friendsList.push(name);
-  input.value = '';
-  renderFriendsList();
-  toast(`👥 Added ${name}!`);
-}
-
-function removeFriend(idx) {
-  const name = friendsList[idx];
-  friendsList.splice(idx, 1);
-  renderFriendsList();
-  toast(`Removed ${name}.`);
 }
 
 function renderFriendRequests() {
   const el = document.getElementById('friend-requests-el');
-  if (el) el.innerHTML = `<div style="color:var(--dim);font-size:.62rem;font-style:italic;padding:4px;">No pending requests.</div>`;
+  if (!el) return;
+  let html = '';
+  if (_incomingReqs.length) {
+    html += `<div style="font-family:'Cinzel',serif;font-size:.6rem;color:var(--gold);
+      padding:4px 6px 6px;">📬 INCOMING (${_incomingReqs.length})</div>`;
+    html += _incomingReqs.map(r => {
+      const su = escapeHTML(r.uname);
+      return `<div style="display:flex;align-items:center;gap:8px;padding:8px;
+        background:rgba(201,154,69,.06);border:1px solid rgba(201,154,69,.2);
+        border-radius:10px;margin-bottom:5px;">
+        <div style="flex:1;font-family:'Cinzel',serif;font-size:.62rem;color:var(--text);">${su}</div>
+        <button onclick="acceptFriendRequest('${su}')"
+          style="background:rgba(10,60,20,.7);border:1px solid rgba(50,150,50,.5);
+          border-radius:6px;color:#60d060;font-size:.58rem;padding:4px 8px;cursor:pointer;">✓</button>
+        <button onclick="rejectFriendRequest('${su}')"
+          style="background:rgba(80,10,10,.5);border:1px solid rgba(150,30,30,.4);
+          border-radius:6px;color:#d06060;font-size:.58rem;padding:4px 8px;cursor:pointer;">✕</button>
+      </div>`;
+    }).join('');
+  }
+  if (_outgoingReqs.length) {
+    html += `<div style="font-family:'Cinzel',serif;font-size:.6rem;color:var(--dim);
+      padding:8px 6px 6px;">📤 SENT (${_outgoingReqs.length})</div>`;
+    html += _outgoingReqs.map(r => {
+      const su = escapeHTML(r.uname);
+      return `<div style="display:flex;align-items:center;gap:8px;padding:7px 8px;
+        background:rgba(0,0,0,.25);border:1px solid var(--border);
+        border-radius:10px;margin-bottom:5px;">
+        <div style="flex:1;font-family:'Cinzel',serif;font-size:.62rem;color:var(--dim);">${su}</div>
+        <span style="font-size:.52rem;color:var(--dim);">Pending...</span>
+        <button onclick="cancelFriendRequest('${su}')"
+          style="background:rgba(60,20,10,.5);border:1px solid rgba(130,60,20,.4);
+          border-radius:6px;color:#c08040;font-size:.55rem;padding:3px 7px;cursor:pointer;">Cancel</button>
+      </div>`;
+    }).join('');
+  }
+  if (!html) html = `<div style="color:var(--dim);font-size:.62rem;font-style:italic;padding:8px 6px;">No pending requests.</div>`;
+  el.innerHTML = html;
+}
+
+let _addFriendInProgress = false;
+function addFriend() {
+  const input = document.getElementById('friend-add-input');
+  const name = input?.value?.trim();
+  if (!name || name.length < 2) { toast('Enter a username (min 2 chars).'); return; }
+  if (_addFriendInProgress) return;
+  const s = getSocket();
+  if (!s?.connected) { toast('Connect online first!'); return; }
+  _addFriendInProgress = true;
+  const btn = document.querySelector('[onclick="addFriend()"]');
+  if (btn) btn.textContent = '...';
+  s.emit('friend:search', { query: name }, (res) => {
+    _addFriendInProgress = false;
+    if (btn) btn.textContent = 'ADD FRIEND';
+    if (!res?.ok) { toast('❌ ' + (res?.error || 'Player not found.')); return; }
+    const p = res.player, su = escapeHTML(p.uname);
+    if (p.relationStatus === 'friends')  { toast('Already friends with ' + su + '!'); return; }
+    if (p.relationStatus === 'outgoing') { toast('Request already sent to ' + su + '.'); return; }
+    if (p.relationStatus === 'incoming') { acceptFriendRequest(p.uname); return; }
+    showModal('➕ Add Friend', `
+      <div style="text-align:center;padding:12px 0;">
+        <div style="font-family:'Cinzel',serif;font-size:.9rem;color:var(--gold);">${su}</div>
+        <div style="font-size:.62rem;color:var(--dim);margin-top:6px;">${p.online ? '🟢 Online' : '⚫ Offline'}</div>
+      </div>`,
+      [{label:'Send Request', cls:'btn', cb:()=>{
+        s.emit('friend:request:send', { toUname: p.uname }, (r) => {
+          closeModal();
+          if (!r?.ok) { toast('❌ ' + (r?.error||'Failed.')); return; }
+          toast('📨 Request sent to ' + su + '!');
+          if (input) input.value = '';
+          _loadFriendList();
+        });
+      }}, {label:'Cancel', cls:'btn-ghost', cb:closeModal}]
+    );
+  });
+}
+
+function addFriendDirect(uname) {
+  const s = getSocket();
+  if (!s?.connected) { toast('Connect online first!'); return; }
+  s.emit('friend:request:send', { toUname: uname }, (r) => {
+    if (!r?.ok) { toast('❌ ' + (r?.error||'Failed.')); return; }
+    toast(r.autoAccepted ? '✅ Now friends with ' + escapeHTML(uname) + '!'
+                         : '📨 Request sent to ' + escapeHTML(uname) + '!');
+    _loadFriendList();
+  });
+}
+
+function removeFriend(uname) {
+  const su = escapeHTML(uname);
+  showModal('Remove Friend?', `<div style="text-align:center;padding:10px;color:var(--dim);">Remove <b>${su}</b>?</div>`,
+    [{label:'Yes, Remove', cls:'btn-ghost', cb:()=>{
+      const s = getSocket();
+      if (!s?.connected) { closeModal(); toast('Connect online first!'); return; }
+      s.emit('friend:remove', { otherUname: uname }, (r) => {
+        closeModal();
+        if (!r?.ok) { toast('❌ ' + (r?.error||'Failed.')); return; }
+        toast('Removed ' + su + '.');
+        _loadFriendList();
+      });
+    }}, {label:'Cancel', cls:'btn', cb:closeModal}]
+  );
+}
+
+function acceptFriendRequest(uname) {
+  const s = getSocket();
+  if (!s?.connected) return;
+  s.emit('friend:request:accept', { fromUname: uname }, (r) => {
+    if (!r?.ok) { toast('❌ ' + (r?.error||'Failed.')); return; }
+    toast('✅ Now friends with ' + escapeHTML(uname) + '!');
+    _loadFriendList();
+  });
+}
+
+function rejectFriendRequest(uname) {
+  const s = getSocket();
+  if (!s?.connected) return;
+  s.emit('friend:request:reject', { fromUname: uname }, (r) => {
+    if (r?.ok) _loadFriendList();
+    else toast('❌ ' + (r?.error||'Failed.'));
+  });
+}
+
+function cancelFriendRequest(uname) {
+  const s = getSocket();
+  if (!s?.connected) return;
+  s.emit('friend:request:cancel', { toUname: uname }, (r) => {
+    if (r?.ok) _loadFriendList();
+    else toast('❌ ' + (r?.error||'Failed.'));
+  });
+}
+
+function inviteFriend(idxOrUname) {
+  const uname = typeof idxOrUname === 'number' ? (_friends[idxOrUname]?.uname) : idxOrUname;
+  if (!uname) return;
+  toast('📨 Guild invite sent to ' + escapeHTML(uname) + '!');
 }
 
 function renderOnlinePlayers(list) {
@@ -5760,8 +5363,8 @@ function renderOnlinePlayers(list) {
     const trophies = ((seed * 37) % 2000);
     return `<div style="display:flex;align-items:center;gap:10px;padding:8px;
       background:rgba(255,255,255,.04);border-radius:10px;margin-bottom:5px;
-      border:1px solid rgba(200,151,58,.12);"
-      onmouseover="this.style.background='rgba(200,151,58,.08)'"
+      border:1px solid rgba(201,154,69,.12);"
+      onmouseover="this.style.background='rgba(201,154,69,.08)'"
       onmouseout="this.style.background='rgba(255,255,255,.04)'">
       <div style="font-family:'Share Tech Mono',monospace;font-size:.6rem;color:var(--dim);min-width:16px;text-align:center;">${i+1}</div>
       <div style="width:36px;height:36px;min-width:36px;border-radius:50%;
@@ -5784,16 +5387,6 @@ function renderOnlinePlayers(list) {
   }).join('');
 }
 
-function addFriendDirect(name) {
-  if (!friendsList.includes(name)) { friendsList.push(name); renderFriendsList(); toast(`Added ${name}!`); }
-  else toast('Already friends!');
-}
-
-function inviteFriend(idxOrName) {
-  const name = typeof idxOrName === 'number' ? friendsList[idxOrName] : idxOrName;
-  if (!name) return;
-  toast(`📨 Invite sent to ${escapeHTML(name)}!`);
-}
 
 // ── TRADE ──
 function renderTradeParty() {
@@ -6377,7 +5970,7 @@ function openLeaderboard(){
               const flagIcon = p.flagLevel==='banned'?'❌':p.flagLevel==='hold'?'🚨':p.flagLevel==='warn'?'⚠️':p.flagLevel==='flag'?'🔴':'';
               const flagTip  = p.flagLevel==='banned'?'Permanently flagged by Veylor':p.flagLevel==='hold'?'On 8-day hold by Veylor':p.flagLevel==='warn'?'Suspected unusual activity':p.flagLevel==='flag'?'Veylor is watching':'';
               return `
-            <div class="leaderboard-row" style="${p.isMe?'border-color:rgba(200,151,58,.4);background:rgba(200,151,58,.06);':''}">
+            <div class="leaderboard-row" style="${p.isMe?'border-color:rgba(201,154,69,.4);background:rgba(201,154,69,.06);':''}">
               <div class="lb-pos">${i===0?'🥇':i===1?'🥈':i===2?'🥉':`#${i+1}`}</div>
               <div class="lb-name">${p.isMe?`<b style="color:var(--gold);">${p.name} ⭐</b>`:escapeHTML(p.name)}
                 ${flagIcon?`<span title="${flagTip}" style="margin-left:4px;cursor:help;">${flagIcon}</span>`:''}
@@ -6587,7 +6180,7 @@ function updateComboDisplay(){
   if(comboState.count >= 2){
     el.style.display = '';
     el.innerHTML = `
-      <div style="font-family:'Cinzel',serif;font-size:.6rem;color:${comboState.count>=5?'#f0c060':comboState.count>=3?'#e08040':'#d06030'};">
+      <div style="font-family:'Cinzel',serif;font-size:.6rem;color:${comboState.count>=5?'#e7b85b':comboState.count>=3?'#e08040':'#d06030'};">
         ${comboState.count}x COMBO! ×${comboState.multiplier.toFixed(2)}
       </div>
       <div style="height:3px;background:rgba(0,0,0,.5);border-radius:2px;margin-top:2px;">
@@ -6764,7 +6357,7 @@ function openDailyQuests(){
     <!-- Quest cards -->
     ${quests.map((q,i)=>{
       const pct = Math.min(100, Math.floor(((q.progress||0)/q.target)*100));
-      const borderCol = q.claimed ? 'rgba(60,200,60,.4)' : q.completed ? 'rgba(200,151,58,.5)' : 'var(--border)';
+      const borderCol = q.claimed ? 'rgba(60,200,60,.4)' : q.completed ? 'rgba(201,154,69,.5)' : 'var(--border)';
       const bgCol     = q.claimed ? 'rgba(0,60,0,.3)'    : q.completed ? 'rgba(60,40,0,.4)'    : 'rgba(0,0,0,.35)';
       const itemReward = q.reward.item ? `🎁 <b>${q.reward.item}</b>` : '';
       return `
@@ -6779,7 +6372,7 @@ function openDailyQuests(){
             </div>
             <!-- Rewards -->
             <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;">
-              <span style="font-size:.52rem;background:rgba(200,151,58,.15);border:1px solid rgba(200,151,58,.3);
+              <span style="font-size:.52rem;background:rgba(201,154,69,.15);border:1px solid rgba(201,154,69,.3);
                 border-radius:5px;padding:2px 6px;color:var(--gold);">💰 ${q.reward.gold} Gold</span>
               <span style="font-size:.52rem;background:rgba(100,100,200,.15);border:1px solid rgba(100,100,200,.3);
                 border-radius:5px;padding:2px 6px;color:#a0a0f0;">⭐ ${q.reward.xp} XP</span>
@@ -6801,7 +6394,7 @@ function openDailyQuests(){
         <!-- Progress bar -->
         <div style="height:6px;background:rgba(0,0,0,.5);border-radius:3px;margin-bottom:3px;">
           <div style="height:100%;background:linear-gradient(90deg,
-            ${q.claimed?'#206040':'#c8973a'},${q.claimed?'#40c070':'#f0d060'});
+            ${q.claimed?'#206040':'#c99a45'},${q.claimed?'#40c070':'#f0d060'});
             width:${pct}%;border-radius:3px;transition:width .4s;"></div>
         </div>
         <div style="display:flex;justify-content:space-between;font-size:.5rem;color:var(--dim);">
@@ -6954,7 +6547,7 @@ function openPvPArena(){
     </div>
 
     <!-- Next opponent preview -->
-    <div style="background:rgba(200,151,58,.06);border:1px solid rgba(200,151,58,.3);
+    <div style="background:rgba(201,154,69,.06);border:1px solid rgba(201,154,69,.3);
       border-radius:12px;padding:12px;margin-bottom:14px;">
       <div style="font-size:.55rem;color:var(--dim);margin-bottom:6px;">NEXT RANKED OPPONENT</div>
       <div style="display:flex;align-items:center;gap:10px;">
@@ -6978,20 +6571,20 @@ function openPvPArena(){
     <div style="font-family:'Cinzel',serif;font-size:.6rem;color:var(--gold);margin-bottom:8px;">⚔️ Arena Modes</div>
 
     <div style="background:rgba(0,0,0,.4);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px;cursor:pointer;"
-      onclick="startRankedMatch()" onmouseover="this.style.borderColor='rgba(200,151,58,.4)'" onmouseout="this.style.borderColor='var(--border)'">
+      onclick="startRankedMatch()" onmouseover="this.style.borderColor='rgba(201,154,69,.4)'" onmouseout="this.style.borderColor='var(--border)'">
       <div style="font-family:'Cinzel',serif;font-size:.7rem;color:var(--gold);">🏆 Ranked Match</div>
       <div style="font-size:.58rem;color:var(--dim);margin-top:2px;">Fight the next bot on the ladder. Gets harder every win (+20%). Counts toward rank.</div>
       <div style="font-size:.55rem;color:#80d080;margin-top:3px;">Reward: ~${Math.floor(15 + (gameState.playerLevel||1)*4 + arenaWins*8)} Gold · XP</div>
     </div>
 
     <div style="background:rgba(0,0,0,.4);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px;cursor:pointer;"
-      onclick="startBotBattle(false)" onmouseover="this.style.borderColor='rgba(200,151,58,.4)'" onmouseout="this.style.borderColor='var(--border)'">
+      onclick="startBotBattle(false)" onmouseover="this.style.borderColor='rgba(201,154,69,.4)'" onmouseout="this.style.borderColor='var(--border)'">
       <div style="font-family:'Cinzel',serif;font-size:.7rem;color:var(--text);">🎯 Practice Match</div>
       <div style="font-size:.58rem;color:var(--dim);margin-top:2px;">Fight an easier bot. No rank impact. Good for testing builds.</div>
     </div>
 
     <div style="background:rgba(0,0,0,.4);border:1px solid var(--border);border-radius:10px;padding:12px;cursor:pointer;"
-      onclick="closeModal();goOnline()" onmouseover="this.style.borderColor='rgba(200,151,58,.4)'" onmouseout="this.style.borderColor='var(--border)'">
+      onclick="closeModal();goOnline()" onmouseover="this.style.borderColor='rgba(201,154,69,.4)'" onmouseout="this.style.borderColor='var(--border)'">
       <div style="font-family:'Cinzel',serif;font-size:.7rem;color:var(--text);">🌐 Challenge Friend</div>
       <div style="font-size:.58rem;color:var(--dim);margin-top:2px;">Go to Online Mode to fight a real player with a room code.</div>
     </div>
@@ -7005,8 +6598,8 @@ function openPvPArena(){
           const isCurrent  = i === tierIdx;
           return `<div title="${b.name} — Tier ${b.tier}" style="width:28px;height:28px;border-radius:6px;
             display:flex;align-items:center;justify-content:center;font-size:.8rem;
-            background:${isCurrent?'rgba(200,151,58,.3)':isUnlocked?'rgba(60,200,60,.15)':'rgba(0,0,0,.3)'};
-            border:1px solid ${isCurrent?'rgba(200,151,58,.6)':isUnlocked?'rgba(60,200,60,.3)':'rgba(100,100,100,.2)'};
+            background:${isCurrent?'rgba(201,154,69,.3)':isUnlocked?'rgba(60,200,60,.15)':'rgba(0,0,0,.3)'};
+            border:1px solid ${isCurrent?'rgba(201,154,69,.6)':isUnlocked?'rgba(60,200,60,.3)':'rgba(100,100,100,.2)'};
             opacity:${isUnlocked?'1':'.4'};">${b.emoji}</div>`;
         }).join('')}
       </div>
@@ -7135,14 +6728,8 @@ function _fetchGuild() {
 // went out, but nothing was ever listening for the reply).
 function setupGuildListeners(){
   if(!socket) return;
-  // Off before on — prevents duplicate listeners if socket reconnects
   socket.off('guild:data');
   socket.off('guild:error');
-  socket.off('guild:disbanded');
-  socket.off('guild:kicked');
-  socket.off('guild:member_joined');
-  socket.off('guild:member_left');
-
   socket.on('guild:data', ({ guild }) => {
     _guildFetchInProgress = false;
     _guildCacheTime = Date.now();
@@ -7151,21 +6738,15 @@ function setupGuildListeners(){
     if (guild) { renderGuildHome(guild); }
     else       { renderGuildJoin(); }
   });
-
   socket.on('guild:error', ({ msg }) => {
     _guildFetchInProgress = false;
     toast('❌ ' + msg);
   });
-
-  // Server broadcasts this when the guild is disbanded by the leader
   socket.on('guild:disbanded', ({ msg } = {}) => {
     _guildData = null; _guildCacheTime = 0;
     toast('🛡️ ' + (msg || 'Your guild was disbanded.'));
-    // If the guild modal is open, show the join screen instead
     renderGuildJoin();
   });
-
-  // Server broadcasts this when the current player is kicked
   socket.on('guild:kicked', ({ uname } = {}) => {
     const myUname = (gameState.username||'').toLowerCase();
     if (uname === myUname) {
@@ -7174,19 +6755,14 @@ function setupGuildListeners(){
       renderGuildJoin();
     }
   });
-
-  // Server broadcasts when a new member joins — refresh if modal is open
   socket.on('guild:member_joined', ({ display } = {}) => {
-    toast('👥 ' + gEsc(display||'Someone') + ' joined your guild!');
-    _guildCacheTime = 0; // invalidate so next open re-fetches
+    toast('👥 ' + (display||'Someone') + ' joined your guild!');
+    _guildCacheTime = 0;
   });
-
-  // Server broadcasts when a member leaves
   socket.on('guild:member_left', ({ uname } = {}) => {
     _guildCacheTime = 0;
-    if (_guildData && _guildData.members) {
+    if (_guildData && _guildData.members)
       _guildData.members = _guildData.members.filter(m => m.uname !== uname);
-    }
   });
 }
 
@@ -7256,27 +6832,16 @@ function renderGuildHome(guild){
   const canEdit  = isLeader || isOfficer;
   const xpPct    = Math.min(100, Math.floor(((guild.xp||0)/(guild.xpToNext||500))*100));
 
-  // Build member rows — one innerHTML build, not per-row updates
+  // Build member rows using textContent-safe values (server already escaped, but we re-escape client-side too)
   const memberRows = (guild.members||[]).map(m => {
     const rankIcon = m.rank==='Leader'?'👑':m.rank==='Officer'?'⭐':'⚔️';
     const isMe = m.uname === myUname;
-    const safeUname = m.uname.replace(/'/g,"\\'");
-
-    // Build action buttons based on viewer's role (display only — server enforces permissions)
-    let actions = '';
-    if (!isMe) {
-      if (isLeader && m.rank === 'Member')  actions += `<button onclick="guildPromote('${safeUname}')" style="font-size:.48rem;padding:2px 6px;background:rgba(20,60,20,.6);border:1px solid rgba(50,150,50,.4);border-radius:5px;color:#60d060;cursor:pointer;margin-left:2px;">▲ Promote</button>`;
-      if (isLeader && m.rank === 'Officer') actions += `<button onclick="guildDemote('${safeUname}')" style="font-size:.48rem;padding:2px 6px;background:rgba(60,40,10,.6);border:1px solid rgba(150,100,20,.4);border-radius:5px;color:#d0a040;cursor:pointer;margin-left:2px;">▼ Demote</button>`;
-      if ((isLeader || isOfficer) && m.rank !== 'Leader') actions += `<button onclick="guildKick('${safeUname}')" style="font-size:.48rem;padding:2px 6px;background:rgba(60,10,10,.6);border:1px solid rgba(150,30,30,.4);border-radius:5px;color:#d06060;cursor:pointer;margin-left:2px;">✕ Kick</button>`;
-    }
-
     return `<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:rgba(0,0,0,.3);border-radius:7px;margin-bottom:4px;">
       <span style="font-size:.6rem;">${rankIcon}</span>
-      <div style="flex:1;min-width:0;">
-        <div style="font-family:'Cinzel',serif;font-size:.62rem;color:${isMe?'var(--gold)':'var(--text)'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${gEsc(m.display)}${isMe?' (You)':''}</div>
+      <div style="flex:1;">
+        <div style="font-family:'Cinzel',serif;font-size:.62rem;color:${isMe?'var(--gold)':'var(--text)'};">${gEsc(m.display)}${isMe?' (You)':''}</div>
         <div style="font-size:.5rem;color:var(--dim);">${gEsc(m.rank)} · ${m.kills||0} kills</div>
       </div>
-      <div style="display:flex;gap:2px;flex-shrink:0;">${actions}</div>
     </div>`;
   }).join('');
 
@@ -7293,7 +6858,7 @@ function renderGuildHome(guild){
         </div>
       </div>
     </div>
-    <div style="background:rgba(200,151,58,.06);border:1px solid rgba(200,151,58,.2);border-radius:8px;padding:10px;margin-bottom:12px;">
+    <div style="background:rgba(201,154,69,.06);border:1px solid rgba(201,154,69,.2);border-radius:8px;padding:10px;margin-bottom:12px;">
       <div style="font-family:'Cinzel',serif;font-size:.58rem;color:var(--gold);margin-bottom:4px;">📌 Notice</div>
       <div style="font-size:.62rem;color:var(--text);">${gEsc(guild.notice||'No notice set.')}</div>
       ${canEdit ? `<button class="btn-ghost" onclick="editGuildNotice()" style="font-size:.52rem;margin-top:6px;padding:4px 8px;">✏️ Edit</button>` : ''}
@@ -7320,9 +6885,7 @@ function renderGuildHome(guild){
     ${memberRows}
     <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);">
       ${isLeader
-        ? `<div style="display:flex;gap:6px;">
-            <button class="btn-ghost" onclick="disbandGuild()" style="flex:1;border-color:rgba(200,0,0,.3);color:#d06060;font-size:.58rem;">💀 Disband</button>
-           </div>`
+        ? `<button class="btn-ghost" onclick="disbandGuild()" style="width:100%;border-color:rgba(200,0,0,.3);color:#d06060;font-size:.6rem;">💀 Disband Guild</button>`
         : `<button class="btn-ghost" onclick="leaveGuild()" style="width:100%;border-color:rgba(200,50,50,.3);color:#d06060;font-size:.6rem;">🚪 Leave Guild</button>`}
     </div>`;
   showModal(`${guild.emblem} ${gEsc(guild.name)}`, body, [{label:'Close', cls:'btn-ghost', cb:closeModal}]);
@@ -7361,6 +6924,109 @@ function leaveGuild(){
 }
 
 
+// ── openFriendsPanel ─────────────────────────────────────────
+let _friendsPanelTab = 'friends';
+
+function openFriendsPanel() {
+  _friendsPanelTab = 'friends';
+  try { getSocket().emit('lobby:request'); } catch(e) {}
+  updateFriendsNotifDot(_incomingReqs.length > 0);
+  _renderFriendsModal();
+  _loadFriendList();
+}
+
+function updateFriendsNotifDot(hasRequests) {
+  const dot = document.getElementById('friends-notif-dot');
+  if (dot) dot.style.display = hasRequests ? 'block' : 'none';
+}
+
+function _renderFriendsModal() {
+  const myId = (gameState.username || 'HERO').toUpperCase().substring(0,8);
+  const body = `
+  <div style="display:flex;gap:12px;flex-wrap:wrap;">
+    <div style="flex:0 0 200px;min-width:160px;background:rgba(255,255,255,.04);
+      border:1px solid rgba(201,154,69,.25);border-radius:12px;padding:14px;">
+      <div style="font-family:'Cinzel',serif;font-size:.7rem;color:var(--gold);
+        text-align:center;margin-bottom:12px;letter-spacing:.1em;">➕ ADD FRIENDS</div>
+      <div style="background:rgba(0,0,0,.4);border:1px solid rgba(201,154,69,.2);
+        border-radius:8px;padding:8px 10px;margin-bottom:10px;text-align:center;">
+        <div style="font-size:.48rem;color:var(--dim);margin-bottom:3px;">YOUR ID</div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:.75rem;
+          color:var(--gold);letter-spacing:.08em;">#${myId}</div>
+      </div>
+      <input id="friend-add-input" placeholder="Enter username..." maxlength="20"
+        style="width:100%;background:rgba(0,0,0,.5);border:1px solid var(--border);
+        border-radius:8px;color:var(--text);font-size:.65rem;padding:8px 10px;
+        outline:none;box-sizing:border-box;margin-bottom:6px;"
+        onkeydown="if(event.key==='Enter')addFriend()">
+      <button class="btn" onclick="addFriend()"
+        style="width:100%;font-size:.65rem;padding:8px;">ADD FRIEND</button>
+      <div style="display:flex;align-items:center;gap:6px;margin:10px 0;">
+        <div style="flex:1;height:1px;background:var(--border);"></div>
+        <div style="font-size:.55rem;color:var(--dim);">OR</div>
+        <div style="flex:1;height:1px;background:var(--border);"></div>
+      </div>
+      <button class="btn-ghost" onclick="shareFriendInvite()"
+        style="width:100%;font-size:.6rem;padding:7px;">🔗 SHARE INVITE</button>
+    </div>
+    <div style="flex:1;min-width:200px;">
+      <div style="display:flex;gap:4px;margin-bottom:10px;">
+        ${['friends','invites','suggested'].map(t => `
+          <button onclick="_switchFriendsPanelTab('${t}')" id="fptab-${t}"
+            style="flex:1;padding:8px 4px;font-size:.55rem;font-family:'Cinzel',serif;
+            letter-spacing:.04em;border-radius:8px 8px 0 0;border:1px solid var(--border);
+            border-bottom:none;cursor:pointer;transition:background .15s;
+            ${_friendsPanelTab===t
+              ? 'background:linear-gradient(135deg,rgba(201,154,69,.25),rgba(201,154,69,.1));color:var(--gold);border-color:rgba(201,154,69,.4);'
+              : 'background:rgba(0,0,0,.3);color:var(--dim);'}">
+            ${t==='friends'?'👥 FRIENDS':t==='invites'?'📬 INVITES':'✨ SUGGEST'}
+          </button>`).join('')}
+      </div>
+      <div style="background:rgba(0,0,0,.25);border:1px solid rgba(201,154,69,.2);
+        border-radius:0 8px 8px 8px;padding:8px;min-height:200px;max-height:320px;overflow-y:auto;">
+        <div id="friends-list-el"></div>
+        <div id="friend-requests-el" style="display:none;"></div>
+        <div id="online-players-el" style="display:none;"></div>
+      </div>
+    </div>
+  </div>`;
+  showModal('👤 FRIENDS', body, [{label:'✕ Close', cls:'btn-ghost', cb:closeModal}]);
+  _switchFriendsPanelTab(_friendsPanelTab);
+}
+
+function _switchFriendsPanelTab(tab) {
+  _friendsPanelTab = tab;
+  ['friends','invites','suggested'].forEach(t => {
+    const btn = document.getElementById('fptab-' + t);
+    if (!btn) return;
+    if (t === tab) {
+      btn.style.background = 'linear-gradient(135deg,rgba(201,154,69,.25),rgba(201,154,69,.1))';
+      btn.style.color = 'var(--gold)'; btn.style.borderColor = 'rgba(201,154,69,.4)';
+    } else {
+      btn.style.background = 'rgba(0,0,0,.3)';
+      btn.style.color = 'var(--dim)'; btn.style.borderColor = 'var(--border)';
+    }
+  });
+  const fl = document.getElementById('friends-list-el');
+  const fr = document.getElementById('friend-requests-el');
+  const op = document.getElementById('online-players-el');
+  if (fl) fl.style.display = tab === 'friends'   ? '' : 'none';
+  if (fr) fr.style.display = tab === 'invites'   ? '' : 'none';
+  if (op) op.style.display = tab === 'suggested' ? '' : 'none';
+  if (tab === 'friends')   renderFriendsList();
+  if (tab === 'invites')   renderFriendRequests();
+  if (tab === 'suggested') { try { getSocket().emit('lobby:request'); } catch(e) {} }
+}
+
+function shareFriendInvite() {
+  const id = (gameState.username || 'HERO').toUpperCase().substring(0,8);
+  const msg = 'Join me on Aetherion RPG! Find me as #' + id;
+  if (navigator.share) { navigator.share({ text: msg }).catch(()=>{}); }
+  else if (navigator.clipboard) { navigator.clipboard.writeText(msg); toast('📋 Invite copied!'); }
+  else toast('Your ID: #' + id);
+}
+
+
 function guildKick(targetUname) {
   showModal('Kick Member?', `<div style="text-align:center;color:#d06060;padding:10px;">Kick <b>${gEsc(targetUname)}</b> from the guild?</div>`,
     [{label:'Yes, Kick', cls:'btn-ghost', cb:()=>{
@@ -7383,7 +7049,7 @@ function guildDemote(targetUname) {
 }
 
 function guildTransferLeadership(targetUname) {
-  showModal('Transfer Leadership?', `<div style="text-align:center;color:#d06060;padding:10px;">Transfer guild leadership to <b>${gEsc(targetUname)}</b>? You will become a Member.</div>`,
+  showModal('Transfer Leadership?', `<div style="text-align:center;color:#d06060;padding:10px;">Transfer leadership to <b>${gEsc(targetUname)}</b>?</div>`,
     [{label:'Yes, Transfer', cls:'btn-ghost', cb:()=>{
       socket.emit('guild:transfer', { targetUname }); closeModal();
     }}, {label:'Cancel', cls:'btn', cb:closeModal}]);
@@ -7837,7 +7503,7 @@ function startRoguelikeNew(){
       ${gameState.deck.map((card,i)=>`
         <div onclick="pickRoguelikeCard(${i})" style="display:flex;align-items:center;gap:10px;
           padding:10px;background:rgba(0,0,0,.4);border:1px solid var(--border);border-radius:10px;cursor:pointer;"
-          onmouseover="this.style.borderColor='rgba(200,151,58,.4)'" onmouseout="this.style.borderColor='var(--border)'">
+          onmouseover="this.style.borderColor='rgba(201,154,69,.4)'" onmouseout="this.style.borderColor='var(--border)'">
           <span style="font-size:1.6rem;">${card.emoji||'⚔️'}</span>
           <div style="flex:1;">
             <div style="font-family:'Cinzel',serif;font-size:.68rem;color:var(--text);">${card.name}</div>
@@ -8027,7 +7693,7 @@ function endRoguelikeRun(rlState, died){
         </div>
       </div>
       <!-- Rewards -->
-      <div style="background:rgba(200,151,58,.06);border:1px solid rgba(200,151,58,.2);border-radius:10px;padding:12px;margin-bottom:10px;">
+      <div style="background:rgba(201,154,69,.06);border:1px solid rgba(201,154,69,.2);border-radius:10px;padding:12px;margin-bottom:10px;">
         <div style="font-family:'Cinzel',serif;font-size:.6rem;color:var(--gold);margin-bottom:8px;">🎁 Run Rewards</div>
         <div style="display:flex;justify-content:center;gap:12px;flex-wrap:wrap;">
           <span style="font-size:.62rem;color:var(--gold);">💰 +${goldReward} Gold</span>
@@ -8077,7 +7743,7 @@ function openCoopRaid(){
       <div style="background:rgba(0,0,0,.4);border:1px solid ${isLocked?'rgba(100,100,100,.2)':'var(--border)'};
         border-radius:10px;padding:12px;margin-bottom:8px;
         ${isLocked?'opacity:.5;':'cursor:pointer;'}
-        ${isLocked?'':'onmouseover="this.style.borderColor=\'rgba(200,151,58,.4)\'" onmouseout="this.style.borderColor=\'var(--border)\'"'}"
+        ${isLocked?'':'onmouseover="this.style.borderColor=\'rgba(201,154,69,.4)\'" onmouseout="this.style.borderColor=\'var(--border)\'"'}"
         ${isLocked?'':` onclick="hostRaidRoom('${b.id}')"`}>
         <div style="display:flex;align-items:center;gap:10px;">
           <span style="font-size:2rem;">${b.emoji}</span>
@@ -8122,8 +7788,8 @@ function hostRaidRoom(bossId){
         <div style="font-size:2.5rem;margin-bottom:8px;">${boss.emoji}</div>
         <div style="font-family:'Cinzel',serif;font-size:.85rem;color:var(--gold);">${boss.name}</div>
         <div style="font-size:.6rem;color:var(--dim);margin-top:4px;">${bossHp.toLocaleString()} HP · Waiting for partner...</div>
-        <div style="margin:16px auto;max-width:200px;background:rgba(200,151,58,.08);
-          border:2px solid rgba(200,151,58,.3);border-radius:12px;padding:16px;">
+        <div style="margin:16px auto;max-width:200px;background:rgba(201,154,69,.08);
+          border:2px solid rgba(201,154,69,.3);border-radius:12px;padding:16px;">
           <div style="font-size:.55rem;color:var(--dim);margin-bottom:4px;">RAID CODE</div>
           <div style="font-family:'Share Tech Mono',monospace;font-size:1.8rem;color:var(--gold);letter-spacing:.2em;">${code}</div>
           <div style="font-size:.52rem;color:var(--dim);margin-top:4px;">Share this with your partner</div>
@@ -8430,353 +8096,6 @@ function claudeEndDialog(won){
   spLog(`🤖 <b>Claude:</b> "${line}"`,'sk');
 }
 
-</script>
-
-<!-- ═════════ FRIEND REQUEST SYSTEM (added; server-backed). Loaded after the main script so these
-     definitions take over from the older local-only placeholder friends functions without editing them. ═════════ -->
-<script>
-// ═══════════════════════════════════════════════════
-//  FRIEND SYSTEM — server-authoritative
-// ═══════════════════════════════════════════════════
-let _friends = [], _incomingReqs = [], _outgoingReqs = [], _friendListLoading = false;
-let _friendListenersSet = false;
-
-function setupFriendListeners() {
-  if (_friendListenersSet || !socket) return;
-  _friendListenersSet = true;
-  socket.on('friend:list:update', () => { _loadFriendList(); });
-  socket.on('friend:request:received', ({ fromUname, fromDisplay } = {}) => {
-    toast('👥 ' + escapeHTML(fromDisplay || fromUname) + ' sent you a friend request!');
-    updateFriendsNotifDot(true);
-    _loadFriendList();
-  });
-}
-
-function _loadFriendList() {
-  if (!socket?.connected || _friendListLoading) return;
-  _friendListLoading = true;
-  socket.emit('friend:list', {}, (res) => {
-    _friendListLoading = false;
-    if (!res?.ok) return;
-    _friends      = res.friends  || [];
-    _incomingReqs = res.incoming || [];
-    _outgoingReqs = res.outgoing || [];
-    renderFriendsList();
-    renderFriendRequests();
-    updateFriendsNotifDot(_incomingReqs.length > 0);
-  });
-}
-
-function renderFriendsList() {
-  const el = document.getElementById('friends-list-el');
-  if (!el) return;
-  const header = `<div style="font-family:'Cinzel',serif;font-size:.6rem;color:var(--dim);
-    padding:4px 6px 8px;letter-spacing:.08em;">FRIENDS (${_friends.length})</div>`;
-  if (!_friends.length) {
-    el.innerHTML = header + `<div style="color:var(--dim);font-size:.63rem;
-      font-style:italic;padding:8px 6px;">No friends yet — search for a player above!</div>`;
-    return;
-  }
-  const emojis = ['⚔️','🔥','❄️','⚡','🌑','👑','🐉','🛡️','✨','💎'];
-  const colors = ['#3a1a6a','#1a3a6a','#1a6a3a','#6a3a1a','#4a1a1a','#1a4a4a'];
-  el.innerHTML = header + _friends.map((f, i) => {
-    const su = escapeHTML(f.uname);
-    const seed = f.uname.split('').reduce((a,ch)=>a+ch.charCodeAt(0),0);
-    const aE = emojis[seed % emojis.length], aC = colors[seed % colors.length];
-    const dot = f.online
-      ? '<span style="color:#60d060;font-size:.52rem;">🟢 Online</span>'
-      : '<span style="color:var(--dim);font-size:.52rem;">⚫ Offline</span>';
-    return `<div style="display:flex;align-items:center;gap:10px;padding:8px;
-      background:rgba(255,255,255,.04);border-radius:10px;margin-bottom:5px;
-      border:1px solid rgba(200,151,58,.12);">
-      <div style="font-size:.55rem;color:var(--dim);min-width:14px;">${i+1}</div>
-      <div style="width:34px;height:34px;min-width:34px;border-radius:50%;
-        background:${aC};border:2px solid rgba(200,151,58,.4);
-        display:flex;align-items:center;justify-content:center;font-size:1rem;">${aE}</div>
-      <div style="flex:1;min-width:0;">
-        <div style="font-family:'Cinzel',serif;font-size:.63rem;color:var(--gold);
-          white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${su}</div>
-        <div style="margin-top:1px;">${dot}</div>
-      </div>
-      <button onclick="removeFriend('${su}')"
-        style="background:rgba(80,10,10,.5);border:1px solid rgba(150,30,30,.4);
-        border-radius:6px;color:#d06060;font-size:.6rem;padding:4px 7px;cursor:pointer;">✕</button>
-    </div>`;
-  }).join('');
-}
-
-function renderFriendRequests() {
-  const el = document.getElementById('friend-requests-el');
-  if (!el) return;
-  let html = '';
-  if (_incomingReqs.length) {
-    html += `<div style="font-family:'Cinzel',serif;font-size:.6rem;color:var(--gold);
-      padding:4px 6px 6px;">📬 INCOMING (${_incomingReqs.length})</div>`;
-    html += _incomingReqs.map(r => {
-      const su = escapeHTML(r.uname);
-      return `<div style="display:flex;align-items:center;gap:8px;padding:8px;
-        background:rgba(200,151,58,.06);border:1px solid rgba(200,151,58,.2);
-        border-radius:10px;margin-bottom:5px;">
-        <div style="flex:1;font-family:'Cinzel',serif;font-size:.62rem;color:var(--text);">${su}</div>
-        <button onclick="acceptFriendRequest('${su}')"
-          style="background:rgba(10,60,20,.7);border:1px solid rgba(50,150,50,.5);
-          border-radius:6px;color:#60d060;font-size:.58rem;padding:4px 8px;cursor:pointer;">✓</button>
-        <button onclick="rejectFriendRequest('${su}')"
-          style="background:rgba(80,10,10,.5);border:1px solid rgba(150,30,30,.4);
-          border-radius:6px;color:#d06060;font-size:.58rem;padding:4px 8px;cursor:pointer;">✕</button>
-      </div>`;
-    }).join('');
-  }
-  if (_outgoingReqs.length) {
-    html += `<div style="font-family:'Cinzel',serif;font-size:.6rem;color:var(--dim);
-      padding:8px 6px 6px;">📤 SENT (${_outgoingReqs.length})</div>`;
-    html += _outgoingReqs.map(r => {
-      const su = escapeHTML(r.uname);
-      return `<div style="display:flex;align-items:center;gap:8px;padding:7px 8px;
-        background:rgba(0,0,0,.25);border:1px solid var(--border);
-        border-radius:10px;margin-bottom:5px;">
-        <div style="flex:1;font-family:'Cinzel',serif;font-size:.62rem;color:var(--dim);">${su}</div>
-        <span style="font-size:.52rem;color:var(--dim);">Pending...</span>
-        <button onclick="cancelFriendRequest('${su}')"
-          style="background:rgba(60,20,10,.5);border:1px solid rgba(130,60,20,.4);
-          border-radius:6px;color:#c08040;font-size:.55rem;padding:3px 7px;cursor:pointer;">Cancel</button>
-      </div>`;
-    }).join('');
-  }
-  if (!html) html = `<div style="color:var(--dim);font-size:.62rem;font-style:italic;padding:8px 6px;">No pending requests.</div>`;
-  el.innerHTML = html;
-}
-
-let _addFriendInProgress = false;
-function addFriend() {
-  const input = document.getElementById('friend-add-input');
-  const name = input?.value?.trim();
-  if (!name || name.length < 2) { toast('Enter a username (min 2 chars).'); return; }
-  if (_addFriendInProgress) return;
-  const s = getSocket();
-  if (!s?.connected) { toast('Connect online first!'); return; }
-  _addFriendInProgress = true;
-  const btn = document.querySelector('[onclick="addFriend()"]');
-  if (btn) btn.textContent = '...';
-  s.emit('friend:search', { query: name }, (res) => {
-    _addFriendInProgress = false;
-    if (btn) btn.textContent = 'ADD FRIEND';
-    if (!res?.ok) { toast('❌ ' + (res?.error || 'Player not found.')); return; }
-    const p = res.player, su = escapeHTML(p.uname);
-    if (p.relationStatus === 'friends')  { toast('Already friends with ' + su + '!'); return; }
-    if (p.relationStatus === 'outgoing') { toast('Request already sent to ' + su + '.'); return; }
-    if (p.relationStatus === 'incoming') { acceptFriendRequest(p.uname); return; }
-    showModal('➕ Add Friend', `
-      <div style="text-align:center;padding:12px 0;">
-        <div style="font-family:'Cinzel',serif;font-size:.9rem;color:var(--gold);">${su}</div>
-        <div style="font-size:.62rem;color:var(--dim);margin-top:6px;">${p.online ? '🟢 Online' : '⚫ Offline'}</div>
-      </div>`,
-      [{label:'Send Request', cls:'btn', cb:()=>{
-        s.emit('friend:request:send', { toUname: p.uname }, (r) => {
-          closeModal();
-          if (!r?.ok) { toast('❌ ' + (r?.error||'Failed.')); return; }
-          toast('📨 Request sent to ' + su + '!');
-          if (input) input.value = '';
-          _loadFriendList();
-        });
-      }}, {label:'Cancel', cls:'btn-ghost', cb:closeModal}]
-    );
-  });
-}
-
-function addFriendDirect(uname) {
-  const s = getSocket();
-  if (!s?.connected) { toast('Connect online first!'); return; }
-  s.emit('friend:request:send', { toUname: uname }, (r) => {
-    if (!r?.ok) { toast('❌ ' + (r?.error||'Failed.')); return; }
-    toast(r.autoAccepted ? '✅ Now friends with ' + escapeHTML(uname) + '!'
-                         : '📨 Request sent to ' + escapeHTML(uname) + '!');
-    _loadFriendList();
-  });
-}
-
-function removeFriend(uname) {
-  const su = escapeHTML(uname);
-  showModal('Remove Friend?', `<div style="text-align:center;padding:10px;color:var(--dim);">Remove <b>${su}</b>?</div>`,
-    [{label:'Yes, Remove', cls:'btn-ghost', cb:()=>{
-      const s = getSocket();
-      if (!s?.connected) { closeModal(); toast('Connect online first!'); return; }
-      s.emit('friend:remove', { otherUname: uname }, (r) => {
-        closeModal();
-        if (!r?.ok) { toast('❌ ' + (r?.error||'Failed.')); return; }
-        toast('Removed ' + su + '.');
-        _loadFriendList();
-      });
-    }}, {label:'Cancel', cls:'btn', cb:closeModal}]
-  );
-}
-
-function acceptFriendRequest(uname) {
-  const s = getSocket();
-  if (!s?.connected) return;
-  s.emit('friend:request:accept', { fromUname: uname }, (r) => {
-    if (!r?.ok) { toast('❌ ' + (r?.error||'Failed.')); return; }
-    toast('✅ Now friends with ' + escapeHTML(uname) + '!');
-    _loadFriendList();
-  });
-}
-
-function rejectFriendRequest(uname) {
-  const s = getSocket();
-  if (!s?.connected) return;
-  s.emit('friend:request:reject', { fromUname: uname }, (r) => {
-    if (r?.ok) _loadFriendList();
-    else toast('❌ ' + (r?.error||'Failed.'));
-  });
-}
-
-function cancelFriendRequest(uname) {
-  const s = getSocket();
-  if (!s?.connected) return;
-  s.emit('friend:request:cancel', { toUname: uname }, (r) => {
-    if (r?.ok) _loadFriendList();
-    else toast('❌ ' + (r?.error||'Failed.'));
-  });
-}
-
-function inviteFriend(idxOrUname) {
-  const uname = typeof idxOrUname === 'number' ? (_friends[idxOrUname]?.uname) : idxOrUname;
-  if (!uname) return;
-  toast('📨 Guild invite sent to ' + escapeHTML(uname) + '!');
-}
-
-// ── openFriendsPanel ─────────────────────────────────────────
-let _friendsPanelTab = 'friends';
-
-function openFriendsPanel() {
-  _friendsPanelTab = 'friends';
-  try { getSocket().emit('lobby:request'); } catch(e) {}
-  updateFriendsNotifDot(_incomingReqs.length > 0);
-  _renderFriendsModal();
-  _loadFriendList();
-}
-
-function updateFriendsNotifDot(hasRequests) {
-  const dot = document.getElementById('friends-notif-dot');
-  if (dot) dot.style.display = hasRequests ? 'block' : 'none';
-}
-
-function _renderFriendsModal() {
-  const myId = (gameState.username || 'HERO').toUpperCase().substring(0,8);
-  const body = `
-  <div style="display:flex;gap:12px;flex-wrap:wrap;">
-    <div style="flex:0 0 200px;min-width:160px;background:rgba(255,255,255,.04);
-      border:1px solid rgba(200,151,58,.25);border-radius:12px;padding:14px;">
-      <div style="font-family:'Cinzel',serif;font-size:.7rem;color:var(--gold);
-        text-align:center;margin-bottom:12px;letter-spacing:.1em;">➕ ADD FRIENDS</div>
-      <div style="background:rgba(0,0,0,.4);border:1px solid rgba(200,151,58,.2);
-        border-radius:8px;padding:8px 10px;margin-bottom:10px;text-align:center;">
-        <div style="font-size:.48rem;color:var(--dim);margin-bottom:3px;">YOUR ID</div>
-        <div style="font-family:'Share Tech Mono',monospace;font-size:.75rem;
-          color:var(--gold);letter-spacing:.08em;">#${myId}</div>
-      </div>
-      <input id="friend-add-input" placeholder="Enter username..." maxlength="20"
-        style="width:100%;background:rgba(0,0,0,.5);border:1px solid var(--border);
-        border-radius:8px;color:var(--text);font-size:.65rem;padding:8px 10px;
-        outline:none;box-sizing:border-box;margin-bottom:6px;"
-        onkeydown="if(event.key==='Enter')addFriend()">
-      <button class="btn" onclick="addFriend()"
-        style="width:100%;font-size:.65rem;padding:8px;">ADD FRIEND</button>
-      <div style="display:flex;align-items:center;gap:6px;margin:10px 0;">
-        <div style="flex:1;height:1px;background:var(--border);"></div>
-        <div style="font-size:.55rem;color:var(--dim);">OR</div>
-        <div style="flex:1;height:1px;background:var(--border);"></div>
-      </div>
-      <button class="btn-ghost" onclick="shareFriendInvite()"
-        style="width:100%;font-size:.6rem;padding:7px;">🔗 SHARE INVITE</button>
-    </div>
-    <div style="flex:1;min-width:200px;">
-      <div style="display:flex;gap:4px;margin-bottom:10px;">
-        ${['friends','invites','suggested'].map(t => `
-          <button onclick="_switchFriendsPanelTab('${t}')" id="fptab-${t}"
-            style="flex:1;padding:8px 4px;font-size:.55rem;font-family:'Cinzel',serif;
-            letter-spacing:.04em;border-radius:8px 8px 0 0;border:1px solid var(--border);
-            border-bottom:none;cursor:pointer;transition:background .15s;
-            ${_friendsPanelTab===t
-              ? 'background:linear-gradient(135deg,rgba(200,151,58,.25),rgba(200,151,58,.1));color:var(--gold);border-color:rgba(200,151,58,.4);'
-              : 'background:rgba(0,0,0,.3);color:var(--dim);'}">
-            ${t==='friends'?'👥 FRIENDS':t==='invites'?'📬 INVITES':'✨ SUGGEST'}
-          </button>`).join('')}
-      </div>
-      <div style="background:rgba(0,0,0,.25);border:1px solid rgba(200,151,58,.2);
-        border-radius:0 8px 8px 8px;padding:8px;min-height:200px;max-height:320px;overflow-y:auto;">
-        <div id="friends-list-el"></div>
-        <div id="friend-requests-el" style="display:none;"></div>
-        <div id="online-players-el" style="display:none;"></div>
-      </div>
-    </div>
-  </div>`;
-  showModal('👤 FRIENDS', body, [{label:'✕ Close', cls:'btn-ghost', cb:closeModal}]);
-  _switchFriendsPanelTab(_friendsPanelTab);
-}
-
-function _switchFriendsPanelTab(tab) {
-  _friendsPanelTab = tab;
-  ['friends','invites','suggested'].forEach(t => {
-    const btn = document.getElementById('fptab-' + t);
-    if (!btn) return;
-    if (t === tab) {
-      btn.style.background = 'linear-gradient(135deg,rgba(200,151,58,.25),rgba(200,151,58,.1))';
-      btn.style.color = 'var(--gold)'; btn.style.borderColor = 'rgba(200,151,58,.4)';
-    } else {
-      btn.style.background = 'rgba(0,0,0,.3)';
-      btn.style.color = 'var(--dim)'; btn.style.borderColor = 'var(--border)';
-    }
-  });
-  const fl = document.getElementById('friends-list-el');
-  const fr = document.getElementById('friend-requests-el');
-  const op = document.getElementById('online-players-el');
-  if (fl) fl.style.display = tab === 'friends'   ? '' : 'none';
-  if (fr) fr.style.display = tab === 'invites'   ? '' : 'none';
-  if (op) op.style.display = tab === 'suggested' ? '' : 'none';
-  if (tab === 'friends')   renderFriendsList();
-  if (tab === 'invites')   renderFriendRequests();
-  if (tab === 'suggested') { try { getSocket().emit('lobby:request'); } catch(e) {} }
-}
-
-function shareFriendInvite() {
-  const id = (gameState.username || 'HERO').toUpperCase().substring(0,8);
-  const msg = 'Join me on Aetherion RPG! Find me as #' + id;
-  if (navigator.share) { navigator.share({ text: msg }).catch(()=>{}); }
-  else if (navigator.clipboard) { navigator.clipboard.writeText(msg); toast('📋 Invite copied!'); }
-  else toast('Your ID: #' + id);
-}
-
-// ═══════════════════════════════════════════════════
-//  GLUE (new) — connects the friend system to the existing socket
-//  * setupFriendListeners() is defined above but was never called in the
-//    friends build, so live pushes (friend:request:received /
-//    friend:list:update) never registered. This registers them on the
-//    current socket, and again if the socket object is ever replaced.
-//  * Refreshes the friend list after every successful login (first login
-//    and every reconnect re-auth) so the notification dot is correct.
-//  * Implemented by wrapping getSocket() at runtime; no existing source
-//    line is modified. To remove: delete this IIFE — everything else still
-//    works, you just lose live notifications until the panel is opened.
-// ═══════════════════════════════════════════════════
-(function wireFriendSystem() {
-  var wiredSocket = null;
-  function attach() {
-    try {
-      if (typeof socket === 'undefined' || !socket || typeof socket.on !== 'function') return;
-      if (socket === wiredSocket) return;
-      wiredSocket = socket;
-      _friendListenersSet = false;
-      setupFriendListeners();
-      socket.on('account:loggedin', function () { _loadFriendList(); });
-    } catch (e) { console.error('[Friends] wiring failed:', e); }
-  }
-  var original = window.getSocket;
-  if (typeof original === 'function') {
-    window.getSocket = function () { var s = original.apply(this, arguments); attach(); return s; };
-  }
-  attach();
-})();
 </script>
 </body>
 </html>
