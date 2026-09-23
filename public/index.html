@@ -1691,6 +1691,41 @@ input, textarea { font-size: 16px !important; } /* Prevents iOS zoom on focus */
   </div>
 </div>
 
+<!-- ═══════════════════════ ONLINE DUEL SCREEN ═══════════════════════ -->
+<div id="screen-online-duel" class="screen">
+  <div class="battle-arena">
+    <div class="battle-header">
+      <h2 id="od-title">⚔️ ONLINE DUEL</h2>
+      <div class="battle-turn-badge" id="od-turn-info">Turn 1</div>
+    </div>
+    <div class="combatant-row">
+      <div class="combatant-card" id="od-cb-me">
+        <span class="cb-emoji" id="od-me-emoji">⚔️</span>
+        <div class="cb-name" id="od-me-name">You</div>
+        <div class="cb-hp-label" id="od-me-hp">100/100</div>
+        <div class="bar-wrap"><div class="bar-fill bar-hp" id="od-me-hpbar" style="width:100%"></div></div>
+        <div class="cb-ability" id="od-me-ability"></div>
+      </div>
+      <div class="combatant-card" id="od-cb-opp">
+        <span class="cb-emoji" id="od-opp-emoji">👾</span>
+        <div class="cb-name" id="od-opp-name">Opponent</div>
+        <div class="cb-hp-label" id="od-opp-hp">100/100</div>
+        <div class="bar-wrap"><div class="bar-fill bar-hp" id="od-opp-hpbar" style="width:100%"></div></div>
+        <div class="cb-ability" id="od-opp-ability"></div>
+      </div>
+    </div>
+    <div id="od-turn-banner" style="text-align:center;font-size:.65rem;color:var(--gold);margin:4px 0;"></div>
+    <div class="battle-log" id="od-log"></div>
+    <div class="battle-btns">
+      <button class="b-btn atk" id="od-btn-attack" onclick="onlineDuelAction('attack')">⚔️ Attack</button>
+      <button class="b-btn sp"  id="od-btn-ability" onclick="onlineDuelAction('ability')">✨ Ability</button>
+      <button class="b-btn heal" id="od-btn-heal" onclick="onlineDuelAction('heal')">🧪 Heal</button>
+      <button class="b-btn flee" id="od-btn-flee" onclick="onlineDuelAction('flee')">🏃 Flee</button>
+    </div>
+    <div class="deck-switcher" id="od-deck-switcher"></div>
+  </div>
+</div>
+
 <!-- MODAL -->
 <div id="modal-overlay">
   <div id="modal-box">
@@ -4549,6 +4584,14 @@ const IS_PRODUCTION = window.IS_PRODUCTION || false;
 let socket = null;
 let onlineRoomPlayers = [];   // real players in current room
 
+// ── Trade state (used by the Trade tab in Online Mode) ──
+let tradeSelected = { cardIdx: -1, targetIdx: -1 };
+let pendingTrades = [];       // incoming trade offers awaiting a response
+let _tradeTargetId = null;
+let _tradeTargetName = null;
+let _tradeOfferedCardRef = null;  // card object we sent in our own offer
+let _tradeAcceptedCardRef = null; // card object we sent as a counter-offer
+
 // ── Socket initializer ───────────────────────────────────
 // Keep one Socket.IO client for the whole page.  Authentication, friends,
 // guilds, duels and Veylor all share this connection.  Login/register call
@@ -4602,6 +4645,305 @@ setTimeout(() => {
     console.error('[Socket] Pre-connect failed:', e);
   }
 }, 0);
+
+// ═══════════════════════════════════════════════════
+//  ONLINE MODE — lobby, rooms, chat/trade wiring, duel screen
+// ═══════════════════════════════════════════════════
+
+// ── Entry point (called by the "Online Mode" menu button) ──
+function goOnline(){
+  showScreen('screen-online');
+  const nameEl = document.getElementById('online-greeting-name');
+  if(nameEl) nameEl.textContent = gameState.username || 'Hero';
+  backToLobbyChoice();
+  onlineTab('lobby');
+  setupOnlineListeners();
+  registerOnlinePresence();
+}
+
+function registerOnlinePresence(){
+  let s;
+  try { s = getSocket(); } catch(e) { toast('⚠️ Could not connect to the server.'); return; }
+  const doRegister = () => {
+    s.emit('player:register', {
+      username: gameState.username || 'Hero',
+      level:    gameState.playerLevel || 1,
+      deckSize: gameState.deck?.length || 0,
+      gold:     gameState.playerGold || 0,
+    });
+  };
+  if(s.connected) doRegister();
+  else s.once('connect', doRegister);
+}
+
+// ── Tabs ──
+function onlineTab(tab){
+  ['lobby','trade','chat'].forEach(t=>{
+    const panel = document.getElementById('online-tab-'+t);
+    const btn   = document.getElementById('otab-'+t);
+    if(panel) panel.style.display = (t===tab) ? '' : 'none';
+    if(btn){
+      btn.style.background  = (t===tab) ? 'var(--gold-grad, linear-gradient(135deg,#c99a45,#8a6420))' : 'rgba(0,0,0,.4)';
+      btn.style.borderColor = (t===tab) ? 'var(--gold)' : 'var(--border)';
+    }
+  });
+  if(tab==='trade'){ renderTradeParty(); renderTradePlayers([]); renderTradeIncoming(); }
+  if(tab==='chat'){ updateChatRoomLabel(); }
+}
+
+// ── Lobby panel switching ──
+function backToLobbyChoice(){
+  const setup = document.getElementById('online-user-setup');
+  const host  = document.getElementById('online-host-panel');
+  const join  = document.getElementById('online-join-panel');
+  if(setup) setup.style.display = '';
+  if(host)  host.style.display  = 'none';
+  if(join)  join.style.display  = 'none';
+}
+
+function showJoinForm(){
+  const setup = document.getElementById('online-user-setup');
+  const join  = document.getElementById('online-join-panel');
+  if(setup) setup.style.display = 'none';
+  if(join)  join.style.display  = '';
+  const input = document.getElementById('join-code-input');
+  if(input){ input.value=''; input.focus(); }
+  const status = document.getElementById('join-status');
+  if(status) status.textContent = '';
+}
+
+// ── Host / join a room ──
+function onlineHost(){
+  let s; try { s = getSocket(); } catch(e) { toast('⚠️ Could not connect to the server.'); return; }
+  if(!s.connected){ toast('⚠️ Not connected yet — try again in a moment.'); return; }
+  if(!gameState.deck?.length){ toast('⚠️ Pick your party in Single Player first!'); return; }
+
+  document.getElementById('online-user-setup').style.display = 'none';
+  document.getElementById('online-host-panel').style.display = '';
+  document.getElementById('room-code-display').textContent = '——';
+  document.getElementById('online-status').textContent = 'Creating room...';
+  document.getElementById('player-list').innerHTML = '';
+
+  s.emit('room:host', { username: gameState.username || 'Hero', deck: gameState.deck, level: gameState.playerLevel || 1 });
+}
+
+function onlineJoin(){
+  let s; try { s = getSocket(); } catch(e) { toast('⚠️ Could not connect to the server.'); return; }
+  if(!s.connected){ toast('⚠️ Not connected yet — try again in a moment.'); return; }
+  const code = (document.getElementById('join-code-input')?.value || '').trim().toUpperCase();
+  if(!code){ toast('Enter a room code first!'); return; }
+  if(!gameState.deck?.length){ toast('⚠️ Pick your party in Single Player first!'); return; }
+
+  const status = document.getElementById('join-status');
+  if(status) status.textContent = 'Joining...';
+  s.emit('room:join', { username: gameState.username || 'Hero', code, deck: gameState.deck, level: gameState.playerLevel || 1 });
+}
+
+function copyRoomCode(){
+  const code = gameState.onlineRoomCode;
+  if(!code) return;
+  if(navigator.clipboard?.writeText){
+    navigator.clipboard.writeText(code).then(()=>toast('📋 Room code copied!')).catch(()=>toast('Code: '+code));
+  } else {
+    toast('Code: '+code);
+  }
+}
+
+function onlineStartDuel(){
+  let s; try { s = getSocket(); } catch(e) { return; }
+  if(!s.connected) return;
+  s.emit('game:start', { mode: 'duel' });
+}
+
+function onlineStartStory(){
+  // Server only supports duel-mode rooms today — surface that honestly
+  // instead of silently doing nothing.
+  toast('📖 Online Story Co-op isn\'t built yet — try Duel Mode!');
+}
+
+// ── Room player list (host/join panel) ──
+function renderRoomPlayerList(players){
+  const el = document.getElementById('player-list');
+  if(!el) return;
+  if(!players?.length){
+    el.innerHTML = `<div style="color:var(--dim);font-size:.6rem;font-style:italic;">Waiting for players...</div>`;
+    return;
+  }
+  el.innerHTML = players.map(p => `
+    <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:rgba(255,255,255,.04);border-radius:8px;margin-bottom:5px;">
+      <span>${p.isHost ? '👑' : '⚔️'}</span>
+      <span style="flex:1;font-family:'Cinzel',serif;font-size:.65rem;color:var(--text);">${escapeHTML(p.username)}</span>
+      <span style="font-size:.55rem;color:var(--dim);">Lv.${p.level||1}</span>
+    </div>`).join('');
+}
+
+// ── Socket listeners (registered once per page load) ──
+let _onlineListenersSet = false;
+function setupOnlineListeners(){
+  let s; try { s = getSocket(); } catch(e) { return; }
+  if(_onlineListenersSet) return;
+  _onlineListenersSet = true;
+
+  s.on('room:hosted', ({ code } = {}) => {
+    gameState.onlineRoomCode = code;
+    const disp = document.getElementById('room-code-display'); if(disp) disp.textContent = code;
+    const status = document.getElementById('online-status'); if(status) status.textContent = 'Waiting for players...';
+    updateChatRoomLabel();
+  });
+
+  s.on('room:joined', ({ code } = {}) => {
+    gameState.onlineRoomCode = code;
+    document.getElementById('online-user-setup').style.display = 'none';
+    document.getElementById('online-join-panel').style.display = 'none';
+    document.getElementById('online-host-panel').style.display = '';
+    document.getElementById('room-code-display').textContent = code;
+    document.getElementById('online-status').textContent = 'Joined! Waiting for host to start...';
+    updateChatRoomLabel();
+  });
+
+  s.on('player:joined', ({ username } = {}) => {
+    addSystemChatMsg(`${username} joined the room.`);
+    toast(`👋 ${username} joined!`);
+  });
+
+  s.on('room:update', (room = {}) => {
+    onlineRoomPlayers = (room.players || []).filter(p => p.id !== s.id);
+    renderRoomPlayerList(room.players);
+    if(document.getElementById('online-tab-trade')?.style.display !== 'none') renderTradePlayers([]);
+  });
+
+  s.on('lobby:players', (list = []) => {
+    renderOnlinePlayers(list);
+  });
+
+  s.on('chat:message', (payload = {}) => {
+    appendChatMessage(payload.username || payload.name || 'Player', payload.message, payload.time || Date.now(), false);
+  });
+
+  s.on('trade:incoming', (offer = {}) => {
+    pendingTrades.push(offer);
+    renderTradeIncoming();
+    toast(`🤝 Trade offer from ${offer.from || 'a player'}!`);
+  });
+
+  s.on('trade:complete', ({ receivedCard, fromUsername } = {}) => {
+    if(!receivedCard) return;
+    const removeRef = _tradeOfferedCardRef || _tradeAcceptedCardRef;
+    if(removeRef){
+      const idx = gameState.deck.indexOf(removeRef);
+      if(idx >= 0) gameState.deck.splice(idx, 1);
+    }
+    _tradeOfferedCardRef = null;
+    _tradeAcceptedCardRef = null;
+    gameState.deck.push(receivedCard);
+    saveGame();
+    updateMenuHud();
+    toast(`✅ Trade complete! Received ${receivedCard.emoji||'⚔️'} ${receivedCard.name} from ${fromUsername||'a player'}`);
+  });
+
+  s.on('trade:declined', () => {
+    toast('❌ Your trade offer was declined.');
+  });
+
+  s.on('game:started', ({ mode, battleState } = {}) => {
+    if(mode === 'duel') enterOnlineDuel(battleState);
+  });
+
+  s.on('battle:update', ({ battleState } = {}) => {
+    renderOnlineDuel(battleState);
+  });
+
+  s.on('battle:over', ({ winner, winnerName } = {}) => {
+    onlineDuelOver(winner, winnerName);
+  });
+
+  s.on('error', ({ msg } = {}) => {
+    if(!msg) return;
+    toast('⚠️ ' + msg);
+    const jstatus = document.getElementById('join-status'); if(jstatus) jstatus.textContent = msg;
+    const ostatus = document.getElementById('online-status'); if(ostatus && ostatus.textContent === 'Creating room...') ostatus.textContent = '';
+  });
+}
+
+// ── Online PvP duel screen ──
+let onlineDuelState = null;
+
+function enterOnlineDuel(battleState){
+  showScreen('screen-online-duel');
+  const log = document.getElementById('od-log'); if(log) log.innerHTML = '';
+  renderOnlineDuel(battleState);
+}
+
+function renderOnlineDuel(battleState){
+  if(!battleState) return;
+  onlineDuelState = battleState;
+  const myId = socket?.id;
+  const isFirst = battleState.combatants[0].id === myId;
+  const me  = isFirst ? battleState.combatants[0] : battleState.combatants[1];
+  const opp = isFirst ? battleState.combatants[1] : battleState.combatants[0];
+
+  document.getElementById('od-turn-info').textContent = `Turn ${(battleState.turn||0)+1}`;
+
+  document.getElementById('od-me-emoji').textContent = me.emoji || '⚔️';
+  document.getElementById('od-me-name').textContent  = me.cardName || me.name || 'You';
+  document.getElementById('od-me-hp').textContent    = `${Math.max(0,me.hp)}/${me.maxHp}`;
+  document.getElementById('od-me-hpbar').style.width = `${Math.max(0,(me.hp/me.maxHp)*100)}%`;
+  document.getElementById('od-me-ability').textContent = me.abilityCooldown>0 ? `${me.ability} (CD ${me.abilityCooldown})` : (me.ability||'');
+
+  document.getElementById('od-opp-emoji').textContent = opp.emoji || '👾';
+  document.getElementById('od-opp-name').textContent  = opp.cardName || opp.name || 'Opponent';
+  document.getElementById('od-opp-hp').textContent    = `${Math.max(0,opp.hp)}/${opp.maxHp}`;
+  document.getElementById('od-opp-hpbar').style.width = `${Math.max(0,(opp.hp/opp.maxHp)*100)}%`;
+  document.getElementById('od-opp-ability').textContent = opp.ability || '';
+
+  const log = document.getElementById('od-log');
+  if(log){
+    log.innerHTML = (battleState.log||[]).slice(-30).map(l=>`<div>${l}</div>`).join('');
+    log.scrollTop = log.scrollHeight;
+  }
+
+  const myTurn = battleState.activePlayer === myId && !battleState.over;
+  ['od-btn-attack','od-btn-ability','od-btn-heal','od-btn-flee'].forEach(id=>{
+    const b = document.getElementById(id); if(b) b.disabled = !myTurn;
+  });
+  const banner = document.getElementById('od-turn-banner');
+  if(banner) banner.textContent = battleState.over ? '' : (myTurn ? '🟢 Your turn!' : `⏳ Waiting for ${escapeHTML(opp.name||'opponent')}...`);
+
+  renderOnlineDuelSwitcher(me, myTurn);
+}
+
+function renderOnlineDuelSwitcher(me, myTurn){
+  const el = document.getElementById('od-deck-switcher');
+  if(!el) return;
+  if(!me.deck || me.deck.length <= 1){ el.innerHTML = ''; return; }
+  el.innerHTML = me.deck.map((c,i) => `
+    <button class="btn-sm" style="opacity:${c.fainted?0.4:1};margin:2px;" ${(!myTurn||c.fainted||i===me.activeIdx)?'disabled':''}
+      onclick="onlineDuelSwitch(${i})">${c.emoji||'⚔️'} ${escapeHTML(c.name)}${i===me.activeIdx?' (active)':''}</button>`).join('');
+}
+
+function onlineDuelAction(action){
+  let s; try { s = getSocket(); } catch(e) { return; }
+  if(!s.connected) return;
+  s.emit('battle:action', { action });
+}
+
+function onlineDuelSwitch(cardIdx){
+  let s; try { s = getSocket(); } catch(e) { return; }
+  if(!s.connected) return;
+  s.emit('battle:action', { action: 'switch', cardIdx });
+}
+
+function onlineDuelOver(winner, winnerName){
+  const myId = socket?.id;
+  const won = !!winner && winner === myId;
+  const title = !winner ? 'Duel Ended' : (won ? 'Victory!' : 'Defeat');
+  const body = !winner
+    ? `<div style="text-align:center;font-size:.85rem;padding:10px;">🏃 The duel ended early.</div>`
+    : `<div style="text-align:center;font-size:.9rem;padding:10px;">${won ? '🏆 You won the duel!' : `💀 ${escapeHTML(winnerName||'Your opponent')} won the duel.`}</div>`;
+  showModal(title, body, [
+    { label: 'Back to Room', cls: 'btn', cb: () => { closeModal(); showScreen('screen-online'); } },
+  ]);
+}
 
 // ═══════════════════════════════════════════════════
 //  FRIEND SYSTEM — server-authoritative
@@ -4921,7 +5263,9 @@ function sendTradeOffer() {
   if (!_tradeTargetId)            { toast('Select a player to trade with!'); return; }
   if (gameState.deck.length <= 1) { toast('Cannot trade your last member!'); return; }
   const card = gameState.deck[tradeSelected.cardIdx];
+  _tradeOfferedCardRef = card;
   getSocket().emit('trade:offer', { toSocketId: _tradeTargetId, card });
+  toast(`📤 Offer sent to ${_tradeTargetName||'player'}!`);
 }
 
 function acceptTrade(idx) {
@@ -4930,6 +5274,7 @@ function acceptTrade(idx) {
   if (!trade) return;
   // Send back one of our cards as the counter offer
   const myCard = gameState.deck[0];
+  _tradeAcceptedCardRef = myCard;
   getSocket().emit('trade:respond', { tradeId: trade.tradeId, accepted: true, counterCard: myCard });
   pendingTrades.splice(idx, 1);
   renderTradeIncoming();
