@@ -39,6 +39,117 @@
   --mythic:#e0a020;
 }
 
+/* ══════════════════════════════════════════
+   MENU CHARACTER CARDS  (#menu-deck-preview)
+   ══════════════════════════════════════════ */
+#menu-deck-preview{
+  display:flex;justify-content:center;align-items:flex-end;flex-wrap:nowrap;
+  gap:10px;width:100%;max-width:700px;padding:14px 12px 4px;
+  -webkit-user-select:none;user-select:none;
+}
+.menu-deck-empty{font-size:.65rem;color:var(--dim);font-style:italic;padding:4px 0;text-align:center;}
+.menu-character-card{
+  position:relative;flex:1 1 0;min-width:56px;max-width:78px;
+  padding:9px 5px 8px;text-align:center;cursor:pointer;
+  background:linear-gradient(180deg,rgba(14,20,34,.95),rgba(6,9,16,.97));
+  border:1px solid rgba(190,145,55,.32);border-radius:10px;
+  box-shadow:0 2px 8px rgba(0,0,0,.45);
+  opacity:.9;
+  transform:scale(1) translateY(0);
+  will-change:transform;
+  touch-action:manipulation;
+  -webkit-tap-highlight-color:transparent;
+  -webkit-touch-callout:none;
+  outline:none;
+  transition:
+    transform .24s cubic-bezier(.34,1.36,.64,1),
+    border-color .22s ease,
+    box-shadow .22s ease,
+    opacity .22s ease,
+    filter .22s ease;
+}
+.menu-character-card.selected{
+  transform:scale(1.08) translateY(-3px);
+  border-color:var(--gold2);
+  box-shadow:0 0 14px rgba(231,184,91,.30),0 6px 14px rgba(0,0,0,.55);
+  opacity:1;z-index:1;
+}
+.menu-character-card:active{transform:scale(.96);transition-duration:.08s;}
+.menu-character-card.selected:active{transform:scale(1.04) translateY(-2px);}
+.menu-character-card:focus-visible{box-shadow:0 0 0 2px rgba(231,184,91,.75),0 2px 8px rgba(0,0,0,.45);}
+@media (hover:hover){
+  .menu-character-card:not(.selected):hover{border-color:rgba(231,184,91,.55);opacity:1;}
+}
+.menu-character-card.fainted{filter:grayscale(.85) brightness(.78);}
+.mcc-emoji{font-size:1.9rem;line-height:1.2;filter:drop-shadow(0 2px 4px rgba(0,0,0,.6));pointer-events:none;}
+.mcc-name{
+  font-family:'Cinzel',serif;font-size:.58rem;letter-spacing:.03em;color:var(--text);margin-top:2px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;
+  transition:color .22s ease;
+}
+.menu-character-card.selected .mcc-name{color:var(--gold);}
+.mcc-lv{font-family:'Share Tech Mono',monospace;font-size:.52rem;color:var(--gold2);margin-top:1px;pointer-events:none;}
+.mcc-hp{height:4px;border-radius:2px;background:rgba(0,0,0,.6);margin-top:6px;overflow:hidden;pointer-events:none;}
+.mcc-hp-fill{height:100%;width:0;border-radius:2px;background:linear-gradient(90deg,#6a1010,#c02020);transition:width .3s ease;}
+
+/* ══════════════════════════════════════════
+   CHARACTER STATS PANEL  (#char-stats-overlay)
+   ══════════════════════════════════════════ */
+#char-stats-overlay{
+  position:fixed;inset:0;z-index:700;display:none;align-items:center;justify-content:center;
+  padding:16px;background:rgba(2,3,8,.82);
+  -webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);
+  overscroll-behavior:contain;-webkit-tap-highlight-color:transparent;
+}
+#char-stats-overlay.show{display:flex;animation:charStatsFadeIn .2s ease both;}
+#char-stats-overlay.closing{animation:charStatsFadeOut .18s ease both;}
+.char-stats-panel{
+  width:100%;max-width:380px;max-height:calc(100vh - 32px);max-height:calc(100dvh - 32px);overflow-y:auto;
+  background:linear-gradient(180deg,#0e1524,#070a12);
+  border:1px solid rgba(201,154,69,.6);border-radius:14px;padding:18px 18px 16px;
+  box-shadow:0 12px 40px rgba(0,0,0,.7),0 0 24px rgba(201,154,69,.12);
+  animation:characterStatsIn .26s cubic-bezier(.2,.9,.3,1) both;
+}
+#char-stats-overlay.closing .char-stats-panel{animation:characterStatsOut .18s ease both;}
+.csp-content{animation:charStatsContentIn .32s .06s ease both;}
+.csp-head{display:flex;align-items:center;gap:10px;padding-bottom:10px;border-bottom:1px solid rgba(201,154,69,.25);}
+.csp-name{flex:1;min-width:0;font-family:'Cinzel',serif;font-weight:700;font-size:1rem;letter-spacing:.08em;
+  color:var(--gold2);text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.csp-lv{font-family:'Share Tech Mono',monospace;font-size:.8rem;color:var(--gold2);letter-spacing:.06em;white-space:nowrap;}
+.csp-close{
+  flex-shrink:0;width:34px;height:34px;min-height:unset;padding:0;margin:-4px -6px -4px 0;
+  background:none;border:none;border-radius:8px;color:#6b7c95;font-size:1rem;line-height:1;cursor:pointer;
+  touch-action:manipulation;-webkit-tap-highlight-color:transparent;transition:color .15s ease,background .15s ease;
+}
+.csp-close:hover,.csp-close:focus-visible{color:var(--gold2);background:rgba(201,154,69,.1);outline:none;}
+.csp-emoji{text-align:center;font-size:3.4rem;line-height:1.15;margin:14px 0 2px;filter:drop-shadow(0 4px 10px rgba(0,0,0,.6));}
+.csp-title{text-align:center;font-family:'Cinzel',serif;font-size:.6rem;letter-spacing:.14em;color:#6b7c95;
+  text-transform:uppercase;margin-bottom:14px;min-height:1em;}
+.csp-row{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-family:'Share Tech Mono',monospace;}
+.csp-label{font-size:.62rem;letter-spacing:.14em;color:#6b7c95;}
+.csp-val{font-size:.82rem;color:var(--gold2);}
+.csp-bar{height:8px;border-radius:4px;margin:5px 0 12px;background:rgba(0,0,0,.6);
+  border:1px solid rgba(201,154,69,.22);overflow:hidden;}
+.csp-fill{height:100%;border-radius:3px;transform-origin:left center;animation:cspBarGrow .55s .12s cubic-bezier(.2,.8,.3,1) both;}
+.csp-fill.hp{background:linear-gradient(90deg,#6a1010,#d02a2a);}
+.csp-fill.xp{background:linear-gradient(90deg,#1b2a48,#3c5c90);}
+.csp-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px 24px;margin:4px 0 12px;
+  padding-top:12px;border-top:1px solid rgba(201,154,69,.15);}
+.csp-gold{padding-top:10px;border-top:1px solid rgba(201,154,69,.15);margin-bottom:14px;}
+.csp-ability{border:1px solid rgba(201,154,69,.45);border-radius:8px;padding:9px 12px;background:rgba(201,154,69,.05);}
+.csp-ability-name{font-family:'Cinzel',serif;font-size:.74rem;letter-spacing:.1em;color:var(--gold2);text-transform:uppercase;}
+.csp-ability-desc{font-size:.62rem;line-height:1.45;color:#8291a8;margin-top:3px;}
+@keyframes characterStatsIn{from{opacity:0;transform:translateY(12px) scale(.95);}to{opacity:1;transform:translateY(0) scale(1);}}
+@keyframes characterStatsOut{from{opacity:1;transform:translateY(0) scale(1);}to{opacity:0;transform:translateY(8px) scale(.96);}}
+@keyframes charStatsFadeIn{from{opacity:0;}to{opacity:1;}}
+@keyframes charStatsFadeOut{from{opacity:1;}to{opacity:0;}}
+@keyframes charStatsContentIn{from{opacity:0;}to{opacity:1;}}
+@keyframes cspBarGrow{from{transform:scaleX(0);}to{transform:scaleX(1);}}
+@media (prefers-reduced-motion:reduce){
+  .menu-character-card{transition:border-color .15s ease,box-shadow .15s ease,opacity .15s ease;}
+  .csp-fill,.csp-content{animation:none;}
+}
+
 /* ── LIGHT MODE ── */
 body.light-mode{
   --ink:#f5f0e8;
@@ -1007,8 +1118,10 @@ input, textarea { font-size: 16px !important; } /* Prevents iOS zoom on focus */
   .mode-name { font-size: .68rem !important; }
   .mode-desc { display: none !important; }
   #menu-player-bar { padding: 8px 10px 0 !important; flex-wrap: wrap; gap: 6px; }
-  #menu-deck-preview { gap: 5px !important; }
-  #menu-deck-preview > div { min-width: 64px !important; padding: 6px 8px !important; }
+  #menu-deck-preview { gap: 6px !important; padding: 12px 8px 4px !important; }
+  .menu-character-card { max-width: 74px !important; padding: 8px 4px 7px !important; }
+  .menu-character-card .mcc-emoji { font-size: 1.7rem !important; }
+  .char-stats-panel { padding: 16px 14px 14px !important; }
 
   /* ── Card Pick ── */
   #card-deal-row {
@@ -1301,7 +1414,7 @@ input, textarea { font-size: 16px !important; } /* Prevents iOS zoom on focus */
     </div>
   </div>
   <!-- Mini deck display on menu -->
-  <div id="menu-deck-preview" style="display:flex;gap:8px;width:100%;max-width:700px;padding:8px 16px 0;justify-content:center;flex-wrap:wrap;"></div>
+  <div id="menu-deck-preview" role="group" aria-label="Your party"></div>
   <div class="logo-wrap" style="margin-top:12px;">
     <span class="logo-emoji">⚔️</span>
     <div class="logo-title">AETHERION</div>
@@ -2022,26 +2135,245 @@ function updateMenuHud(){
   const rankBadgeEl = document.getElementById('menu-rank-badge');
   if(rankBadgeEl){ const {rank,wins}=getRankData(); rankBadgeEl.innerHTML=getRankBadgeHTML(rank,wins); }
 
-  // Mini deck preview on menu
+  // Mini deck preview on menu (interactive character cards)
+  renderMenuCharacterCards();
+}
+
+// ─────────────────────────────────────────
+//  MENU CHARACTER CARDS
+//  Tap = select (gameState.activeCardIdx) · Double tap = character stats
+// ─────────────────────────────────────────
+const MENU_CARD_DOUBLE_TAP_MS = 320;
+let lastCardTapIndex = -1;
+let lastCardTapTime  = 0;
+let _menuCardSig = '';
+let _menuCardSaveTimer = null;
+let _menuCardFaintTimer = null;
+
+// Safe number: returns fallback for null/undefined/''/NaN/Infinity
+function _mcNum(v, fallback){
+  if(v===null || v===undefined || v==='') return fallback;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+function _mcHp(c){
+  const hp  = Math.max(0, _mcNum(c && c.hp, 0));
+  let   max = _mcNum(c && c.maxHp, 0);
+  if(max <= 0) max = hp;                       // missing maxHp → current HP is the max
+  const pct = max > 0 ? Math.max(0, Math.min(100, (hp / max) * 100)) : 0;
+  return { hp, max, pct };
+}
+
+// Fainted = flagged, or a real HP value at/below 0 (a missing/corrupt hp is NOT treated as fainted)
+function _mcFainted(c){ return !!(c && c.fainted) || _mcNum(c && c.hp, 1) <= 0; }
+
+function renderMenuCharacterCards(){
   const preview = document.getElementById('menu-deck-preview');
-  if(preview && gameState.deck.length){
-    preview.innerHTML = gameState.deck.map((c,i)=>{
-      const lv = c.cardLevel||1;
-      const isLead = i===gameState.activeCardIdx;
-      return `<div style="background:rgba(0,0,0,.5);border:1px solid ${isLead?'rgba(201,154,69,.5)':'var(--border)'};
-        border-radius:10px;padding:8px 12px;text-align:center;min-width:80px;cursor:pointer;"
-        onclick="showMenu()" title="${c.name} · Lv.${lv}">
-        <div style="font-size:1.6rem;">${c.emoji||'⚔️'}</div>
-        <div style="font-family:'Cinzel',serif;font-size:.52rem;color:${isLead?'var(--gold)':'var(--text)'};">${c.name.split(' ')[0]}</div>
-        <div style="font-family:'Share Tech Mono',monospace;font-size:.5rem;color:var(--gold2);">Lv.${lv}</div>
-        <div style="height:3px;border-radius:2px;background:rgba(0,0,0,.5);margin-top:4px;">
-          <div style="height:100%;background:linear-gradient(90deg,#6a1010,#c02020);width:${Math.round(c.hp/c.maxHp*100)}%;border-radius:2px;"></div>
-        </div>
-      </div>`;
-    }).join('');
-  } else if(preview){
-    preview.innerHTML = `<div style="font-size:.65rem;color:var(--dim);font-style:italic;padding:4px 0;">No deck yet — start a game to pick your cards!</div>`;
+  if(!preview) return;
+  const deck = gameState.deck || [];
+
+  if(!deck.length){
+    preview.innerHTML = '<div class="menu-deck-empty">No deck yet — start a game to pick your cards!</div>';
+    _menuCardSig = '';
+    return;
   }
+
+  // Only rebuild the DOM when the party itself changes, so selection changes
+  // animate via CSS transitions instead of re-creating the elements.
+  const sig = deck.map((c,i)=> (c && c.id) || ('idx'+i)).join('|');
+  if(sig !== _menuCardSig || preview.querySelectorAll('.menu-character-card').length !== deck.length){
+    preview.innerHTML = deck.map((_,i)=>`
+      <div class="menu-character-card" role="button" tabindex="0" data-idx="${i}">
+        <div class="mcc-emoji"></div>
+        <div class="mcc-name"></div>
+        <div class="mcc-lv"></div>
+        <div class="mcc-hp"><div class="mcc-hp-fill"></div></div>
+      </div>`).join('');
+    _menuCardSig = sig;
+  }
+  _bindMenuCardEvents(preview);
+
+  preview.querySelectorAll('.menu-character-card').forEach((el,i)=>{
+    const c = deck[i] || {};
+    const lv = Math.max(1, _mcNum(c.cardLevel, _mcNum(c.level, 1)));
+    const name = String(c.name || '???');
+    const hp = _mcHp(c);
+    el.querySelector('.mcc-emoji').textContent = c.emoji || '⚔️';
+    el.querySelector('.mcc-name').textContent  = name.split(' ')[0];
+    el.querySelector('.mcc-lv').textContent    = 'Lv.' + lv;
+    el.querySelector('.mcc-hp-fill').style.width = hp.pct + '%';
+    el.classList.toggle('fainted', _mcFainted(c));
+    el.title = `${name} · Lv.${lv} · ${hp.hp}/${hp.max} HP`;
+    el.setAttribute('aria-label', `${name}, level ${lv}. Tap to select, double tap for stats.`);
+  });
+  syncMenuCardSelection();
+}
+
+function syncMenuCardSelection(){
+  const preview = document.getElementById('menu-deck-preview');
+  if(!preview) return;
+  preview.querySelectorAll('.menu-character-card').forEach(el=>{
+    const isSelected = Number(el.dataset.idx) === gameState.activeCardIdx;
+    el.classList.toggle('selected', isSelected);
+    el.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
+  });
+}
+
+// One delegated listener. "click" fires once for both mouse and touch
+// (touch-action:manipulation removes the 300ms delay), so nothing can double-fire.
+function _bindMenuCardEvents(preview){
+  if(preview.dataset.cardsBound) return;
+  preview.dataset.cardsBound = '1';
+  preview.addEventListener('click', e=>{
+    const el = e.target.closest('.menu-character-card');
+    if(!el || !preview.contains(el)) return;
+    onMenuCardTap(Number(el.dataset.idx));
+  });
+  // Keyboard: Enter/Space selects; on the already-selected card it opens stats
+  preview.addEventListener('keydown', e=>{
+    if(e.key !== 'Enter' && e.key !== ' ') return;
+    const el = e.target.closest('.menu-character-card');
+    if(!el) return;
+    e.preventDefault();
+    const idx = Number(el.dataset.idx);
+    if(idx === gameState.activeCardIdx) openCharacterStats(idx);
+    else selectMenuCard(idx);
+  });
+}
+
+function onMenuCardTap(idx){
+  const now = performance.now();
+  const isDouble = idx === lastCardTapIndex && (now - lastCardTapTime) <= MENU_CARD_DOUBLE_TAP_MS;
+  if(isDouble){
+    lastCardTapIndex = -1; lastCardTapTime = 0;   // a 3rd tap starts a fresh sequence
+    clearTimeout(_menuCardFaintTimer);
+    openCharacterStats(idx);
+    return;
+  }
+  lastCardTapIndex = idx;
+  lastCardTapTime  = now;
+  selectMenuCard(idx);
+}
+
+function selectMenuCard(idx){
+  const card = (gameState.deck || [])[idx];
+  if(!card) return false;
+  // Same rule as the Party Manager: fainted members can't lead (stats still open on double tap)
+  if(_mcFainted(card)){
+    clearTimeout(_menuCardFaintTimer);
+    _menuCardFaintTimer = setTimeout(()=>toast(`${card.name} has fainted!`), MENU_CARD_DOUBLE_TAP_MS + 30);
+    return false;
+  }
+  if(idx !== gameState.activeCardIdx){
+    gameState.activeCardIdx = idx;
+    syncMenuCardSelection();
+    _scheduleMenuCardSave();
+  }
+  return true;
+}
+
+// Debounced so rapid tapping doesn't spam account:save; flushed if the page is hidden/closed.
+function _scheduleMenuCardSave(){
+  clearTimeout(_menuCardSaveTimer);
+  _menuCardSaveTimer = setTimeout(_flushMenuCardSave, 350);
+}
+function _flushMenuCardSave(){
+  if(_menuCardSaveTimer === null) return;
+  clearTimeout(_menuCardSaveTimer);
+  _menuCardSaveTimer = null;
+  if(typeof saveGame === 'function') saveGame();
+}
+window.addEventListener('pagehide', _flushMenuCardSave);
+document.addEventListener('visibilitychange', ()=>{ if(document.hidden) _flushMenuCardSave(); });
+
+// ── Character stats panel ──
+let _charStatsClosing = false;
+let _charStatsDownOnOverlay = false;
+
+function _ensureCharStatsOverlay(){
+  let ov = document.getElementById('char-stats-overlay');
+  if(ov) return ov;
+  ov = document.createElement('div');
+  ov.id = 'char-stats-overlay';
+  // Close on backdrop tap (press AND release must both be on the backdrop)
+  ov.addEventListener('pointerdown', e=>{ _charStatsDownOnOverlay = (e.target === ov); });
+  ov.addEventListener('click', e=>{
+    if(e.target === ov && _charStatsDownOnOverlay) closeCharacterStats();
+    else if(e.target.closest('.csp-close')) closeCharacterStats();
+    _charStatsDownOnOverlay = false;
+  });
+  document.body.appendChild(ov);
+  document.addEventListener('keydown', e=>{
+    if(e.key === 'Escape' && ov.classList.contains('show')) closeCharacterStats();
+  });
+  return ov;
+}
+
+function openCharacterStats(index){
+  const c = (gameState.deck || [])[index];
+  if(!c) return;
+  const ov = _ensureCharStatsOverlay();
+
+  const lv     = Math.max(1, _mcNum(c.cardLevel, _mcNum(c.level, 1)));
+  const hp     = _mcHp(c);
+  const toNext = _mcNum(c.xpToNext, 0) > 0 ? _mcNum(c.xpToNext, 0) : 80 + lv * 40;   // same formula as the deck list
+  const xp     = Math.max(0, _mcNum(c.cardXp, _mcNum(c.xp, 0)));
+  const xpPct  = Math.max(0, Math.min(100, (xp / toNext) * 100));
+  const gold   = _mcNum(c.gold, _mcNum(gameState.playerGold, 0));   // cards carry no gold of their own → shared party gold
+  const stat   = v => { const n = _mcNum(v, null); return n === null ? '—' : String(Math.round(n)); };
+  const name   = String(c.name || 'Unknown');
+  const h      = s => escapeHTML(String(s));
+
+  ov.innerHTML = `
+    <div class="char-stats-panel" role="dialog" aria-modal="true" aria-label="${h(name)} stats">
+      <div class="csp-content">
+        <div class="csp-head">
+          <div class="csp-name">${h(name)}</div>
+          <div class="csp-lv">LV. ${lv}</div>
+          <button class="csp-close" type="button" aria-label="Close">✕</button>
+        </div>
+        <div class="csp-emoji">${h(c.emoji || '⚔️')}</div>
+        <div class="csp-title">${h(c.title || '')}</div>
+
+        <div class="csp-row"><span class="csp-label">HP</span><span class="csp-val">${hp.hp}/${hp.max}</span></div>
+        <div class="csp-bar"><div class="csp-fill hp" style="width:${hp.pct}%"></div></div>
+
+        <div class="csp-row"><span class="csp-label">XP</span><span class="csp-val">${xp}/${toNext}</span></div>
+        <div class="csp-bar"><div class="csp-fill xp" style="width:${xpPct}%"></div></div>
+
+        <div class="csp-grid">
+          <div class="csp-row"><span class="csp-label">ATK</span><span class="csp-val">${stat(c.attack)}</span></div>
+          <div class="csp-row"><span class="csp-label">DEF</span><span class="csp-val">${stat(c.defense)}</span></div>
+          <div class="csp-row"><span class="csp-label">MAG</span><span class="csp-val">${stat(c.magic)}</span></div>
+          <div class="csp-row"><span class="csp-label">SPD</span><span class="csp-val">${stat(c.speed)}</span></div>
+        </div>
+        <div class="csp-row csp-gold"><span class="csp-label">GOLD</span><span class="csp-val">${h(gold)}</span></div>
+
+        <div class="csp-ability">
+          <div class="csp-ability-name">${h(c.ability || '—')}</div>
+          ${c.abilityDesc ? `<div class="csp-ability-desc">${h(c.abilityDesc)}</div>` : ''}
+        </div>
+      </div>
+    </div>`;
+
+  _charStatsClosing = false;
+  ov.classList.remove('closing');
+  ov.classList.add('show');
+  const closeBtn = ov.querySelector('.csp-close');
+  if(closeBtn) try{ closeBtn.focus({preventScroll:true}); }catch(e){}
+}
+
+function closeCharacterStats(){
+  const ov = document.getElementById('char-stats-overlay');
+  if(!ov || !ov.classList.contains('show') || _charStatsClosing) return;
+  _charStatsClosing = true;
+  ov.classList.add('closing');
+  setTimeout(()=>{
+    if(!_charStatsClosing) return;
+    _charStatsClosing = false;
+    ov.classList.remove('show','closing');
+    ov.innerHTML = '';
+  }, 190);
 }
 
 // ── INTRO / USERNAME + SAVE/LOAD ──
