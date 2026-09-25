@@ -415,6 +415,19 @@ body::before{
 .shop-buy-btn:hover:not(:disabled){background:linear-gradient(135deg,#5a3010,#a86020);box-shadow:0 0 14px rgba(201,154,69,.2);}
 .shop-buy-btn:disabled{opacity:.35;cursor:not-allowed;}
 
+/* Out-of-stock state (server-driven, see shopTab) */
+.shop-item.out-of-stock{border-color:rgba(190,70,60,.35);}
+.shop-item.out-of-stock .shop-item-icon,
+.shop-item.out-of-stock .shop-item-name,
+.shop-item.out-of-stock .shop-item-desc{opacity:.55;}
+.shop-oos{
+  text-align:center;padding:6px 4px;border-radius:8px;
+  background:rgba(120,30,30,.22);border:1px solid rgba(190,70,60,.35);
+}
+.shop-oos-label{font-family:'Cinzel',serif;font-size:.6rem;letter-spacing:.08em;color:#e07060;}
+.shop-restock{font-family:'Share Tech Mono',monospace;font-size:.58rem;color:var(--dim);margin-top:3px;}
+.shop-item.out-of-stock .shop-buy-btn:disabled{opacity:.5;}
+
 /* ═══════════════════════════════════════════════════
    TYPOGRAPHY
 ═══════════════════════════════════════════════════ */
@@ -2100,6 +2113,9 @@ let gameState = {
   onlineUsername: '',
   onlineRoomCode: '',
   onlinePlayers: [],
+
+  // Global server shop stock (display only — pushed by the server via shop:state)
+  shopStock: {},
 };
 
 // Convenience: active card
@@ -2379,6 +2395,143 @@ function closeCharacterStats(){
 // ── INTRO / USERNAME + SAVE/LOAD ──
 const SAVE_KEY = 'aetherion_save_v1';
 
+// ── BINARY SAVE FORMAT (.aeth) ───────────────────────────────
+// Players could trivially edit the old plain-JSON save (gold, levels, deck
+// stats). The save is now stored as an obfuscated binary blob:
+//   [0..3]   magic bytes 'AETH'
+//   [4..5]   format version (u16 LE)
+//   [6..9]   payload length (u32 LE)
+//   [10..N]  UTF-8 JSON payload, XOR-obfuscated with a keystream
+//   [N..N+3] CRC32 over everything before it (tamper detection)
+// The whole blob is base64-wrapped for localStorage. Legacy JSON saves are
+// still readable and get migrated to binary on the next save.
+// NOTE: this deters casual editing; the real anti-cheat is that online
+// progress is owned by the server (see server.js deck validation).
+const AethSaveCodec = (() => {
+  const MAGIC = [0x41, 0x45, 0x54, 0x48]; // 'AETH' — Aetherion save format (.aeth)
+  const VERSION = 2;
+  const KEY_STR = 'Aetherion::SaveGuard::v2';
+  function keystream(len){
+    let h = 2166136261;
+    for (let i = 0; i < KEY_STR.length; i++) {
+      h ^= KEY_STR.charCodeAt(i);
+      h = Math.imul(h, 16777619) >>> 0;
+    }
+    const out = new Uint8Array(len);
+    let x = (h || 1) >>> 0;
+    for (let i = 0; i < len; i++) {
+      x ^= x << 13; x >>>= 0;
+      x ^= x >>> 17;
+      x ^= x << 5;  x >>>= 0;
+      out[i] = x & 0xff;
+    }
+    return out;
+  }
+  function crc32(bytes){
+    if (!crc32.T) {
+      crc32.T = new Uint32Array(256);
+      for (let n = 0; n < 256; n++) {
+        let c = n;
+        for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+        crc32.T[n] = c >>> 0;
+      }
+    }
+    let crc = 0xFFFFFFFF;
+    for (let i = 0; i < bytes.length; i++) crc = crc32.T[(crc ^ bytes[i]) & 0xff] ^ (crc >>> 8);
+    return (crc ^ 0xFFFFFFFF) >>> 0;
+  }
+  function encode(obj){
+    const payload = new TextEncoder().encode(JSON.stringify(obj));
+    const ks = keystream(payload.length);
+    for (let i = 0; i < payload.length; i++) payload[i] ^= ks[i];
+    const len = payload.length;
+    const body = new Uint8Array(14 + len);
+    body.set(MAGIC, 0);
+    body[4] = VERSION & 0xff; body[5] = (VERSION >>> 8) & 0xff;
+    body[6] = len & 0xff; body[7] = (len >>> 8) & 0xff;
+    body[8] = (len >>> 16) & 0xff; body[9] = (len >>> 24) & 0xff;
+    body.set(payload, 10);
+    const crc = crc32(body.subarray(0, 10 + len));
+    body[10+len] = crc & 0xff; body[11+len] = (crc >>> 8) & 0xff;
+    body[12+len] = (crc >>> 16) & 0xff; body[13+len] = (crc >>> 24) & 0xff;
+    let s = '';
+    for (let i = 0; i < body.length; i++) s += String.fromCharCode(body[i]);
+    return btoa(s);
+  }
+  function decode(raw){
+    if (!raw) return null;
+    // Legacy v1 saves were plain JSON — still accepted, migrated on next save
+    if (raw[0] === '{') { try { return JSON.parse(raw); } catch (e) { return null; } }
+    try {
+      const s = atob(raw);
+      const body = new Uint8Array(s.length);
+      for (let i = 0; i < s.length; i++) body[i] = s.charCodeAt(i);
+      if (body.length < 14) return null;
+      for (let i = 0; i < 4; i++) if (body[i] !== MAGIC[i]) return null;
+      const ver = body[4] | (body[5] << 8);
+      if (ver !== VERSION) return null;
+      const len = body[6] | (body[7] << 8) | (body[8] << 16) | (body[9] << 24);
+      if (len < 0 || 10 + len + 4 !== body.length) return null;
+      const crc = (body[10+len] | (body[11+len] << 8) | (body[12+len] << 16) | (body[13+len] << 24)) >>> 0;
+      if (crc32(body.subarray(0, 10 + len)) !== crc) return null; // corrupt or tampered
+      const payload = body.subarray(10, 10 + len);
+      const ks = keystream(len);
+      for (let i = 0; i < len; i++) payload[i] ^= ks[i];
+      return JSON.parse(new TextDecoder().decode(payload));
+    } catch (e) { return null; }
+  }
+  return { encode, decode };
+})();
+
+// ── .aeth FILE EXPORT / IMPORT ────────────────────────────────
+// The encoded save blob IS the .aeth file format: 'AETH' magic + version +
+// length + XOR-obfuscated payload + CRC32. Downloads as <name>.aeth and can
+// be restored on any device. Tampered or hand-edited files fail the CRC and
+// are rejected.
+function buildSaveObject(){
+  return {
+    username: gameState.username,
+    playerLevel: gameState.playerLevel,
+    playerXp: gameState.playerXp,
+    xpToNext: gameState.xpToNext,
+    playerGold: gameState.playerGold,
+    inventory: gameState.inventory,
+    unlockedSkills: gameState.unlockedSkills,
+    skillXp: gameState.skillXp,
+    deck: gameState.deck,
+    activeCardIdx: gameState.activeCardIdx,
+    shopOwned: gameState.shopOwned || {},
+    savedAt: Date.now(),
+  };
+}
+function exportAetg(){
+  try {
+    const blob = AethSaveCodec.encode(buildSaveObject());
+    const name = (gameState.username || 'hero').replace(/[^a-zA-Z0-9_\- ]/g, '') || 'hero';
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([blob], { type: 'application/octet-stream' }));
+    a.download = name + '.aeth';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    toast('💾 Backup saved as ' + name + '.aeth');
+  } catch (e) { toast('Backup failed'); }
+}
+function importAetgFile(input){
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const save = AethSaveCodec.decode(String(reader.result || ''));
+    if (!save || !save.username) { toast('⚠️ Not a valid .aeth save file'); return; }
+    localStorage.setItem(SAVE_KEY, AethSaveCodec.encode(save));
+    toast('📂 Backup restored — reloading…');
+    setTimeout(() => location.reload(), 900);
+  };
+  reader.onerror = () => toast('Could not read that file');
+  reader.readAsText(file);
+  input.value = '';
+}
+
 
 // ── DEBUG / OFFLINE MODE ──────────────────────────────────────
 // Triple-click the ⚔️ sword logo on the login screen to enter without a server.
@@ -2412,6 +2565,7 @@ function debugLogin() {
   gameState.skillXp        = 0;
   gameState.activeCardIdx  = 0;
   gameState.shopOwned      = {};
+  gameState.isOfflineDebug = true; // no server session — shop purchases are applied locally (dev only)
 
   // Give a starter deck so battle/deck screens don't show empty
   if (!gameState.deck || !gameState.deck.length) {
@@ -2461,7 +2615,7 @@ function saveGame(){
       shopOwned: gameState.shopOwned||{},
       savedAt: Date.now(),
     };
-    localStorage.setItem(SAVE_KEY, JSON.stringify(save));
+    localStorage.setItem(SAVE_KEY, AethSaveCodec.encode(save));
     localStorage.setItem('aetherion_hero_name', gameState.username||'');
     // Also save to cloud so it works across devices
     cloudSave();
@@ -2472,8 +2626,8 @@ function loadGame(){
   try {
     const raw = localStorage.getItem(SAVE_KEY);
     if(!raw) return false;
-    const save = JSON.parse(raw);
-    if(!save.username) return false;
+    const save = AethSaveCodec.decode(raw);
+    if(!save || !save.username) return false;
     gameState.username       = save.username;
     gameState.onlineUsername = save.username;
     gameState.playerLevel    = save.playerLevel  || 1;
@@ -2576,6 +2730,7 @@ function doLogin(){
     localStorage.removeItem('aetherion_hero_pass');
     gameState.username = uname;
     gameState.onlineUsername = uname;
+    gameState.isOfflineDebug = false;
     if (save && !isNew) {
       try {
         const sd = typeof save === 'string' ? JSON.parse(save) : save;
@@ -2670,11 +2825,29 @@ function doRegister(){
     localStorage.removeItem('aetherion_hero_pass');
     gameState.username = uname;
     gameState.onlineUsername = uname;
-    gameState.playerLevel=1; gameState.playerXp=0; gameState.xpToNext=100;
-    gameState.playerGold=0; gameState.inventory=[]; gameState.deck=[];
-    gameState.unlockedSkills=[]; gameState.skillXp=0; gameState.shopOwned={};
-    toast('🎉 Account created! Welcome, ' + uname + '!');
-    goCardPick('menu');
+    gameState.isOfflineDebug = false;
+    // FIX: creating an account no longer wipes existing progress. If the
+    // player already has a party (e.g. played as a guest first), keep it and
+    // push it to the brand-new account; only fresh players go to card-pick.
+    if ((gameState.deck || []).length > 0) {
+      s.emit('player:setDeck', {
+        deck: gameState.deck.map(c => ({
+          id: c.id, name: c.name, emoji: c.emoji, title: c.title,
+          hp: c.hp, maxHp: c.maxHp, attack: c.attack, defense: c.defense,
+          magic: c.magic, speed: c.speed, ability: c.ability,
+          cardLevel: c.cardLevel || 1, cardXp: c.cardXp || 0
+        })),
+        activeCardIdx: gameState.activeCardIdx || 0
+      });
+      updateMenuHud(); showScreen('screen-menu');
+      toast('🎉 Account created! Your party carries over, ' + uname + '!');
+    } else {
+      gameState.playerLevel=1; gameState.playerXp=0; gameState.xpToNext=100;
+      gameState.playerGold=0; gameState.inventory=[]; gameState.deck=[];
+      gameState.unlockedSkills=[]; gameState.skillXp=0; gameState.shopOwned={};
+      toast('🎉 Account created! Welcome, ' + uname + '!');
+      goCardPick('menu');
+    }
   };
 
   // Bug 7 fix: onNameTaken now calls cleanup() to remove all 4 listeners
@@ -2749,6 +2922,28 @@ function openSettings(){
           font-family:'Cinzel',serif;font-size:.65rem;color:var(--text);">
           ☀️ Light Mode
         </button>
+      </div>
+    </div>
+
+    <!-- Save data (.aeth backup) -->
+    <div style="border-bottom:1px solid var(--border);padding-bottom:14px;margin-bottom:14px;">
+      <div style="font-family:'Cinzel',serif;font-size:.65rem;color:var(--gold);margin-bottom:10px;">💾 Save Data (.aeth)</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <button onclick="exportAetg()"
+          style="padding:10px;border-radius:8px;border:2px solid var(--border);background:rgba(0,0,0,.3);
+          cursor:pointer;font-family:'Cinzel',serif;font-size:.65rem;color:var(--text);">
+          ⬇️ Backup save
+        </button>
+        <button onclick="document.getElementById('aeth-import-input').click()"
+          style="padding:10px;border-radius:8px;border:2px solid var(--border);background:rgba(0,0,0,.3);
+          cursor:pointer;font-family:'Cinzel',serif;font-size:.65rem;color:var(--text);">
+          ⬆️ Restore backup
+        </button>
+      </div>
+      <input type="file" id="aeth-import-input" accept=".aeth" style="display:none"
+        onchange="importAetgFile(this)">
+      <div style="font-size:.55rem;color:var(--dim);margin-top:8px;">
+        Binary .aeth format — edits break the checksum and are rejected.
       </div>
     </div>
 
@@ -3147,7 +3342,8 @@ function applyServerState(state){
     }
   }
   updateMenuHud();
-  localStorage.setItem('aetherion_save', JSON.stringify({
+  localStorage.setItem(SAVE_KEY, AethSaveCodec.encode({
+    username: gameState.username,
     playerLevel: gameState.playerLevel, playerXp: gameState.playerXp,
     xpToNext: gameState.xpToNext, playerGold: gameState.playerGold,
     inventory: gameState.inventory, deck: gameState.deck,
@@ -3166,6 +3362,8 @@ function goShop(){
   document.getElementById('shop-gold-display').textContent = gameState.playerGold||0;
   shopTab('potions', document.querySelector('.shop-cat-btn'));
   showScreen('screen-shop');
+  requestShopState(); // always show the server's current stock, never a stale copy
+  startShopTicker();
 }
 
 const SHOP_CATALOG = {
@@ -3217,6 +3415,7 @@ const SHOP_CATALOG = {
 const RARITY_COLORS = {Common:'#8a9aaa', Rare:'#4a8abe', Epic:'#a040e0', Mythic:'#e0a020'};
 
 function shopTab(cat, btn){
+  _shopCurrentCat = cat;
   document.querySelectorAll('.shop-cat-btn').forEach(b=>b.classList.remove('active-cat'));
   if(btn) btn.classList.add('active-cat');
   const panel = document.getElementById('shop-items-panel');
@@ -3275,7 +3474,11 @@ function shopTab(cat, btn){
       ${items.map(item=>{
         const canAfford = gold>=item.cost;
         const isOwned = owned[item.id] && item.effect.type!=='item' && item.effect.type!=='cardXp' && item.effect.type!=='healAll' && item.effect.type!=='fullRestorePlus';
-        return `<div class="shop-item">
+        // Stock comes from the server (gameState.shopStock). Display only — the server re-checks on purchase.
+        const stock = getShopStockInfo(item.id);
+        const soldOut = stock.outOfStock && !isOwned;
+        const buying = !!_shopBuyPending;
+        return `<div class="shop-item${soldOut?' out-of-stock':''}">
           <div class="shop-item-icon">${item.icon}</div>
           <div class="shop-item-name">${item.name}</div>
           <div style="height:2px;border-radius:1px;background:${RARITY_COLORS[item.rarity]||'#888'};margin:-4px 0 0;"></div>
@@ -3284,23 +3487,179 @@ function shopTab(cat, btn){
           <div class="shop-item-cost ${canAfford?'':'cant-afford'}">💰 ${item.cost.toLocaleString()} Gold</div>
           ${isOwned
             ? `<div style="text-align:center;font-size:.58rem;color:#60e090;font-family:'Cinzel',serif;">✓ Owned</div>`
-            : `<button class="shop-buy-btn" ${canAfford?'':'disabled'} onclick="shopBuy('${item.id}','${cat}')">
-                ${canAfford?'Buy':'Not enough Gold'}
-              </button>`}
+            : soldOut
+              ? `<div class="shop-oos">
+                   <div class="shop-oos-label">⚠ OUT OF STOCK</div>
+                   <div class="shop-restock" data-restock-id="${item.id}">Restocks in ${formatShopCountdown(stock.remainingMs)}</div>
+                 </div>
+                 <button class="shop-buy-btn" disabled>Out of Stock</button>`
+              : `<button class="shop-buy-btn" ${(canAfford&&!buying)?'':'disabled'} onclick="shopBuy('${item.id}','${cat}')">
+                  ${_shopBuyPending&&_shopBuyPending.itemId===item.id?'Buying…':(canAfford?'Buy':'Not enough Gold')}
+                </button>`}
         </div>`;
       }).join('')}
     </div>`;
+  startShopTicker();
 }
 
+// ─────────────────────────────────────────
+//  SHOP STOCK — client side (DISPLAY ONLY)
+//  The server owns stock, cooldowns and every purchase decision. Nothing
+//  below is trusted by the server; it only decides what to draw.
+// ─────────────────────────────────────────
+let _shopClockOffset = 0;      // serverTime − clientTime; keeps countdowns right even if the device clock is wrong
+let _shopCurrentCat  = 'potions';
+let _shopTickTimer   = null;
+let _shopLastStateReq = 0;
+let _shopBuyPending  = null;   // { itemId, timer } while waiting for the server's answer
+
+function shopNow(){ return Date.now() + _shopClockOffset; }
+
+// { outOfStock, remainingMs } for one item, from the last server-sent state.
+// Unknown items count as in stock (the server rejects a bad buy anyway).
+function getShopStockInfo(itemId){
+  const st = (gameState.shopStock||{})[itemId];
+  if(!st || st.available!==false) return {outOfStock:false, remainingMs:0};
+  const remainingMs = (st.cooldownEndsAt||0) - shopNow();
+  return remainingMs>0 ? {outOfStock:true, remainingMs} : {outOfStock:false, remainingMs:0};
+}
+
+// 4h 27m  /  12m 05s  /  42s
+function formatShopCountdown(ms){
+  const totalSec = Math.max(0, Math.ceil(ms/1000));
+  if(totalSec >= 3600){
+    const mins = Math.ceil(totalSec/60);
+    return `${Math.floor(mins/60)}h ${mins%60}m`;
+  }
+  if(totalSec >= 60) return `${Math.floor(totalSec/60)}m ${String(totalSec%60).padStart(2,'0')}s`;
+  return `${totalSec}s`;
+}
+
+function requestShopState(){
+  try{ if(socket && socket.connected) socket.emit('shop:getState'); }catch(e){}
+}
+
+function refreshShopIfOpen(){
+  const scr = document.getElementById('screen-shop');
+  if(!scr || !scr.classList.contains('active') || _shopCurrentCat==='sell') return;
+  shopTab(_shopCurrentCat, document.querySelector('.shop-cat-btn.active-cat'));
+}
+
+// One 1-second timer for the whole shop screen (not one per item). It only
+// rewrites the countdown text; when a countdown hits zero it redraws the
+// shop and asks the server to confirm the restock.
+function startShopTicker(){
+  if(_shopTickTimer) return;
+  _shopTickTimer = setInterval(shopTick, 1000);
+}
+function stopShopTicker(){
+  if(_shopTickTimer){ clearInterval(_shopTickTimer); _shopTickTimer = null; }
+}
+function shopTick(){
+  const scr = document.getElementById('screen-shop');
+  if(!scr || !scr.classList.contains('active')){ stopShopTicker(); return; }
+  let expired = false;
+  document.querySelectorAll('[data-restock-id]').forEach(el=>{
+    const info = getShopStockInfo(el.getAttribute('data-restock-id'));
+    if(info.outOfStock) el.textContent = 'Restocks in ' + formatShopCountdown(info.remainingMs);
+    else expired = true;
+  });
+  if(expired){
+    refreshShopIfOpen(); // show the normal Buy button right away…
+    if(Date.now() - _shopLastStateReq > 2000){ // …and let the server confirm (max once / 2s)
+      _shopLastStateReq = Date.now();
+      requestShopState();
+    }
+  }
+}
+
+function findShopCatalogItem(itemId){
+  for(const cat of Object.keys(SHOP_CATALOG)){
+    const item = SHOP_CATALOG[cat].find(i=>i.id===itemId);
+    if(item) return {item, cat};
+  }
+  return null;
+}
+
+function setupShopListeners(sock){
+  if(!sock || sock._shopListenersBound) return;
+  sock._shopListenersBound = true;
+  sock.on('shop:state', onShopState);
+  sock.on('shop:buyResult', onShopBuyResult);
+}
+
+// Server → client: the global stock. Replaces (never merges with) local data.
+function onShopState(payload){
+  if(!payload || typeof payload!=='object' || !payload.items || typeof payload.items!=='object') return;
+  if(Number.isFinite(payload.serverTime)) _shopClockOffset = payload.serverTime - Date.now();
+  const next = {};
+  Object.keys(payload.items).forEach(id=>{
+    if(id==='__proto__') return;
+    const v = payload.items[id] || {};
+    next[id] = { available: v.available!==false, cooldownEndsAt: Number(v.cooldownEndsAt)||0 };
+  });
+  const changed = JSON.stringify(next) !== JSON.stringify(gameState.shopStock||{});
+  gameState.shopStock = next;
+  if(changed) refreshShopIfOpen();
+}
+
+// Server → client: the outcome of player:shopBuy. This is the ONLY place a
+// purchase changes anything on screen — success or failure comes from the server.
+function onShopBuyResult(res){
+  if(!res || typeof res!=='object') return;
+  if(_shopBuyPending && _shopBuyPending.itemId===res.itemId){
+    clearTimeout(_shopBuyPending.timer);
+    _shopBuyPending = null;
+  }
+  const goldEl = document.getElementById('shop-gold-display');
+  if(!res.ok){
+    if(Number.isFinite(res.playerGold)) gameState.playerGold = res.playerGold; // server's real balance
+    toast(String(res.msg||'Purchase failed.'));
+    if(goldEl) goldEl.textContent = gameState.playerGold||0;
+    updateMenuHud();
+    refreshShopIfOpen();
+    return;
+  }
+  const found = findShopCatalogItem(res.itemId);
+  if(!found) return;
+  if(Number.isFinite(res.playerGold)) gameState.playerGold = res.playerGold; // server's real balance
+  if(!gameState.shopOwned) gameState.shopOwned = {};
+  if(res.shopOwned && typeof res.shopOwned==='object') Object.assign(gameState.shopOwned, res.shopOwned);
+  applyPurchasedShopItem(found.item);
+}
+
+// Buy button. Sends the request only — no gold, inventory, stat or ownership
+// change happens here. Those happen in onShopBuyResult once the server confirms.
 function shopBuy(itemId, cat){
   const item = (SHOP_CATALOG[cat]||[]).find(i=>i.id===itemId);
   if(!item) return;
+  if(_shopBuyPending) return; // one purchase at a time
+  // UX-only pre-checks (the server independently re-checks all of them)
+  if(getShopStockInfo(itemId).outOfStock){ toast(`${item.name} is out of stock.`); refreshShopIfOpen(); return; }
   if(gameState.playerGold < item.cost){ toast('Not enough Gold!'); return; }
-  // Optimistic UI update — server will confirm or correct
-  gameState.playerGold -= item.cost;
-  if(!gameState.shopOwned) gameState.shopOwned = {};
-  // Send to server (authoritative)
+
+  if(gameState.isOfflineDebug){ // dev-only offline mode: there is no server session to ask
+    gameState.playerGold -= item.cost;
+    applyPurchasedShopItem(item);
+    return;
+  }
+  if(!gameState.username || !socket?.connected){ toast('Not connected to the server.'); return; }
+
+  _shopBuyPending = { itemId, timer: setTimeout(()=>{
+    _shopBuyPending = null;
+    toast('The server did not answer. Please try again.');
+    requestShopState();
+    refreshShopIfOpen();
+  }, 8000) };
+  refreshShopIfOpen(); // shows "Buying…"
   serverShopBuy(itemId);
+}
+
+// Applies a purchase to the local game view. Only ever called AFTER the server
+// has confirmed the purchase (or in dev-only offline debug mode).
+function applyPurchasedShopItem(item){
+  const itemId = item.id;
+  if(!gameState.shopOwned) gameState.shopOwned = {};
 
   const e = item.effect;
   const active = gameState.deck[gameState.activeCardIdx];
@@ -3365,8 +3724,7 @@ function shopBuy(itemId, cat){
   document.getElementById('shop-gold-display').textContent = gameState.playerGold;
   updateMenuHud();
   saveGame(); // save after purchase
-  const activeBtn = document.querySelector('.shop-cat-btn.active-cat');
-  shopTab(cat, activeBtn);
+  refreshShopIfOpen();
 }
 function goSkills(){renderSkillTree();showScreen('screen-skills');}
 function goDungeon(){
@@ -3526,7 +3884,8 @@ function confirmDeck(){
         ability: c.ability,
         cardLevel: c.cardLevel || 1,
         cardXp: c.cardXp || 0
-      }))
+      })),
+      activeCardIdx: gameState.activeCardIdx || 0
     });
   }
 
@@ -4162,6 +4521,7 @@ function bActiveCard(){ return battleState.deck[battleState.activeIdx]; }
 
 function bLog(msg,cls='s'){
   const el=document.getElementById('battle-log');
+  if(!el) return;
   const p=document.createElement('p');
   p.className=cls;p.innerHTML=msg;
   el.appendChild(p);el.scrollTop=el.scrollHeight;
@@ -4954,8 +5314,16 @@ function getSocket() {
     timeout: 4500,
   });
 
+  // Shop stock/purchase listeners live for the whole page (bound once — they
+  // survive reconnects because they're attached to the socket object itself).
+  setupShopListeners(socket);
+
   socket.on('connect', () => {
     console.log('[Socket] Connected:', socket.id);
+
+    // Ask the server for the current global shop stock on every (re)connect,
+    // so a reconnect shows the server's real state rather than a stale copy.
+    requestShopState();
 
     // These systems register their persistent listeners once the actual
     // socket exists. Their own setup functions remove duplicates where
@@ -5157,8 +5525,17 @@ function setupOnlineListeners(){
   });
 
   s.on('chat:message', (payload = {}) => {
-    appendChatMessage(payload.username || payload.name || 'Player', payload.message, payload.time || Date.now(), false);
+    // FIX: server sends `from` (not `username`) — every name showed as "Player"
+    appendChatMessage(payload.from || payload.username || payload.name || 'Player', payload.message, payload.time || Date.now(), false);
   });
+
+  // FIX: these server events previously had no listener and were silently
+  // dropped, so players never saw the errors/notices they carry.
+  s.on('player:actionError', ({ msg } = {}) => { toast('⚠️ ' + (msg || 'Action failed.')); });
+  s.on('account:save:blocked', ({ reason } = {}) => { toast('⚖️ Progress saving is blocked (' + (reason || 'hold') + '). Wins will NOT be saved right now.'); });
+  s.on('host:transferred', ({ username } = {}) => { toast('👑 ' + (username || 'A player') + ' is now the host.'); });
+  s.on('duel:chat', ({ from, message } = {}) => { bLog('💬 <b>' + escapeHTML(from || '') + ':</b> ' + escapeHTML(message || ''), 'c'); });
+  s.on('trade:sent', () => { toast('🤝 Trade offer sent!'); });
 
   s.on('trade:incoming', (offer = {}) => {
     pendingTrades.push(offer);
