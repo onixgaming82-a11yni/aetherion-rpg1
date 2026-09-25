@@ -32,6 +32,17 @@ const os        = require('os');
 const mongoose  = require('mongoose');
 const bcrypt    = require('bcryptjs');
 const { BOSSES } = require('./monsters');
+const { CHARACTERS } = require('./characters');
+// Canonical character catalog — the server's source of truth for what a
+// real card looks like. Client-submitted cards are validated against this.
+const CHARACTER_BY_ID   = new Map(CHARACTERS.map(c => [c.id, c]));
+const CHARACTER_BY_NAME = new Map(CHARACTERS.map(c => [c.name.toLowerCase(), c]));
+function canonicalCharacter(card) {
+  if (!card || typeof card !== 'object') return null;
+  return CHARACTER_BY_ID.get(String(card.id || ''))
+      || CHARACTER_BY_NAME.get(String(card.name || '').toLowerCase())
+      || null;
+}
 
 const app    = express();
 const server = http.createServer(app);
@@ -66,7 +77,7 @@ if (!ADMIN_KEY) {
 }
 const adminAuth = (req, res, next) => {
   if (!ADMIN_KEY) { res.status(503).json({ error: 'Admin not configured' }); return; }
-  const provided = String(req.headers['x-admin-key'] || req.query.key || '');
+  const provided = String(req.headers['x-admin-key'] || '');
   // timingSafeEqual requires equal-length buffers; hash both to normalize length
   const a = crypto.createHash('sha256').update(provided).digest();
   const b = crypto.createHash('sha256').update(ADMIN_KEY).digest();
@@ -190,6 +201,27 @@ const rooms         = new Map(); // code → room object
 const socketToRoom  = new Map(); // socket.id → room code
 const onlinePlayers = new Map(); // socket.id → player info (global lobby)
 const trades        = new Map(); // tradeId → trade object
+const TRADE_TTL_MS  = 10 * 60 * 1000; // stale offers expire after 10 minutes
+function purgeOldTrades() {
+  const now = Date.now();
+  for (const [id, t] of trades) { if (now - t.offeredAt > TRADE_TTL_MS) trades.delete(id); }
+}
+// Ownership check: a card may only be traded if it exists in the sender's
+// current room deck or their authoritative account save. Prevents trading
+// fabricated cards that were never owned.
+async function senderOwnsCard(sock, cardId) {
+  const room = getRoomOf(sock.id);
+  if (room) {
+    const p = room.players.find(p => p.id === sock.id);
+    if (p?.deck?.some(c => c.id === cardId)) return true;
+  }
+  const session = await requireSession(sock).catch(() => null);
+  if (session) {
+    const save = loadPlayerSave(session.acc);
+    if ((save.deck || []).some(c => c.id === cardId)) return true;
+  }
+  return false;
+}
 const leaderboard   = new Map(); // username → { name, wins, rankName, updatedAt }
 
 // ── Rank thresholds (mirrors client RANKS in public/index.html) ─
@@ -338,6 +370,210 @@ const SERVER_SHOP = {
 
 // Items that are "consumable" (can be bought multiple times / stackable)
 const CONSUMABLE_ITEM_TYPES = new Set(['item','healAll','fullRestorePlus','reroll','cardXp']);
+
+// ============================================================
+//  SHOP STOCK CONFIGURATION  —  tune the dynamic shop here
+// ============================================================
+//  Every time a player successfully buys an item there is a chance the
+//  item "sells out" for EVERYONE on the server. A sold-out item gets a
+//  random cooldown, then restocks by itself. All of this is decided by
+//  the server only — the client just displays what it is told.
+//
+//  Example: to make sell-outs rarer, lower outOfStockChance.
+//           To test quickly, set cooldownMinHours/MaxHours to 0.01 (~36s).
+const SHOP_STOCK_CONFIG = {
+  // Fallback used for any rarity that has no entry in rarityOverrides.
+  outOfStockChance: 0.25,   // 0.25 = 25% chance per successful purchase (0 = never, 1 = always)
+  cooldownMinHours: 2,      // shortest possible restock time
+  cooldownMaxHours: 8,      // longest possible restock time
+
+  // Optional per-rarity behaviour. Any field you leave out falls back to the
+  // values above. Set this to {} to use the flat values above for every item.
+  rarityOverrides: {
+    Common: { outOfStockChance: 0.10, cooldownMinHours: 2, cooldownMaxHours: 4  },
+    Rare:   { outOfStockChance: 0.20, cooldownMinHours: 2, cooldownMaxHours: 6  },
+    Epic:   { outOfStockChance: 0.30, cooldownMinHours: 3, cooldownMaxHours: 8  },
+    Mythic: { outOfStockChance: 0.40, cooldownMinHours: 4, cooldownMaxHours: 12 },
+  },
+
+  // How often the server sweeps for expired cooldowns and pushes a restock
+  // to connected players. (Purchases/shop requests also expire cooldowns
+  // lazily, so this only affects how quickly idle players see a restock.)
+  cleanupIntervalMs: 30_000,
+};
+
+// ═══════════════════════════════════════════════════════════
+//  GLOBAL SHOP STOCK  (server-authoritative, shared by all players)
+//
+//  shopStock[itemId] = { available: boolean, cooldownEndsAt: ms timestamp }
+//    • available === true  → cooldownEndsAt is 0
+//    • available === false → cooldownEndsAt is the exact time it restocks
+//
+//  This is *availability*, and is separate from `save.shopOwned`
+//  (which still stops a player re-buying a permanent upgrade).
+//
+//  Persistence is isolated in loadShopStock()/persistShopStock() below
+//  (one MongoDB document; memory-only when MONGO_URI is not set, exactly
+//  like accounts). Swap those two functions to change the storage.
+// ═══════════════════════════════════════════════════════════
+const shopStock = Object.create(null); // null-prototype: item ids can never hit Object.prototype keys
+for (const id of Object.keys(SERVER_SHOP)) shopStock[id] = { available: true, cooldownEndsAt: 0 };
+
+let shopStockLoaded = false; // true once persisted state has been read (or there is nothing to read)
+let shopStockDirty  = false; // in-memory state has changes not yet written to the DB
+const HOUR_MS = 60 * 60 * 1000;
+
+const ShopStockSchema = new mongoose.Schema({
+  key:       { type: String, required: true, unique: true }, // always 'global'
+  items:     { type: mongoose.Schema.Types.Mixed, default: {} }, // { itemId: { available, cooldownEndsAt } }
+  updatedAt: { type: Number, default: Date.now },
+}, { minimize: false });
+const ShopStock = mongoose.model('ShopStock', ShopStockSchema);
+
+// Stock rules for one item: rarity override → falls back to the flat config.
+// Values are sanitised so a typo in the config can never break purchases.
+function getShopStockRules(shopItem) {
+  const base = SHOP_STOCK_CONFIG;
+  const ov   = (base.rarityOverrides && base.rarityOverrides[shopItem.rarity]) || {};
+  const pick = (k) => (ov[k] !== undefined ? ov[k] : base[k]);
+  const chance = Math.min(1, Math.max(0, Number(pick('outOfStockChance')) || 0));
+  let minH = Math.max(0, Number(pick('cooldownMinHours')) || 0);
+  let maxH = Math.max(0, Number(pick('cooldownMaxHours')) || 0);
+  if (maxH < minH) [minH, maxH] = [maxH, minH];
+  return { chance, minMs: Math.floor(minH * HOUR_MS), maxMs: Math.floor(maxH * HOUR_MS) };
+}
+
+// Unpredictable roll in [0,1) — stock outcomes are visible to every player,
+// so avoid the (predictable) Math.random() here.
+function secureRandomUnit() { return crypto.randomInt(0, 1_000_000) / 1_000_000; }
+function secureRandomBetween(minMs, maxMs) {
+  return maxMs <= minMs ? minMs : crypto.randomInt(minMs, maxMs + 1);
+}
+
+// "4h 27m" / "12m" — used in error messages (client formats its own live countdown)
+function formatShopRestock(ms) {
+  const totalMin = Math.max(1, Math.ceil(ms / 60_000));
+  const h = Math.floor(totalMin / 60), m = totalMin % 60;
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+// The payload every client receives. Contains ONLY public, global shop data.
+function buildShopStatePayload() {
+  const items = {};
+  for (const id of Object.keys(shopStock)) {
+    const e = shopStock[id];
+    items[id] = { available: e.available, cooldownEndsAt: e.available ? 0 : e.cooldownEndsAt };
+  }
+  // serverTime lets clients correct for a wrong device clock when counting down.
+  return { items, serverTime: Date.now() };
+}
+
+// Lazily restock anything whose cooldown has passed. Returns true if anything
+// changed — in which case the new state has ALREADY been broadcast to everyone
+// and queued for persistence, so callers need not send it again.
+function refreshShopStock(now = Date.now()) {
+  let changed = false;
+  for (const id of Object.keys(shopStock)) {
+    const e = shopStock[id];
+    if (!e.available && now >= e.cooldownEndsAt) {
+      e.available = true; e.cooldownEndsAt = 0;
+      changed = true;
+      console.log(`[SHOP] ${id} restocked`);
+    }
+  }
+  if (changed) {
+    shopStockDirty = true;
+    persistShopStock();
+    io.emit('shop:state', buildShopStatePayload());
+  }
+  return changed;
+}
+
+// Send the current stock to one socket (restocks are broadcast by refreshShopStock).
+function sendShopState(target) {
+  if (refreshShopStock()) return;
+  target.emit('shop:state', buildShopStatePayload());
+}
+
+// Called after a successful purchase: maybe sell the item out for everyone.
+// Synchronous on purpose — it runs in the same tick as the purchase itself,
+// so no other purchase can slip between "bought" and "sold out".
+function rollShopStockOut(itemId, shopItem) {
+  const rules = getShopStockRules(shopItem);
+  if (rules.chance <= 0 || secureRandomUnit() >= rules.chance) return { wentOut: false, cooldownEndsAt: 0 };
+  const cooldownMs     = secureRandomBetween(rules.minMs, rules.maxMs);
+  const cooldownEndsAt = Date.now() + cooldownMs; // exact expiry timestamp, not a countdown
+  shopStock[itemId] = { available: false, cooldownEndsAt };
+  shopStockDirty = true;
+  persistShopStock();
+  console.log(`[SHOP] ${itemId} sold out — restocks in ${formatShopRestock(cooldownMs)}`);
+  return { wentOut: true, cooldownEndsAt };
+}
+
+// ── Persistence (MongoDB, single document) ────────────────
+// Merge a persisted snapshot into memory. When two sources disagree the LATER
+// expiry wins, so a restart (or a late DB reconnect) can never shorten a cooldown.
+function mergePersistedShopStock(items) {
+  if (!items || typeof items !== 'object') return false;
+  const now = Date.now();
+  let maxCooldown = 0;
+  for (const id of Object.keys(SERVER_SHOP)) maxCooldown = Math.max(maxCooldown, getShopStockRules(SERVER_SHOP[id]).maxMs);
+  let changed = false;
+  for (const id of Object.keys(SERVER_SHOP)) {
+    const p   = Object.prototype.hasOwnProperty.call(items, id) ? items[id] : null;
+    let  end  = Number(p && p.cooldownEndsAt);
+    if (!p || p.available !== false || !Number.isFinite(end) || end <= now) continue;
+    end = Math.min(end, now + maxCooldown); // corrupt/huge timestamps can't lock an item forever
+    const cur = shopStock[id];
+    if (cur.available || end > cur.cooldownEndsAt) {
+      shopStock[id] = { available: false, cooldownEndsAt: end };
+      changed = true;
+    }
+  }
+  return changed;
+}
+
+async function loadShopStock() {
+  if (!MONGO_URI) { shopStockLoaded = true; return; } // memory-only mode: nothing to restore
+  if (!dbConnected) return;                            // try again from the cleanup interval
+  try {
+    const doc = await ShopStock.findOne({ key: 'global' }).lean().maxTimeMS(3000);
+    const changed = mergePersistedShopStock(doc && doc.items);
+    shopStockLoaded = true;
+    if (doc) console.log('[SHOP] Restored shop stock from database');
+    if (changed) io.emit('shop:state', buildShopStatePayload());
+    if (shopStockDirty) persistShopStock();
+  } catch (e) {
+    console.warn('[SHOP] Could not load shop stock:', e.message);
+  }
+}
+
+let shopPersistRunning = false;
+async function persistShopStock() {
+  if (!MONGO_URI || !shopStockLoaded || !dbConnected) return; // never overwrite a snapshot we haven't read yet
+  if (shopPersistRunning) return;                              // the running write loops until clean
+  shopPersistRunning = true;
+  try {
+    while (shopStockDirty) {
+      shopStockDirty = false;
+      const items = {};
+      for (const id of Object.keys(shopStock)) items[id] = { ...shopStock[id] };
+      try {
+        await ShopStock.findOneAndUpdate(
+          { key: 'global' },
+          { key: 'global', items, updatedAt: Date.now() },
+          { upsert: true, new: true, maxTimeMS: 3000 }
+        );
+      } catch (e) {
+        shopStockDirty = true; // retried by the cleanup interval
+        console.warn('[SHOP] Could not save shop stock:', e.message);
+        break;
+      }
+    }
+  } finally {
+    shopPersistRunning = false;
+  }
+}
 
 // ── Server-side quest catalog (authoritative rewards) ─────
 const SERVER_QUEST_CATALOG = {
@@ -518,7 +754,6 @@ function buildClientState(save) {
   };
 }
 
-// ── Safe deck sanitizer (for initial deck submission only) ─
 // SECURITY: strips anything but safe display characters. Used for guest/
 // unauthenticated display names (room:host, room:join fallback) — logged-in
 // account names are already restricted to this same character set at
@@ -527,41 +762,43 @@ function sanitizeDisplayName(name, fallback) {
   return String(name || '').trim().substring(0, 20).replace(/[^a-zA-Z0-9_\- ]/g, '') || fallback;
 }
 
+// ── Safe deck sanitizer (canonical validation) ──────────
+// SECURITY: a submitted card is only accepted if it corresponds to a real
+// character in the canonical catalog (matched by id, name as fallback).
+// Display fields are rebuilt from the catalog so a forged card can neither
+// exceed the game's real stat ceilings nor smuggle markup into other
+// players' UIs (battle log, trade panel). Max party size is 4, matching the
+// client. Stats keep legitimate upgrades but are clamped to sane ceilings.
 function sanitizeDeck(deck) {
   if (!Array.isArray(deck)) return [];
-  // SECURITY: these ceilings are not arbitrary — they're the real maximum a
-  // legitimate account could ever reach: highest canonical base stat (~18
-  // atk/def/mag, ~16 spd, ~70 hp — see CHARACTERS in public/index.html)
-  // plus every permanent stat-boosting shop item bought once each (summing
-  // the shop catalog: up to ~+82 atk, ~+79 def, ~+62 mag, ~+15 spd, ~+70
-  // max HP). Ceilings below are set well above that real max, but nowhere
-  // near the previous 999/9999, which let a raw socket call to
-  // player:setDeck save an arbitrary, effectively-uncapped card.
-  // NOTE: this is a bounds tightening, not full validation — it does not
-  // verify a card's name/id/ability actually corresponds to a real,
-  // player-owned catalog entry. That requires the client's embedded
-  // CHARACTERS list to be extracted into a module both client and server
-  // require, so the server can look up and enforce real per-card base
-  // stats. Flagging as a follow-up, not attempted here.
-  return deck.slice(0, 3).map(card => {
-    if (!card || typeof card !== 'object') return null;
-    return {
-      name:      String(card.name    || '').substring(0, 40),
-      emoji:     String(card.emoji   || '⚔️').substring(0, 10),
-      title:     String(card.title   || '').substring(0, 40),
-      hp:        safeNum(card.hp,      1, 250, 100),
-      maxHp:     safeNum(card.maxHp,   1, 250, 100),
-      attack:    safeNum(card.attack,  0, 150,  10),
-      defense:   safeNum(card.defense, 0, 150,  5),
-      magic:     safeNum(card.magic,   0, 150,  8),
-      speed:     safeNum(card.speed,   0, 60,   8),
-      ability:   String(card.ability  || 'Strike').substring(0, 40),
-      fainted:   false, // never trust fainted state from client
-      id:        card.id ? String(card.id).substring(0, 40) : undefined,
-      cardLevel: safeNum(card.cardLevel, 1, 50, 1),
-      cardXp:    safeNum(card.cardXp,    0, 999_999, 0),
-    };
-  }).filter(Boolean);
+  const MAX_DECK = 4;
+  const out = [];
+  for (const card of deck) {
+    if (out.length >= MAX_DECK) break;
+    if (!card || typeof card !== 'object') continue;
+    const cc = canonicalCharacter(card);
+    if (!cc) continue; // unknown card — drop it
+    if (out.some(c => c.id === cc.id)) continue; // no duplicates
+    const hp = safeNum(card.hp, 1, 250, cc.hp);
+    out.push({
+      id:          cc.id,
+      name:        cc.name,
+      emoji:       cc.emoji,
+      title:       cc.title,
+      hp:          hp,
+      maxHp:       safeNum(card.maxHp, 1, 250, Math.max(cc.hp, hp)),
+      attack:      safeNum(card.attack,  0, 150, cc.attack),
+      defense:     safeNum(card.defense, 0, 150, cc.defense),
+      magic:       safeNum(card.magic,   0, 150, cc.magic),
+      speed:       safeNum(card.speed,   0,  60, cc.speed),
+      ability:     cc.ability,
+      abilityDesc: cc.abilityDesc || '',
+      fainted:     false, // never trust fainted state from client
+      cardLevel:   safeNum(card.cardLevel, 1, 50, 1),
+      cardXp:      safeNum(card.cardXp,    0, 999_999, 0),
+    });
+  }
+  return out;
 }
 
 // SECURITY: bcrypt cost factor 10 — strong enough, ~100ms vs ~400ms at 12.
@@ -1027,7 +1264,7 @@ io.on('connection', (socket) => {
         id:       socket.id,
         username: displayName,
         authUname,
-        deck:     deck  || [],
+        deck:     sanitizeDeck(deck),
         level:    level || 1,
         deckSize: deck?.length || 0,
         hp:       deck?.[0]?.hp || 100,
@@ -1065,7 +1302,7 @@ io.on('connection', (socket) => {
       id:       socket.id,
       username: displayName,
       authUname,
-      deck:     deck  || [],
+      deck:     sanitizeDeck(deck),
       level:    level || 1,
       deckSize: deck?.length || 0,
       hp:       deck?.[0]?.hp || 100,
@@ -1100,6 +1337,10 @@ io.on('connection', (socket) => {
         return;
       }
       const [p1, p2] = room.players;
+      if (!p1.deck?.length || !p2.deck?.length) {
+        socket.emit('error', { msg: 'Both players need a valid deck to duel.' });
+        return;
+      }
       const makeCombatant = (p) => {
         const activeCard = p.deck?.[0] || {};
         return {
@@ -1107,18 +1348,18 @@ io.on('connection', (socket) => {
           name:            p.username,
           authUname:       p.authUname || null,
           // Full deck stored so player can switch cards
-          deck:            (p.deck||[]).map(c=>({
+          deck:            sanitizeDeck(p.deck||[]).map(c=>({
             name:     c.name,
-            emoji:    c.emoji||'⚔️',
+            emoji:    c.emoji,
             hp:       c.hp,
-            maxHp:    c.maxHp||c.hp,
-            atk:      c.attack||10,
-            def:      c.defense||5,
-            mag:      c.magic||8,
-            spd:      c.speed||8,
-            ability:  c.ability||'Strike',
-            title:    c.title||'',
-            fainted:  c.fainted||false,
+            maxHp:    c.maxHp,
+            atk:      c.attack,
+            def:      c.defense,
+            mag:      c.magic,
+            spd:      c.speed,
+            ability:  c.ability,
+            title:    c.title,
+            fainted:  false,
           })),
           activeIdx:       0,
           // Current active card stats (mirrored from deck[activeIdx])
@@ -1131,6 +1372,7 @@ io.on('connection', (socket) => {
           mag:             activeCard.magic   || 8,
           ability:         activeCard.ability || 'Strike',
           abilityCooldown: 0,
+          healUses:      0,
         };
       };
       room.battleState = {
@@ -1170,6 +1412,10 @@ io.on('connection', (socket) => {
     if(action === 'switch') {
       const { cardIdx } = data || {};
       if(cardIdx !== undefined && me.deck && me.deck[cardIdx] && !me.deck[cardIdx].fainted){
+        // FIX: persist the outgoing card's current HP back into the deck so
+        // switching away and back can no longer be used as a free full heal.
+        const oldCard = me.deck[me.activeIdx];
+        if (oldCard) { oldCard.hp = me.hp; oldCard.fainted = me.hp <= 0; }
         const newCard = me.deck[cardIdx];
         me.activeIdx   = cardIdx;
         me.emoji       = newCard.emoji;
@@ -1180,7 +1426,7 @@ io.on('connection', (socket) => {
         me.def         = newCard.def;
         me.mag         = newCard.mag;
         me.ability     = newCard.ability;
-        me.abilityCooldown = 0;
+        // NOTE: ability cooldown is intentionally preserved on switch.
         const switchMsg = `🔄 ${me.name} switches to <b>${newCard.emoji} ${newCard.name}</b>!`;
         bs.log.push(switchMsg);
         bs.turn++;
@@ -1206,6 +1452,8 @@ io.on('connection', (socket) => {
         break;
       }
       case 'heal': {
+        if ((me.healUses||0) >= 3) { socket.emit('error', { msg: 'No potions left this duel!' }); return; }
+        me.healUses = (me.healUses||0) + 1;
         const h = Math.floor(18 + Math.random()*14);
         me.hp = Math.min(me.maxHp, me.hp + h);
         msg = `🧪 ${me.name} heals <b>${h} HP</b>! (${me.hp}/${me.maxHp})`;
@@ -1218,6 +1466,9 @@ io.on('connection', (socket) => {
         break;
       }
     }
+
+    // FIX: an unknown action must not silently pass the turn
+    if (!msg && !bs.over) return;
 
     // Tick ability cooldown each turn
     if (action !== 'ability' && me.abilityCooldown > 0) me.abilityCooldown--;
@@ -1358,13 +1609,19 @@ io.on('connection', (socket) => {
 
   // ── TRADE OFFER ───────────────────────────────────────
   // Payload: { toSocketId, card }
-  socket.on('trade:offer', ({ toSocketId, card } = {}) => {
+  socket.on('trade:offer', async ({ toSocketId, card } = {}) => {
     if (!toSocketId || !card) { socket.emit('error', { msg: 'Invalid trade' }); return; }
     const from = onlinePlayers.get(socket.id);
     if (!from) { socket.emit('error', { msg: 'Not registered' }); return; }
 
+    purgeOldTrades();
+    const [cleanCard] = sanitizeDeck([card]);
+    if (!cleanCard) { socket.emit('error', { msg: 'Invalid card.' }); return; }
+    const owns = await senderOwnsCard(socket, cleanCard.id);
+    if (!owns) { socket.emit('error', { msg: 'You do not own that card.' }); return; }
+
     const tradeId = crypto.randomBytes(4).toString('hex');
-    trades.set(tradeId, { id: tradeId, from: socket.id, to: toSocketId, card, offeredAt: Date.now() });
+    trades.set(tradeId, { id: tradeId, from: socket.id, to: toSocketId, card: cleanCard, offeredAt: Date.now() });
 
     io.to(toSocketId).emit('trade:incoming', {
       tradeId,
@@ -1378,7 +1635,8 @@ io.on('connection', (socket) => {
 
   // ── TRADE RESPONSE ────────────────────────────────────
   // Payload: { tradeId, accepted, counterCard? }
-  socket.on('trade:respond', ({ tradeId, accepted, counterCard } = {}) => {
+  socket.on('trade:respond', async ({ tradeId, accepted, counterCard } = {}) => {
+    purgeOldTrades();
     const trade = trades.get(tradeId);
     if (!trade) { socket.emit('error', { msg: 'Trade expired' }); return; }
 
@@ -1389,9 +1647,13 @@ io.on('connection', (socket) => {
     }
 
     if (accepted && counterCard) {
+      const [cleanCounter] = sanitizeDeck([counterCard]);
+      if (!cleanCounter) { socket.emit('error', { msg: 'Invalid counter-card.' }); return; }
+      const ownsCounter = await senderOwnsCard(socket, cleanCounter.id);
+      if (!ownsCounter) { socket.emit('error', { msg: 'You do not own that card.' }); return; }
       io.to(trade.from).emit('trade:complete', {
         tradeId,
-        receivedCard: counterCard,
+        receivedCard: cleanCounter,
         fromUsername: onlinePlayers.get(socket.id)?.username || 'Opponent',
       });
       io.to(trade.to).emit('trade:complete', {
@@ -1664,71 +1926,122 @@ io.on('connection', (socket) => {
 
   // ── ACTION: SHOP PURCHASE ─────────────────────────────
   // Client requests to buy an item. Server verifies gold, deducts, gives item.
-  socket.on('player:shopBuy', async ({ itemId } = {}) => {
-    if (!itemId) return;
-    const session = await requireSession(socket);
-    if (!session) return;
-    const { uname, acc } = session;
-    if (!checkActionRateLimit(uname)) return;
+  socket.on('player:shopBuy', async (payload) => {
+    const itemId = (payload && typeof payload === 'object') ? payload.itemId : undefined;
+    if (typeof itemId !== 'string' || !itemId) return;
+    const echoId = itemId.substring(0, 40);
+    const fail = (msg, extra = {}) => socket.emit('shop:buyResult', { ok: false, itemId: echoId, msg, ...extra });
 
-    const f = flagged.get(uname);
-    if (f && f.level === 'banned') return;
-    if (isOnHold(uname)) return;
+    try {
+      const session = await requireSession(socket); // emits player:actionError itself if not logged in
+      if (!session) { fail('Not logged in — please log in again.'); return; }
+      const { uname, acc } = session;
+      if (!checkActionRateLimit(uname)) { fail('You are doing that too fast. Please wait a moment.'); return; }
 
-    const shopItem = SERVER_SHOP[itemId];
-    if (!shopItem) {
-      console.log(`[SECURITY] ${uname} tried to buy unknown item: ${itemId}`);
-      socket.emit('player:actionError', { msg: 'Unknown item.' });
-      return;
-    }
+      const f = flagged.get(uname);
+      if ((f && f.level === 'banned') || isOnHold(uname)) { fail('Purchases are unavailable right now.'); return; }
 
-    const save = loadPlayerSave(acc);
-
-    // Check if already owned (for permanent upgrades)
-    const isPermanent = !CONSUMABLE_ITEM_TYPES.has(shopItem.effect.type);
-    if (isPermanent && save.shopOwned?.[itemId]) {
-      socket.emit('player:actionError', { msg: 'Already owned.' });
-      return;
-    }
-
-    // Check gold
-    if ((save.playerGold || 0) < shopItem.cost) {
-      socket.emit('player:actionError', { msg: 'Not enough Gold.' });
-      return;
-    }
-
-    // Deduct gold
-    const removed = removeGold(save, shopItem.cost, `shop:${itemId}`);
-    if (!removed) { socket.emit('player:actionError', { msg: 'Not enough Gold.' }); return; }
-
-    // Grant item or apply permanent upgrade
-    const e = shopItem.effect;
-    if (CONSUMABLE_ITEM_TYPES.has(e.type)) {
-      // Consumable — goes into inventory
-      giveItem(save, shopItem.name, 1, `shop:${itemId}`);
-    } else {
-      // Permanent upgrade — mark as owned; client applies buff to deck
-      if (!save.shopOwned) save.shopOwned = {};
-      save.shopOwned[itemId] = true;
-      // Apply stat buffs to server deck too
-      if (e.type === 'statAll' && save.deck) {
-        save.deck.forEach(c => { c[e.stat] = safeNum((c[e.stat]||0)+e.val,0,9999,0); if(e.stat==='maxHp') c.hp=Math.min((c.hp||0)+e.val,c.maxHp); });
-      } else if ((e.type === 'statAll2' || e.type === 'statAll3') && save.deck) {
-        save.deck.forEach(c => { e.stats.forEach((s,i) => { c[s]=safeNum((c[s]||0)+e.vals[i],0,9999,0); if(s==='maxHp')c.hp=Math.min((c.hp||0)+e.vals[i],c.maxHp); }); });
-      } else if (e.type === 'allStats' && save.deck) {
-        save.deck.forEach(c => { ['attack','defense','magic','speed'].forEach(s=>c[s]=safeNum((c[s]||0)+e.val,0,9999,0)); c.maxHp=safeNum((c.maxHp||100)+e.val*2,1,9999,100); c.hp=c.maxHp; });
-      } else if ((e.type === 'statOne' || e.type === 'statOne2') && save.deck?.[save.activeCardIdx||0]) {
-        const card = save.deck[save.activeCardIdx||0];
-        if (e.type==='statOne') { card[e.stat]=safeNum((card[e.stat]||0)+e.val,0,9999,0); }
-        else { e.stats.forEach((s,i)=>card[s]=safeNum((card[s]||0)+e.vals[i],0,9999,0)); }
-      } else if (e.type === 'fullRestorePlus' && save.deck) {
-        save.deck.forEach(c => { c.maxHp=safeNum((c.maxHp||100)+e.val,1,9999,100); c.hp=c.maxHp; c.fainted=false; });
+      // Own-property check: 'constructor', '__proto__', 'toString'… are NOT shop items.
+      if (!Object.prototype.hasOwnProperty.call(SERVER_SHOP, itemId)) {
+        console.log(`[SECURITY] ${uname} tried to buy unknown item: ${echoId}`);
+        fail('Unknown item.');
+        return;
       }
-    }
+      const shopItem = SERVER_SHOP[itemId];
 
-    await persistSave(acc, save, uname);
-    socket.emit('player:state', buildClientState(save));
-    console.log(`[SHOP] ${uname} bought ${itemId} for ${shopItem.cost}g`);
+      // ── Everything from here to persistSave() is synchronous on purpose ──
+      // (no `await`): the stock check, gold deduction, item grant and the
+      // sell-out roll happen atomically, so two players buying at once can't
+      // both slip past an item that is selling out, and one player can't
+      // double-spend the same gold.
+      refreshShopStock(); // lazily restock anything whose cooldown has passed
+
+      const save = loadPlayerSave(acc);
+
+      // Check if already owned (for permanent upgrades)
+      const isPermanent = !CONSUMABLE_ITEM_TYPES.has(shopItem.effect.type);
+      if (isPermanent && save.shopOwned?.[itemId]) { fail('Already owned.'); return; }
+
+      // Check stock (global, server-side). Independent of shopOwned above.
+      const stock = shopStock[itemId];
+      if (!stock.available) {
+        const remaining = stock.cooldownEndsAt - Date.now();
+        console.log(`[SHOP] ${uname} tried to buy out-of-stock ${itemId}`);
+        fail(`${shopItem.name} is out of stock. Restocks in ${formatShopRestock(remaining)}.`);
+        socket.emit('shop:state', buildShopStatePayload()); // correct the client's view
+        return;
+      }
+
+      // Check gold
+      if ((save.playerGold || 0) < shopItem.cost) {
+        fail('Not enough Gold.', { playerGold: save.playerGold || 0 });
+        return;
+      }
+
+      // Deduct gold
+      const removed = removeGold(save, shopItem.cost, `shop:${itemId}`);
+      if (!removed) { fail('Not enough Gold.', { playerGold: save.playerGold || 0 }); return; }
+
+      // Grant item or apply permanent upgrade
+      const e = shopItem.effect;
+      if (CONSUMABLE_ITEM_TYPES.has(e.type)) {
+        // Consumable — goes into inventory
+        giveItem(save, shopItem.name, 1, `shop:${itemId}`);
+      } else {
+        // Permanent upgrade — mark as owned; client applies buff to deck
+        if (!save.shopOwned) save.shopOwned = {};
+        save.shopOwned[itemId] = true;
+        // Apply stat buffs to server deck too
+        if (e.type === 'statAll' && save.deck) {
+          save.deck.forEach(c => { c[e.stat] = safeNum((c[e.stat]||0)+e.val,0,9999,0); if(e.stat==='maxHp') c.hp=Math.min((c.hp||0)+e.val,c.maxHp); });
+        } else if ((e.type === 'statAll2' || e.type === 'statAll3') && save.deck) {
+          save.deck.forEach(c => { e.stats.forEach((s,i) => { c[s]=safeNum((c[s]||0)+e.vals[i],0,9999,0); if(s==='maxHp')c.hp=Math.min((c.hp||0)+e.vals[i],c.maxHp); }); });
+        } else if (e.type === 'allStats' && save.deck) {
+          save.deck.forEach(c => { ['attack','defense','magic','speed'].forEach(s=>c[s]=safeNum((c[s]||0)+e.val,0,9999,0)); c.maxHp=safeNum((c.maxHp||100)+e.val*2,1,9999,100); c.hp=c.maxHp; });
+        } else if ((e.type === 'statOne' || e.type === 'statOne2') && save.deck?.[save.activeCardIdx||0]) {
+          const card = save.deck[save.activeCardIdx||0];
+          if (e.type==='statOne') { card[e.stat]=safeNum((card[e.stat]||0)+e.val,0,9999,0); }
+          else { e.stats.forEach((s,i)=>card[s]=safeNum((card[s]||0)+e.vals[i],0,9999,0)); }
+        } else if (e.type === 'fullRestorePlus' && save.deck) {
+          save.deck.forEach(c => { c.maxHp=safeNum((c.maxHp||100)+e.val,1,9999,100); c.hp=c.maxHp; c.fainted=false; });
+        }
+      }
+
+      // Purchase succeeded → maybe sell this item out for EVERYONE (server RNG).
+      const stockRoll = rollShopStockOut(itemId, shopItem);
+
+      await persistSave(acc, save, uname);
+      socket.emit('player:state', buildClientState(save));
+      // Stock first, then the result, so the client redraws once with the final picture.
+      if (stockRoll.wentOut) io.emit('shop:state', buildShopStatePayload()); // everyone sees the sell-out now
+      else socket.emit('shop:state', buildShopStatePayload());
+      socket.emit('shop:buyResult', {
+        ok: true, itemId,
+        playerGold: save.playerGold || 0,
+        shopOwned:  save.shopOwned  || {},
+      });
+      console.log(`[SHOP] ${uname} bought ${itemId} for ${shopItem.cost}g${stockRoll.wentOut ? ' (now out of stock)' : ''}`);
+    } catch (err) {
+      console.error('[SHOP] purchase error:', err && err.message);
+      fail('Purchase failed. Please try again.');
+    }
+  });
+
+  // ── SHOP: CURRENT STOCK ───────────────────────────────
+  // Client asks for the global stock (on opening the shop, on reconnect, and
+  // when a countdown reaches zero). Public, read-only data — nothing here can
+  // change server state. Logged-in players are covered by the shared action
+  // rate limit; sockets that haven't logged in yet get a simple 1/second cap.
+  socket.on('shop:getState', () => {
+    const uname = socket.data.uname;
+    if (uname) {
+      if (!checkActionRateLimit(uname)) return;
+    } else {
+      const now = Date.now();
+      if (now - (socket.data.lastShopStateAt || 0) < 1000) return;
+      socket.data.lastShopStateAt = now;
+    }
+    sendShopState(socket);
   });
 
   // ── ACTION: SELL ITEM ─────────────────────────────────
@@ -1856,7 +2169,7 @@ io.on('connection', (socket) => {
   // ── ACTION: SET DECK (first pick / reroll) ────────────
   // Client submits new deck (only on fresh game start / reroll).
   // Server sanitizes stats to prevent inflated cards.
-  socket.on('player:setDeck', async ({ deck } = {}) => {
+  socket.on('player:setDeck', async ({ deck, activeCardIdx } = {}) => {
     if (!Array.isArray(deck)) return;
     const session = await requireSession(socket);
     if (!session) return;
@@ -1868,7 +2181,8 @@ io.on('connection', (socket) => {
     if (cleanDeck.length === 0) { socket.emit('player:actionError', { msg: 'Invalid deck.' }); return; }
 
     save.deck = cleanDeck;
-    save.activeCardIdx = 0;
+    const reqIdx = parseInt(activeCardIdx, 10);
+    save.activeCardIdx = (Number.isInteger(reqIdx) && reqIdx >= 0 && reqIdx < cleanDeck.length) ? reqIdx : 0;
 
     await persistSave(acc, save, uname);
     socket.emit('player:state', buildClientState(save));
@@ -2862,6 +3176,17 @@ setInterval(() => {
   for (const [ip, e]    of loginAttemptsByIp)    if (now - e.windowStart > LOGIN_IP_WINDOW) loginAttemptsByIp.delete(ip);
 }, 10 * 60 * 1000);
 
+// ── Shop stock sweep: one timer for the whole shop (not one per item) ──
+// Expires finished cooldowns (and pushes the restock to everyone), retries a
+// shop-stock load/save that failed because the DB was briefly unavailable.
+setInterval(async () => {
+  try {
+    if (!shopStockLoaded) await loadShopStock();
+    refreshShopStock();
+    if (shopStockDirty) persistShopStock();
+  } catch (e) { console.warn('[SHOP] sweep error:', e.message); }
+}, SHOP_STOCK_CONFIG.cleanupIntervalMs).unref();
+
 // ─────────────────────────────────────────────────────────
 //  START
 // ─────────────────────────────────────────────────────────
@@ -2869,7 +3194,9 @@ const PORT    = process.env.PORT || 3000;
 const localIP = getLocalIP();
 
 // Connect to MongoDB then start server
-connectDB().then(() => {
+connectDB().then(async () => {
+  // Restore the global shop stock/cooldowns so a restart doesn't reset them.
+  try { await loadShopStock(); } catch (e) { console.warn('[SHOP] load failed:', e.message); }
   server.listen(PORT, () => {
     console.log(`
 ╔══════════════════════════════════════════════╗
