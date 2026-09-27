@@ -205,6 +205,7 @@ html,body{
   background:var(--ink);color:var(--text);
   font-family:'IM Fell English',serif;
   min-height:100vh;overflow-x:hidden;
+  transition:background-color .8s ease,color .8s ease;
 }
 body::before{
   content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
@@ -357,6 +358,55 @@ body::before{
   border-radius:20px;padding:6px 14px;margin-left:auto;
   font-family:'Share Tech Mono',monospace;font-size:.85rem;color:var(--gold2);
 }
+.market-nav-btn{
+  display:flex;align-items:center;gap:6px;
+  background:linear-gradient(135deg,#3a2008,#7a4818);
+  border:1px solid rgba(201,154,69,.3);border-radius:20px;
+  padding:7px 16px;color:var(--gold2);
+  font-family:'Cinzel',serif;font-size:.68rem;letter-spacing:.04em;
+  cursor:pointer;transition:all .15s;
+}
+.market-nav-btn:hover{background:linear-gradient(135deg,#5a3010,#a86020);box-shadow:0 0 14px rgba(201,154,69,.2);border-color:rgba(201,154,69,.5);}
+/* ── Player Market / Auction House ── */
+.market-tabs{display:flex;gap:6px;width:100%;max-width:900px;margin:12px auto 0;padding:0 16px;}
+.market-tab-btn{
+  flex:1;padding:10px;border-radius:8px 8px 0 0;border:1px solid var(--border);border-bottom:none;
+  background:rgba(0,0,0,.25);color:var(--dim);font-family:'Cinzel',serif;font-size:.68rem;
+  letter-spacing:.05em;cursor:pointer;transition:all .15s;
+}
+.market-tab-btn.active-cat{background:rgba(201,154,69,.1);color:var(--gold);border-color:rgba(201,154,69,.3);}
+.market-toolbar{
+  width:100%;max-width:900px;margin:0 auto;padding:14px 16px 0;
+  display:flex;flex-wrap:wrap;gap:8px;align-items:center;
+}
+.market-search{
+  flex:1;min-width:160px;padding:9px 12px;border-radius:8px;
+  border:1px solid var(--border);background:rgba(0,0,0,.3);color:var(--text);
+  font-family:'Share Tech Mono',monospace;font-size:.7rem;
+}
+.market-filter-row{display:flex;flex-wrap:wrap;gap:6px;width:100%;max-width:900px;margin:10px auto 0;padding:0 16px;}
+.market-filter-btn{
+  padding:6px 12px;border-radius:16px;border:1px solid var(--border);background:none;
+  color:var(--text);font-family:'Cinzel',serif;font-size:.6rem;cursor:pointer;transition:all .15s;
+}
+.market-filter-btn.active-cat{background:rgba(201,154,69,.12);border-color:rgba(201,154,69,.35);color:var(--gold);}
+.market-panel{width:100%;max-width:900px;margin:0 auto;padding:16px;overflow-y:auto;min-height:50vh;}
+.market-listing-seller{font-size:.55rem;color:var(--dim);text-align:center;}
+.market-price-per{font-size:.5rem;color:var(--dim);text-align:center;margin-top:-4px;}
+.auction-bid-row{display:flex;flex-direction:column;gap:2px;align-items:center;margin-top:auto;}
+.auction-current-bid{font-family:'Share Tech Mono',monospace;font-size:.8rem;color:var(--gold2);}
+.auction-timer{font-family:'Share Tech Mono',monospace;font-size:.6rem;color:#e07060;}
+.market-empty{color:var(--dim);font-style:italic;padding:30px 0;text-align:center;}
+.market-modal-input{
+  width:100%;padding:9px 12px;border-radius:8px;margin-top:6px;
+  border:1px solid var(--border);background:rgba(0,0,0,.3);color:var(--text);
+  font-family:'Share Tech Mono',monospace;font-size:.75rem;
+}
+.market-modal-label{font-size:.6rem;color:var(--dim);margin-top:10px;display:block;}
+.market-history-row{
+  display:flex;justify-content:space-between;gap:8px;font-size:.6rem;
+  padding:6px 0;border-bottom:1px solid var(--border);
+}
 .shop-layout{
   width:100%;max-width:900px;margin:0 auto;
   display:grid;grid-template-columns:160px 1fr;
@@ -440,13 +490,31 @@ body::before{
 ═══════════════════════════════════════════════════ */
 #screen-menu{
   padding:30px 20px 40px;gap:0;
-  background-image:
-    linear-gradient(rgba(5,6,10,.72), rgba(5,6,10,.85)),
-    url('menu-bg.jpg');
+  position:relative;
+  background:transparent; /* actual art handled by ::before/::after so themes can cross-fade */
+}
+#screen-menu::before,
+#screen-menu::after{
+  content:'';position:absolute;inset:0;z-index:-1;
   background-size:cover;
   background-position:center;
   background-repeat:no-repeat;
+  transition:opacity 1s ease;
 }
+#screen-menu::before{
+  background-image:
+    linear-gradient(rgba(5,6,10,.72), rgba(5,6,10,.85)),
+    url('menu-bg.jpg');
+  opacity:1;
+}
+#screen-menu::after{
+  background-image:
+    linear-gradient(rgba(245,238,222,.22), rgba(255,250,238,.4)),
+    url('menu-bg-light.jpg');
+  opacity:0;
+}
+body.light-mode #screen-menu::before{opacity:0;}
+body.light-mode #screen-menu::after{opacity:1;}
 
 .logo-wrap{text-align:center;margin-bottom:6px;}
 .logo-emoji{font-size:4rem;filter:drop-shadow(0 0 28px rgba(201,154,69,.8));
@@ -1384,8 +1452,9 @@ input, textarea { font-size: 16px !important; } /* Prevents iOS zoom on focus */
 <div id="screen-shop" class="screen">
   <div class="shop-topbar">
     <button class="back-btn" onclick="showMenu()">← Menu</button>
-    <span style="font-family:'Cinzel Decorative',serif;font-size:.9rem;color:var(--gold);">🏪 Market</span>
-    <div class="shop-gold-badge">💰 <span id="shop-gold-display">0</span> Gold</div>
+    <span style="font-family:'Cinzel Decorative',serif;font-size:.9rem;color:var(--gold);">🏪 Shop</span>
+    <button class="market-nav-btn" onclick="openMarket()" style="margin-left:auto;">🏪 Market</button>
+    <div class="shop-gold-badge" style="margin-left:0;">💰 <span id="shop-gold-display">0</span> Gold</div>
   </div>
   <div class="shop-layout">
     <!-- Categories -->
@@ -1400,6 +1469,41 @@ input, textarea { font-size: 16px !important; } /* Prevents iOS zoom on focus */
     </div>
     <!-- Items panel -->
     <div class="shop-items-panel" id="shop-items-panel"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ PLAYER MARKET / AUCTION HOUSE ═══════════════════════ -->
+<div id="screen-market" class="screen">
+  <div class="shop-topbar">
+    <button class="back-btn" onclick="goShop()">← Shop</button>
+    <span style="font-family:'Cinzel Decorative',serif;font-size:.9rem;color:var(--gold);">🏪 Player Market</span>
+    <div class="shop-gold-badge" style="margin-left:auto;">💰 <span id="market-gold-display">0</span> Gold</div>
+  </div>
+
+  <div class="market-tabs">
+    <button class="market-tab-btn active-cat" id="market-tab-market" onclick="marketMainTab('market')">MARKET</button>
+    <button class="market-tab-btn" id="market-tab-auction" onclick="marketMainTab('auction')">AUCTION HOUSE</button>
+  </div>
+
+  <!-- ── MARKET SUB-VIEW ── -->
+  <div id="market-view-market">
+    <div class="market-toolbar">
+      <input class="market-search" id="market-search-input" placeholder="🔎 Search Market..." oninput="renderMarketPanel()">
+      <button class="shop-buy-btn" style="width:auto;padding:9px 14px;" onclick="openSellOnMarketModal()">+ SELL ON MARKET</button>
+      <button class="shop-buy-btn" style="width:auto;padding:9px 14px;background:rgba(20,20,20,.6);" onclick="openMyListingsModal()">MY LISTINGS</button>
+    </div>
+    <div class="market-filter-row" id="market-filter-row"></div>
+    <div class="market-panel" id="market-listings-panel"></div>
+  </div>
+
+  <!-- ── AUCTION SUB-VIEW ── -->
+  <div id="market-view-auction" style="display:none;">
+    <div class="market-toolbar">
+      <input class="market-search" id="auction-search-input" placeholder="🔎 Search Auctions..." oninput="renderAuctionPanel()">
+      <button class="shop-buy-btn" style="width:auto;padding:9px 14px;" onclick="openCreateAuctionModal()">+ CREATE AUCTION</button>
+      <button class="shop-buy-btn" style="width:auto;padding:9px 14px;background:rgba(20,20,20,.6);" onclick="openMyAuctionsModal()">MY AUCTIONS</button>
+    </div>
+    <div class="market-panel" id="auction-listings-panel"></div>
   </div>
 </div>
 
@@ -2966,12 +3070,6 @@ function openSettings(){
 
     <div style="padding-top:4px;">
       <div style="font-family:'Cinzel',serif;font-size:.65rem;color:var(--gold);margin-bottom:10px;">⚠️ Account</div>
-      <button class="btn-ghost" onclick="exportProfile()" style="width:100%;margin-bottom:8px;border-color:rgba(50,150,200,.4);color:#60b0e0;font-size:.65rem;">
-        📥 Save Profile to Phone
-      </button>
-      <button class="btn-ghost" onclick="importProfile()" style="width:100%;margin-bottom:8px;border-color:rgba(50,200,100,.4);color:#60e090;font-size:.65rem;">
-        📤 Load Profile from File
-      </button>
       <button class="btn-ghost" onclick="doLogout()" style="width:100%;border-color:rgba(200,50,50,.3);color:#d06060;font-size:.65rem;margin-bottom:8px;">
         🚪 Log Out
       </button>
@@ -3010,167 +3108,6 @@ function doChangePassword(){
   s.once('account:error', ({ msg })=>{
     errEl.textContent = msg;
   });
-}
-
-function exportProfile(){
-  const profile = {
-    username:       gameState.username,
-    playerLevel:    gameState.playerLevel,
-    playerXp:       gameState.playerXp,
-    xpToNext:       gameState.xpToNext,
-    playerGold:     gameState.playerGold,
-    inventory:      gameState.inventory,
-    deck:           gameState.deck,
-    unlockedSkills: gameState.unlockedSkills,
-    skillXp:        gameState.skillXp,
-    shopOwned:      gameState.shopOwned||{},
-    activeCardIdx:  gameState.activeCardIdx,
-    duelWins:       parseInt(localStorage.getItem('aetherion_duel_wins')||'0'),
-    duelLosses:     parseInt(localStorage.getItem('aetherion_duel_losses')||'0'),
-    exportedAt:     new Date().toISOString(),
-    version:        '1.0',
-    // Signature — server validates this to detect banned accounts
-    sig:            btoa(gameState.username + ':aetherion:' + Date.now()),
-  };
-  const json    = JSON.stringify(profile, null, 2);
-  const blob    = new Blob([json], {type:'application/json'});
-  const url     = URL.createObjectURL(blob);
-  const a       = document.createElement('a');
-  a.href        = url;
-  a.download    = `aetherion_${gameState.username||'profile'}_lv${gameState.playerLevel}.json`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-  toast(`📥 Profile saved as JSON!`);
-  closeModal();
-}
-
-function importProfile(){
-  closeModal();
-  showModal('📤 Load Profile', `
-    <div style="text-align:center;padding:8px 0 14px;">
-      <div style="font-size:2rem;margin-bottom:8px;">📤</div>
-      <div style="font-size:.68rem;color:var(--dim);margin-bottom:14px;line-height:1.6;">
-        Select your <b style="color:var(--gold);">aetherion_profile.json</b> file to load your saved progress.
-        <br><br>
-        <span style="color:#d06060;">⚠️ This will overwrite your current progress!</span>
-      </div>
-      <input type="file" id="import-file-input" accept=".json"
-        style="display:none;" onchange="doImportProfile(this)">
-      <button class="btn" onclick="document.getElementById('import-file-input').click()" style="width:100%;">
-        📂 Choose File
-      </button>
-      <div id="import-status" style="font-size:.62rem;color:var(--dim);margin-top:10px;min-height:16px;"></div>
-    </div>`,
-    [{label:'Cancel', cls:'btn-ghost', cb:closeModal}]
-  );
-}
-
-function doImportProfile(input){
-  const file = input.files[0];
-  if(!file) return;
-  const statusEl = document.getElementById('import-status');
-  if(statusEl){ statusEl.textContent = 'Validating profile...'; statusEl.style.color = 'var(--dim)'; }
-
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    try {
-      const profile = JSON.parse(e.target.result);
-
-      if(!profile.username || !profile.deck){
-        if(statusEl){ statusEl.textContent = '❌ Invalid profile file!'; statusEl.style.color = '#d06060'; }
-        return;
-      }
-
-      // Check version
-      if(!profile.version){
-        if(statusEl){ statusEl.textContent = '❌ Outdated profile format — not compatible.'; statusEl.style.color = '#d06060'; }
-        return;
-      }
-
-      // Validate with server — checks if account is banned/suspended
-      if(socket?.connected){
-        if(statusEl){ statusEl.textContent = '🔍 Checking account status...'; statusEl.style.color = 'var(--dim)'; }
-
-        socket.emit('profile:validate', { username: profile.username });
-
-        socket.once('profile:valid', () => {
-          applyImportedProfile(profile);
-        });
-
-        socket.once('profile:invalid', ({ reason, message, daysLeft }) => {
-          if(reason === 'banned'){
-            if(statusEl){ statusEl.textContent = ''; }
-            // Show Veylor banned screen — this profile is dead
-            showModal('⚖️ Profile Invalidated', `
-              <div style="text-align:center;padding:10px 0 16px;">
-                <div style="font-size:3rem;margin-bottom:10px;
-                  filter:drop-shadow(0 0 20px rgba(200,0,200,.8));">⚖️</div>
-                <div style="font-family:'Cinzel Decorative',serif;font-size:.85rem;
-                  color:#e040e0;margin-bottom:10px;">PROFILE INVALIDATED</div>
-                <div style="font-size:.65rem;color:var(--dim);line-height:1.8;margin-bottom:14px;">
-                  This profile belongs to a <b style="color:#e040e0;">banned account</b>.<br>
-                  <b>Veylor, the Eternal Judge</b>, has permanently<br>
-                  invalidated this save file.<br><br>
-                  This file cannot be loaded on any device.
-                </div>
-                <div style="font-size:.55rem;color:rgba(200,150,200,.4);font-style:italic;">
-                  "No save file survives my judgement."
-                </div>
-              </div>`,
-              [{label:'Close', cls:'btn-ghost', cb:closeModal}]
-            );
-          } else if(reason === 'suspended'){
-            if(statusEl){
-              statusEl.textContent = `⚖️ Account suspended for ${daysLeft} more day${daysLeft!==1?'s':''}. Cannot load profile.`;
-              statusEl.style.color = '#e040e0';
-            }
-          } else {
-            if(statusEl){ statusEl.textContent = `❌ ${message||'Profile validation failed.'}`; statusEl.style.color = '#d06060'; }
-          }
-        });
-
-        // Timeout — if server doesn't respond in 3s, allow load anyway
-        setTimeout(()=>{
-          socket.off('profile:valid');
-          socket.off('profile:invalid');
-          // Fallback — load but warn
-          applyImportedProfile(profile);
-        }, 3000);
-
-      } else {
-        // Offline — load without server check but warn
-        applyImportedProfile(profile);
-        toast('⚠️ Loaded offline — ban status not checked.');
-      }
-
-    } catch(err) {
-      if(statusEl){ statusEl.textContent = '❌ Could not read file — make sure it is a valid JSON profile!'; statusEl.style.color = '#d06060'; }
-    }
-  };
-  reader.readAsText(file);
-}
-
-function applyImportedProfile(profile){
-  gameState.username       = profile.username;
-  gameState.playerLevel    = profile.playerLevel    || 1;
-  gameState.playerXp       = profile.playerXp       || 0;
-  gameState.xpToNext       = profile.xpToNext       || 300;
-  gameState.playerGold     = profile.playerGold     || 0;
-  gameState.inventory      = profile.inventory      || [];
-  gameState.deck           = profile.deck           || [];
-  gameState.unlockedSkills = profile.unlockedSkills || [];
-  gameState.skillXp        = profile.skillXp        || 0;
-  gameState.shopOwned      = profile.shopOwned      || {};
-  gameState.activeCardIdx  = profile.activeCardIdx  || 0;
-  if(profile.duelWins)   localStorage.setItem('aetherion_duel_wins',   profile.duelWins);
-  if(profile.duelLosses) localStorage.setItem('aetherion_duel_losses', profile.duelLosses);
-  saveGame();
-  closeModal();
-  updateMenuHud();
-  showMenu();
-  toast(`✅ Profile loaded! Welcome back, ${profile.username}!`);
 }
 
 function doLogout(){
@@ -3726,6 +3663,366 @@ function applyPurchasedShopItem(item){
   saveGame(); // save after purchase
   refreshShopIfOpen();
 }
+// ═══════════════════════════════════════════════════════
+//  PLAYER MARKET + AUCTION HOUSE
+//  Live, server-authoritative. The client only ever displays what the
+//  server sends via market:state / auction:state and sends requests —
+//  every gold/item change happens on the server (see server.js).
+// ═══════════════════════════════════════════════════════
+const MARKET_FEE_PERCENT_DISPLAY = 5; // cosmetic only — the server enforces the real fee
+const MARKET_CATEGORIES = ['potions','weapons','armor','magic','cards','rare','materials'];
+const MARKET_CAT_LABELS = {potions:'🧪 Potions',weapons:'⚔️ Weapons',armor:'🛡️ Armor',magic:'✨ Magic',cards:'🃏 Cards',rare:'💎 Rare',materials:'📦 Materials'};
+const MARKET_ITEM_ICONS = (()=>{
+  const map = {};
+  Object.values(SHOP_CATALOG).forEach(arr=>arr.forEach(i=>{ map[i.name]=i.icon; }));
+  Object.assign(map, {'Health Potion':'🧪','Elixir':'⚗️','Phoenix Feather':'🪶','Mana Crystal':'🔮','Antidote':'💉','Spell Scroll':'📜','Sharp Stone':'🗡️','Iron Links':'⛓️','XP Tome':'📚','Mega Potion':'💊','Monster Bait':'🪤',
+    'Rusty Dagger':'🗡️','Bat Wing':'🪶','Rat Tail':'🐀','Charcoal':'🪨','Fire Shard':'🔥','Frost Crystal':'❄️','Leather Gloves':'🧤','Wolf Pelt':'🐺','Troll Tooth':'🦷','Hydra Scale':'🐉','Stone Fragment':'🪨','Drake Scale':'🔥','Assassin Dagger':'🗡️','Dark Blade':'⚔️','Flame Scale':'🔥','Dragon Heart':'💜','Void King Scale':'👑','Inferno Scale':'🔥','Thunder Core':'⚡','Dark Crystal':'🔮',
+    'Spider Silk':'🕷️','Toxic Gland':'🐸','Scorpion Claw':'🦂','Croc Scale':'🐊','Lion Mane':'🦁','Iron Tusk':'🐘','Shadow Fin':'🦈','Moth Wing':'🦋','Abyss Ink':'🐙','Crab Shell':'🦀','Bee Stinger':'🐝','Lava Scale':'🦎','Frost Pelt':'🐺','Storm Feather':'🦅','Chaos Claw':'🐻','Fox Tail':'🦊','Nightmare Mane':'🐴','Terror Ink':'🦑','Cursed Fin':'🐬','Void Core':'🐋'});
+  return map;
+})();
+function getItemIcon(name){ return MARKET_ITEM_ICONS[name] || '📦'; }
+function getItemCategory(name){
+  for(const cat of Object.keys(SHOP_CATALOG)){
+    if(SHOP_CATALOG[cat].some(i=>i.name===name)) return cat;
+  }
+  return 'materials';
+}
+
+let _marketData = [];          // last known active market listings (server-sent)
+let _auctionData = [];         // last known active auctions (server-sent)
+let _marketCurrentCat = 'all';
+let _marketMainTab = 'market'; // 'market' | 'auction'
+let _marketTickTimer = null;
+let _marketActionPending = false; // one in-flight action (buy/list/cancel/bid/create) at a time
+
+function openMarket(){
+  const g = document.getElementById('market-gold-display'); if(g) g.textContent = gameState.playerGold||0;
+  showScreen('screen-market');
+  marketMainTab(_marketMainTab);
+  requestMarketState();
+  requestAuctionState();
+  startMarketTicker();
+}
+
+function marketMainTab(tab){
+  _marketMainTab = tab;
+  document.getElementById('market-tab-market').classList.toggle('active-cat', tab==='market');
+  document.getElementById('market-tab-auction').classList.toggle('active-cat', tab==='auction');
+  document.getElementById('market-view-market').style.display  = tab==='market'  ? '' : 'none';
+  document.getElementById('market-view-auction').style.display = tab==='auction' ? '' : 'none';
+  if(tab==='market'){ renderMarketFilterRow(); renderMarketPanel(); }
+  else renderAuctionPanel();
+}
+
+function requestMarketState(){ try{ if(socket && socket.connected) socket.emit('market:getState'); }catch(e){} }
+function requestAuctionState(){ try{ if(socket && socket.connected) socket.emit('auction:getState'); }catch(e){} }
+
+// Bound once on the persistent socket — survives reconnects (same pattern as setupShopListeners).
+function setupMarketListeners(sock){
+  if(!sock || sock._marketListenersBound) return;
+  sock._marketListenersBound = true;
+  sock.on('market:state', (list)=>{
+    _marketData = Array.isArray(list) ? list : [];
+    if(document.getElementById('screen-market')?.classList.contains('active') && _marketMainTab==='market') renderMarketPanel();
+  });
+  sock.on('auction:state', (list)=>{
+    _auctionData = Array.isArray(list) ? list : [];
+    if(document.getElementById('screen-market')?.classList.contains('active') && _marketMainTab==='auction') renderAuctionPanel();
+  });
+  sock.on('market:listResult',   onMarketListResult);
+  sock.on('market:buyResult',    onMarketBuyResult);
+  sock.on('market:cancelResult', onMarketCancelResult);
+  sock.on('auction:createResult', onAuctionCreateResult);
+  sock.on('auction:bidResult',    onAuctionBidResult);
+  sock.on('market:notify', (p)=>{ if(p && p.msg) toast(p.msg); });
+}
+
+function renderMarketFilterRow(){
+  const row = document.getElementById('market-filter-row');
+  if(!row) return;
+  const cats = ['all', ...MARKET_CATEGORIES];
+  row.innerHTML = cats.map(c=>
+    `<button class="market-filter-btn${_marketCurrentCat===c?' active-cat':''}" onclick="setMarketCategory('${c}')">${c==='all'?'ALL':MARKET_CAT_LABELS[c]}</button>`
+  ).join('');
+}
+function setMarketCategory(cat){ _marketCurrentCat = cat; renderMarketFilterRow(); renderMarketPanel(); }
+
+function renderMarketPanel(){
+  const panel = document.getElementById('market-listings-panel');
+  if(!panel) return;
+  const q = (document.getElementById('market-search-input')?.value||'').trim().toLowerCase();
+  const items = _marketData.filter(l=>{
+    if(_marketCurrentCat!=='all' && getItemCategory(l.item)!==_marketCurrentCat) return false;
+    if(q && !l.item.toLowerCase().includes(q)) return false;
+    return true;
+  });
+  if(!items.length){ panel.innerHTML = '<div class="market-empty">No listings found. Be the first to sell something!</div>'; return; }
+  const gold = gameState.playerGold||0;
+  panel.innerHTML = `<div class="shop-grid">${items.map(l=>{
+    const icon = getItemIcon(l.item);
+    const rc = RARITY_COLORS[l.rarity] || '#888';
+    const canAfford = gold >= l.totalPrice;
+    const isMine = l.sellerDisplay === gameState.username;
+    return `<div class="shop-item">
+      <div class="shop-item-icon">${icon}</div>
+      <div class="shop-item-name">${l.item}</div>
+      <div style="font-size:.52rem;color:${rc};font-family:'Cinzel',serif;text-align:center;">${(l.rarity||'Common').toUpperCase()}</div>
+      <div style="font-size:.58rem;color:var(--dim);text-align:center;">Qty: ${l.qty.toLocaleString()}</div>
+      <div class="shop-item-cost ${canAfford?'':'cant-afford'}">💰 ${l.totalPrice.toLocaleString()} Gold</div>
+      ${l.qty>1?`<div class="market-price-per">(${(l.totalPrice/l.qty).toFixed(2)} / item)</div>`:''}
+      <div class="market-listing-seller">Seller: ${l.sellerDisplay}</div>
+      ${isMine
+        ? `<div style="text-align:center;font-size:.58rem;color:var(--dim);font-family:'Cinzel',serif;">Your listing</div>`
+        : `<button class="shop-buy-btn" ${(canAfford&&!_marketActionPending)?'':'disabled'} onclick="buyMarketListing('${l.id}')">${canAfford?'BUY':'Not enough Gold'}</button>`}
+    </div>`;
+  }).join('')}</div>`;
+}
+
+function renderAuctionPanel(){
+  const panel = document.getElementById('auction-listings-panel');
+  if(!panel) return;
+  const q = (document.getElementById('auction-search-input')?.value||'').trim().toLowerCase();
+  const items = _auctionData.filter(a=> !q || a.item.toLowerCase().includes(q));
+  if(!items.length){ panel.innerHTML = '<div class="market-empty">No auctions running right now. Start one!</div>'; return; }
+  panel.innerHTML = `<div class="shop-grid">${items.map(a=>{
+    const icon = getItemIcon(a.item);
+    const rc = RARITY_COLORS[a.rarity] || '#888';
+    const isMine = a.sellerDisplay === gameState.username;
+    const isHighBidder = a.bidCount>0 && a.currentBidderDisplay === gameState.username;
+    const minNext = a.bidCount>0 ? Math.ceil(a.currentBid*1.05) : a.startingBid;
+    const remaining = Math.max(0, a.endsAt - Date.now());
+    return `<div class="shop-item">
+      <div class="shop-item-icon">${icon}</div>
+      <div class="shop-item-name">${a.item}</div>
+      <div style="font-size:.52rem;color:${rc};font-family:'Cinzel',serif;text-align:center;">${(a.rarity||'Common').toUpperCase()}</div>
+      <div style="font-size:.55rem;color:var(--dim);text-align:center;">${a.bidCount>0?`${a.bidCount} bid${a.bidCount>1?'s':''}`:'No bids yet'}</div>
+      <div class="auction-bid-row">
+        <div class="auction-current-bid">💰 ${(a.bidCount>0?a.currentBid:a.startingBid).toLocaleString()} Gold</div>
+        <div style="font-size:.55rem;color:var(--dim);">${a.bidCount>0?`High bidder: ${a.currentBidderDisplay}${isHighBidder?' (you)':''}`:'Starting bid'}</div>
+        <div class="auction-timer" data-auction-timer="${a.id}" data-ends="${a.endsAt}">${formatAuctionCountdown(remaining)}</div>
+      </div>
+      <div class="market-listing-seller">Seller: ${a.sellerDisplay}</div>
+      ${isMine
+        ? `<div style="text-align:center;font-size:.58rem;color:var(--dim);font-family:'Cinzel',serif;">Your auction</div>`
+        : `<button class="shop-buy-btn" ${_marketActionPending?'disabled':''} onclick="openBidModal('${a.id}',${minNext})">PLACE BID (min ${minNext.toLocaleString()})</button>`}
+    </div>`;
+  }).join('')}</div>`;
+}
+
+function formatAuctionCountdown(ms){
+  const totalSec = Math.max(0, Math.floor(ms/1000));
+  const h = Math.floor(totalSec/3600), m = Math.floor((totalSec%3600)/60), s = totalSec%60;
+  if(h>0) return `${h}h ${String(m).padStart(2,'0')}m`;
+  if(m>0) return `${m}m ${String(s).padStart(2,'0')}s`;
+  return `${s}s`;
+}
+function startMarketTicker(){ if(_marketTickTimer) return; _marketTickTimer = setInterval(marketTick, 1000); }
+function stopMarketTicker(){ if(_marketTickTimer){ clearInterval(_marketTickTimer); _marketTickTimer=null; } }
+function marketTick(){
+  const scr = document.getElementById('screen-market');
+  if(!scr || !scr.classList.contains('active')){ stopMarketTicker(); return; }
+  const g = document.getElementById('market-gold-display'); if(g) g.textContent = gameState.playerGold||0;
+  document.querySelectorAll('[data-auction-timer]').forEach(el=>{
+    const ends = Number(el.getAttribute('data-ends'))||0;
+    const remaining = ends - Date.now();
+    el.textContent = remaining>0 ? formatAuctionCountdown(remaining) : 'Ending…';
+  });
+}
+
+// Strips everything but digits as the user types — decimal points, minus
+// signs and letters are all rejected, so quantities/prices/bids can only
+// ever be whole numbers by the time they reach the server.
+function sanitizeIntInput(el){
+  let v = (el.value||'').replace(/[^0-9]/g,'');
+  if(v.length>1) v = v.replace(/^0+/,'') || '0';
+  el.value = v;
+}
+
+// ── SELL ON MARKET ──────────────────────────────────────
+function openSellOnMarketModal(){
+  const inv = gameState.inventory||[];
+  if(!inv.length){ toast('Your bag is empty — nothing to sell.'); return; }
+  const options = inv.map((it,idx)=>`<option value="${idx}">${it.item} (x${it.qty||1}) — ${it.rarity||'Common'}</option>`).join('');
+  showModal('💰 Sell on Market', `
+    <div style="padding:4px 0;">
+      <label class="market-modal-label">Item</label>
+      <select id="mkt-sell-item" class="market-modal-input" onchange="updateMarketSellPreview()">${options}</select>
+      <label class="market-modal-label">Quantity</label>
+      <input id="mkt-sell-qty" class="market-modal-input" type="number" inputmode="numeric" min="1" step="1" value="1" oninput="sanitizeIntInput(this);updateMarketSellPreview()">
+      <label class="market-modal-label">Total Price (Gold)</label>
+      <input id="mkt-sell-price" class="market-modal-input" type="number" inputmode="numeric" min="1" step="1" value="1" oninput="sanitizeIntInput(this);updateMarketSellPreview()">
+      <div id="mkt-sell-preview" style="font-size:.6rem;color:var(--dim);margin-top:8px;"></div>
+      <div style="font-size:.55rem;color:var(--dim);margin-top:10px;">A ${MARKET_FEE_PERCENT_DISPLAY}% market fee is taken from the sale. Whole-number Gold amounts only.</div>
+    </div>`,
+    [{label:'Cancel',cls:'btn-ghost',cb:closeModal},{label:'List Item',cls:'btn',cb:submitSellOnMarket}]
+  );
+  updateMarketSellPreview();
+}
+function updateMarketSellPreview(){
+  const idx = parseInt(document.getElementById('mkt-sell-item')?.value);
+  const it = (gameState.inventory||[])[idx];
+  const qtyEl = document.getElementById('mkt-sell-qty');
+  const priceEl = document.getElementById('mkt-sell-price');
+  const preview = document.getElementById('mkt-sell-preview');
+  if(!it || !qtyEl || !priceEl || !preview) return;
+  const maxQty = it.qty||1;
+  let qty = parseInt(qtyEl.value)||1;
+  if(qty>maxQty){ qty = maxQty; qtyEl.value = maxQty; }
+  if(qty<1){ qty = 1; qtyEl.value = 1; }
+  const price = parseInt(priceEl.value)||0;
+  preview.innerHTML = `Available: ${maxQty} &nbsp;•&nbsp; Price per item: ${qty>0?(price/qty).toFixed(2):'0.00'} Gold`;
+}
+function submitSellOnMarket(){
+  if(_marketActionPending) return;
+  const idx = parseInt(document.getElementById('mkt-sell-item')?.value);
+  const it = (gameState.inventory||[])[idx];
+  if(!it){ toast('Select an item first.'); return; }
+  const qty   = parseInt(document.getElementById('mkt-sell-qty')?.value)||0;
+  const price = parseInt(document.getElementById('mkt-sell-price')?.value)||0;
+  if(qty<1){ toast('Quantity must be at least 1.'); return; }
+  if(qty>(it.qty||1)){ toast('You do not have that many.'); return; }
+  if(price<1){ toast('Price must be at least 1 Gold.'); return; }
+  if(!gameState.username || !socket?.connected){ toast('Not connected to the server.'); return; }
+  _marketActionPending = true;
+  socket.emit('player:marketList', { itemName: it.item, qty, totalPrice: price });
+}
+function onMarketListResult(res){
+  _marketActionPending = false;
+  if(!res) return;
+  if(!res.ok){ toast(res.msg||'Listing failed.'); return; }
+  toast('📥 Item listed on the Market!');
+  closeModal();
+  marketMainTab('market');
+  requestMarketState();
+}
+
+// ── BUY / CANCEL ─────────────────────────────────────────
+function buyMarketListing(id){
+  if(_marketActionPending) return;
+  if(!gameState.username || !socket?.connected){ toast('Not connected to the server.'); return; }
+  _marketActionPending = true;
+  renderMarketPanel(); // disable buttons immediately — real state comes back from the server
+  socket.emit('player:marketBuy', { listingId: id });
+}
+function onMarketBuyResult(res){
+  _marketActionPending = false;
+  if(!res) return;
+  if(!res.ok){
+    if(Number.isFinite(res.playerGold)) gameState.playerGold = res.playerGold;
+    toast(res.msg||'Purchase failed.');
+    requestMarketState();
+    return;
+  }
+  toast('✓ Purchase successful!');
+  requestMarketState();
+}
+function openMyListingsModal(){
+  const mine = _marketData.filter(l=>l.sellerDisplay===gameState.username);
+  const body = mine.length ? mine.map(l=>`
+    <div class="market-history-row">
+      <div>${getItemIcon(l.item)} ${l.item} x${l.qty} — 💰${l.totalPrice.toLocaleString()}</div>
+      <button class="btn-ghost" style="font-size:.55rem;padding:5px 10px;" onclick="cancelMarketListing('${l.id}')">CANCEL</button>
+    </div>`).join('') : '<div class="market-empty">You have no active listings.</div>';
+  showModal('📋 My Listings', body, [{label:'Close',cls:'btn-ghost',cb:closeModal}]);
+}
+function cancelMarketListing(id){
+  if(_marketActionPending) return;
+  _marketActionPending = true;
+  socket.emit('player:marketCancel', { listingId: id });
+}
+function onMarketCancelResult(res){
+  _marketActionPending = false;
+  if(!res) return;
+  if(!res.ok){ toast(res.msg||'Cancel failed.'); return; }
+  toast('↩️ Listing cancelled — item returned to your bag.');
+  closeModal();
+  requestMarketState();
+}
+
+// ── AUCTION HOUSE ────────────────────────────────────────
+function openCreateAuctionModal(){
+  const inv = gameState.inventory||[];
+  if(!inv.length){ toast('Your bag is empty — nothing to auction.'); return; }
+  const options = inv.map((it,idx)=>`<option value="${idx}">${it.item} — ${it.rarity||'Common'}</option>`).join('');
+  showModal('🃏 Create Auction', `
+    <div style="padding:4px 0;">
+      <label class="market-modal-label">Item</label>
+      <select id="auc-item" class="market-modal-input">${options}</select>
+      <label class="market-modal-label">Starting Bid (Gold)</label>
+      <input id="auc-bid" class="market-modal-input" type="number" inputmode="numeric" min="1" step="1" value="10" oninput="sanitizeIntInput(this)">
+      <label class="market-modal-label">Duration</label>
+      <select id="auc-duration" class="market-modal-input">
+        <option value="1">1 Hour</option>
+        <option value="6">6 Hours</option>
+        <option value="12">12 Hours</option>
+        <option value="24" selected>24 Hours</option>
+        <option value="48">48 Hours</option>
+      </select>
+      <div style="font-size:.55rem;color:var(--dim);margin-top:10px;">One item per auction. A ${MARKET_FEE_PERCENT_DISPLAY}% fee is taken from the winning bid. Whole-number Gold amounts only.</div>
+    </div>`,
+    [{label:'Cancel',cls:'btn-ghost',cb:closeModal},{label:'Start Auction',cls:'btn',cb:submitCreateAuction}]
+  );
+}
+function submitCreateAuction(){
+  if(_marketActionPending) return;
+  const idx = parseInt(document.getElementById('auc-item')?.value);
+  const it = (gameState.inventory||[])[idx];
+  if(!it){ toast('Select an item first.'); return; }
+  const bid = parseInt(document.getElementById('auc-bid')?.value)||0;
+  const duration = parseInt(document.getElementById('auc-duration')?.value)||24;
+  if(bid<1){ toast('Starting bid must be at least 1 Gold.'); return; }
+  if(!gameState.username || !socket?.connected){ toast('Not connected to the server.'); return; }
+  _marketActionPending = true;
+  socket.emit('player:auctionCreate', { itemName: it.item, startingBid: bid, durationHours: duration });
+}
+function onAuctionCreateResult(res){
+  _marketActionPending = false;
+  if(!res) return;
+  if(!res.ok){ toast(res.msg||'Could not start auction.'); return; }
+  toast('🃏 Auction created!');
+  closeModal();
+  marketMainTab('auction');
+  requestAuctionState();
+}
+function openBidModal(auctionId, minBid){
+  showModal('🔨 Place Bid', `
+    <div style="padding:4px 0;">
+      <label class="market-modal-label">Your Bid (Gold) — minimum ${minBid.toLocaleString()}</label>
+      <input id="bid-amount" class="market-modal-input" type="number" inputmode="numeric" min="${minBid}" step="1" value="${minBid}" oninput="sanitizeIntInput(this)">
+    </div>`,
+    [{label:'Cancel',cls:'btn-ghost',cb:closeModal},{label:'Place Bid',cls:'btn',cb:()=>submitBid(auctionId)}]
+  );
+}
+function submitBid(auctionId){
+  if(_marketActionPending) return;
+  const amt = parseInt(document.getElementById('bid-amount')?.value)||0;
+  if(amt<1){ toast('Enter a valid bid.'); return; }
+  if(!gameState.username || !socket?.connected){ toast('Not connected to the server.'); return; }
+  _marketActionPending = true;
+  socket.emit('player:auctionBid', { auctionId, bidAmount: amt });
+}
+function onAuctionBidResult(res){
+  _marketActionPending = false;
+  if(!res) return;
+  if(!res.ok){
+    if(Number.isFinite(res.playerGold)) gameState.playerGold = res.playerGold;
+    toast(res.msg||'Bid failed.');
+    return;
+  }
+  toast('✓ Bid placed!');
+  closeModal();
+  requestAuctionState();
+}
+function openMyAuctionsModal(){
+  const mine = _auctionData.filter(a=>a.sellerDisplay===gameState.username);
+  const body = mine.length ? mine.map(a=>`
+    <div class="market-history-row">
+      <div>${getItemIcon(a.item)} ${a.item} — ${a.bidCount>0?`💰${a.currentBid.toLocaleString()} (${a.bidCount} bid${a.bidCount>1?'s':''})`:'No bids yet'}</div>
+      <div style="font-size:.55rem;color:var(--dim);">${formatAuctionCountdown(Math.max(0,a.endsAt-Date.now()))}</div>
+    </div>`).join('') : '<div class="market-empty">You have no active auctions.</div>';
+  showModal('🃏 My Auctions', body, [{label:'Close',cls:'btn-ghost',cb:closeModal}]);
+}
+
 function goSkills(){renderSkillTree();showScreen('screen-skills');}
 function goDungeon(){
   if(!gameState.deck.length){goCardPick('dungeon');return;}
@@ -5317,6 +5614,7 @@ function getSocket() {
   // Shop stock/purchase listeners live for the whole page (bound once — they
   // survive reconnects because they're attached to the socket object itself).
   setupShopListeners(socket);
+  setupMarketListeners(socket);
 
   socket.on('connect', () => {
     console.log('[Socket] Connected:', socket.id);
@@ -5324,6 +5622,10 @@ function getSocket() {
     // Ask the server for the current global shop stock on every (re)connect,
     // so a reconnect shows the server's real state rather than a stale copy.
     requestShopState();
+
+    // Refresh the Market/Auction House too, in case it's open across a reconnect.
+    requestMarketState();
+    requestAuctionState();
 
     // These systems register their persistent listeners once the actual
     // socket exists. Their own setup functions remove duplicates where
