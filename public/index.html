@@ -218,14 +218,23 @@ html,body{
    overlays, etc.). Crossfades on theme toggle via the
    existing body.light-mode class — no separate theme
    system. Images are used as-is, unmodified, uncolored.
+
+   Stacking order (bottom → top):
+     #global-menu-background (z-index 0)  — the artwork
+     body::before             (z-index 1)  — atmosphere overlay
+     .screen                  (z-index 2)  — all game UI
+   No negative z-index anywhere in this stack, so the
+   images paint above the plain body background color
+   instead of being pushed behind it.
 ═══════════════════════════════════════════════════ */
 #global-menu-background{
-  position:fixed;inset:0;overflow:hidden;pointer-events:none;z-index:-1;
+  position:fixed;inset:0;overflow:hidden;pointer-events:none;z-index:0;
 }
 #menu-bg-dark,
 #menu-bg-light{
   position:absolute;inset:0;
   background-size:cover;background-position:center;background-repeat:no-repeat;
+  pointer-events:none;
   transition:opacity 800ms ease-in-out;
 }
 #menu-bg-dark{
@@ -240,7 +249,7 @@ body.light-mode #menu-bg-dark{opacity:0;}
 body.light-mode #menu-bg-light{opacity:1;}
 
 body::before{
-  content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
+  content:'';position:fixed;inset:0;z-index:1;pointer-events:none;
   transition:opacity .8s ease;
   background:
     radial-gradient(ellipse at 15% 0%,rgba(90,50,150,.16) 0%,transparent 55%),
@@ -252,7 +261,7 @@ body.light-mode::before{opacity:.25;}
 /* ═══════════════════════════════════════════════════
    SCREEN SYSTEM
 ═══════════════════════════════════════════════════ */
-.screen{display:none;position:relative;z-index:1;min-height:100vh;}
+.screen{display:none;position:relative;z-index:2;min-height:100vh;background:transparent;}
 .screen.active{display:flex;flex-direction:column;align-items:center;}
 
 /* ═══════════════════════════════════════════════════
