@@ -6,6 +6,9 @@
 <title>AETHERION — Realm of Legends</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚔️</text></svg>">
 <link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Cinzel:wght@400;600;700&family=IM+Fell+English:ital@0;1&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<!-- Preload both theme background images so switching Light/Dark never shows a blank/delayed background -->
+<link rel="preload" as="image" href="/assets/menu-dark.png">
+<link rel="preload" as="image" href="/assets/menu-light.png">
 <style>
 /* ═══════════════════════════════════════════════════
    GLOBAL VARS & RESET
@@ -209,30 +212,32 @@ html,body{
 }
 
 /* ═══════════════════════════════════════════════════
-   FULL-GAME THEME BACKGROUND
-   Two fixed full-viewport art layers, cross-faded by
-   opacity whenever body.light-mode is toggled — sits
-   behind every screen in the game, not just the menu.
+   GLOBAL MENU/UI BACKGROUND
+   Two absolutely-positioned image layers behind every
+   menu/auth screen (login, menu, cards, stats, settings,
+   overlays, etc.). Crossfades on theme toggle via the
+   existing body.light-mode class — no separate theme
+   system. Images are used as-is, unmodified, uncolored.
 ═══════════════════════════════════════════════════ */
-.game-bg{
-  position:fixed;inset:0;z-index:-1;pointer-events:none;
-  background-size:cover;background-position:center;background-repeat:no-repeat;
-  transition:opacity 1s ease;
+#global-menu-background{
+  position:fixed;inset:0;overflow:hidden;pointer-events:none;z-index:-1;
 }
-#game-bg-dark{
-  background-image:
-    linear-gradient(rgba(5,6,10,.80), rgba(5,6,10,.88)),
-    url('menu-bg.jpg');
+#menu-bg-dark,
+#menu-bg-light{
+  position:absolute;inset:0;
+  background-size:cover;background-position:center;background-repeat:no-repeat;
+  transition:opacity 800ms ease-in-out;
+}
+#menu-bg-dark{
+  background-image:url('/assets/menu-dark.png');
   opacity:1;
 }
-#game-bg-light{
-  background-image:
-    linear-gradient(rgba(245,238,222,.55), rgba(255,250,238,.72)),
-    url('menu-bg-light.jpg');
+#menu-bg-light{
+  background-image:url('/assets/menu-light.png');
   opacity:0;
 }
-body.light-mode #game-bg-dark{opacity:0;}
-body.light-mode #game-bg-light{opacity:1;}
+body.light-mode #menu-bg-dark{opacity:0;}
+body.light-mode #menu-bg-light{opacity:1;}
 
 body::before{
   content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
@@ -1360,9 +1365,11 @@ input, textarea { font-size: 16px !important; } /* Prevents iOS zoom on focus */
 </head>
 <body>
 
-<!-- Full-game theme background (behind every screen, cross-fades on theme toggle) -->
-<div id="game-bg-dark" class="game-bg"></div>
-<div id="game-bg-light" class="game-bg"></div>
+<!-- Global menu/UI background — behind every menu & auth screen; crossfades on theme toggle -->
+<div id="global-menu-background">
+  <div id="menu-bg-dark"></div>
+  <div id="menu-bg-light"></div>
+</div>
 
 <!-- ═══════ SCREENS ═══════ -->
 
@@ -3200,6 +3207,16 @@ function loadTheme(){
   const saved = localStorage.getItem('aetherion_theme');
   if(saved==='light') document.body.classList.add('light-mode');
 }
+
+// Preload both theme backgrounds via JS too (belt-and-suspenders alongside the <link rel="preload"> tags)
+// so the crossfade never stalls on a cold cache.
+function preloadThemeBackgrounds(){
+  ['/assets/menu-dark.png','/assets/menu-light.png'].forEach(src=>{
+    const img = new Image();
+    img.src = src;
+  });
+}
+preloadThemeBackgrounds();
 
 // ── CLOUD SAVE ── (saves UI/deck battle state ONLY)
 // Progression (gold, XP, level, inventory) is managed by server actions.
