@@ -341,31 +341,91 @@ const SERVER_SHOP = {
   antidote:     { name:'Antidote',        cost:60,   rarity:'Common', cat:'potions', effect:{type:'item',stat:'cure',val:0} },
   speed_brew:   { name:'Speed Brew',      cost:90,   rarity:'Rare',   cat:'potions', effect:{type:'stat',stat:'speed',val:5} },
   mana_crystal: { name:'Mana Crystal',    cost:80,   rarity:'Rare',   cat:'potions', effect:{type:'item',stat:'cooldown',val:0} },
+  greater_hp_potion:  { name:'Greater Health Potion', cost:500,  rarity:'Rare',   cat:'potions', effect:{type:'item',stat:'hpPercent',val:35} },
+  greater_mana_potion:{ name:'Greater Mana Potion',   cost:600,  rarity:'Rare',   cat:'potions', effect:{type:'item',stat:'cooldown',val:0} },
+  regen_potion:       { name:'Regeneration Potion',   cost:800,  rarity:'Epic',   cat:'potions', effect:{type:'item',stat:'healRegen',val:4} },
+  fire_res_potion:    { name:'Fire Resistance Potion',cost:750,  rarity:'Epic',   cat:'potions', effect:{type:'item',stat:'defUp',val:5} },
+  frost_potion:       { name:'Frost Potion',          cost:900,  rarity:'Epic',   cat:'potions', effect:{type:'item',stat:'slowEnemy',val:3} },
+  strength_potion:    { name:'Strength Potion',       cost:1000, rarity:'Epic',   cat:'potions', effect:{type:'item',stat:'atkUp',val:5} },
+  luck_potion:        { name:'Luck Potion',           cost:1250, rarity:'Epic',   cat:'potions', effect:{type:'item',stat:'luckXp',val:150} },
+  invis_potion:       { name:'Invisibility Potion',   cost:1500, rarity:'Epic',   cat:'potions', effect:{type:'item',stat:'defUp',val:3} },
+  berserker_brew:     { name:'Berserker Brew',        cost:1800, rarity:'Mythic', cat:'potions', effect:{type:'item',stat:'berserk',val:4} },
+  purify_potion:      { name:'Purification Potion',   cost:1400, rarity:'Epic',   cat:'potions', effect:{type:'item',stat:'purify',val:20} },
   iron_sword:   { name:'Iron Sword',      cost:160,  rarity:'Common', cat:'weapons', effect:{type:'statAll',stat:'attack',val:4} },
   flame_blade:  { name:'Flame Blade',     cost:320,  rarity:'Rare',   cat:'weapons', effect:{type:'statAll2',stats:['attack','magic'],vals:[8,3]} },
   shadow_dagger:{ name:'Shadow Dagger',   cost:240,  rarity:'Rare',   cat:'weapons', effect:{type:'statOne2',stats:['attack','speed'],vals:[6,4]} },
   thunder_axe:  { name:'Thunder Axe',     cost:400,  rarity:'Epic',   cat:'weapons', effect:{type:'statOne',stat:'attack',val:12} },
   void_blade:   { name:'Void Blade',      cost:560,  rarity:'Epic',   cat:'weapons', effect:{type:'statAll2',stats:['attack','magic'],vals:[10,5]} },
+  steel_longsword:  { name:'Steel Longsword',  cost:1200, rarity:'Rare',   cat:'weapons', effect:{type:'statAll',stat:'attack',val:10} },
+  bloodfang_dagger: { name:'Bloodfang Dagger', cost:1600, rarity:'Epic',   cat:'weapons', effect:{type:'statOne2',stats:['attack','speed'],vals:[12,4]} },
+  frostbite_sword:  { name:'Frostbite Sword',  cost:2000, rarity:'Epic',   cat:'weapons', effect:{type:'statAll',stat:'attack',val:14} },
+  inferno_spear:    { name:'Inferno Spear',    cost:2400, rarity:'Epic',   cat:'weapons', effect:{type:'statAll2',stats:['attack','magic'],vals:[14,6]} },
+  stormbreaker:     { name:'Stormbreaker',     cost:3000, rarity:'Epic',   cat:'weapons', effect:{type:'statAll2',stats:['attack','speed'],vals:[16,6]} },
+  demon_scythe:     { name:'Demon Scythe',     cost:3500, rarity:'Mythic', cat:'weapons', effect:{type:'statAll2',stats:['attack','magic'],vals:[20,8]} },
+  crystal_katana:   { name:'Crystal Katana',   cost:4000, rarity:'Mythic', cat:'weapons', effect:{type:'statOne',stat:'attack',val:30} },
+  soul_reaper:      { name:'Soul Reaper',      cost:4500, rarity:'Mythic', cat:'weapons', effect:{type:'statAll3',stats:['attack','magic','speed'],vals:[18,10,6]} },
+  nether_hammer:    { name:'Nether Hammer',    cost:5000, rarity:'Mythic', cat:'weapons', effect:{type:'statAll2',stats:['attack','defense'],vals:[24,10]} },
+  celestial_bow:    { name:'Celestial Bow',    cost:6000, rarity:'Mythic', cat:'weapons', effect:{type:'statAll3',stats:['attack','magic','speed'],vals:[22,14,8]} },
   leather:      { name:'Leather Vest',    cost:140,  rarity:'Common', cat:'armor',   effect:{type:'statAll',stat:'defense',val:5} },
   chain_mail:   { name:'Chain Mail',      cost:280,  rarity:'Rare',   cat:'armor',   effect:{type:'statAll',stat:'defense',val:10} },
   dragon_scale: { name:'Dragon Scale',    cost:440,  rarity:'Epic',   cat:'armor',   effect:{type:'statAll2',stats:['defense','maxHp'],vals:[8,20]} },
   void_cloak:   { name:'Void Cloak',      cost:360,  rarity:'Rare',   cat:'armor',   effect:{type:'statOne2',stats:['defense','speed'],vals:[6,6]} },
   titan_plate:  { name:'Titan Plate',     cost:600,  rarity:'Epic',   cat:'armor',   effect:{type:'statAll',stat:'defense',val:15} },
+  steel_armor:      { name:'Steel Armor',      cost:1500, rarity:'Rare',   cat:'armor', effect:{type:'statAll',stat:'defense',val:12} },
+  knight_armor:     { name:'Knight Armor',     cost:2000, rarity:'Epic',   cat:'armor', effect:{type:'statAll2',stats:['defense','maxHp'],vals:[16,20]} },
+  frostguard_armor: { name:'Frostguard Armor', cost:2500, rarity:'Epic',   cat:'armor', effect:{type:'statAll',stat:'defense',val:18} },
+  inferno_armor:    { name:'Inferno Armor',    cost:3000, rarity:'Epic',   cat:'armor', effect:{type:'statAll2',stats:['defense','maxHp'],vals:[16,30]} },
+  shadow_armor:     { name:'Shadow Armor',     cost:3500, rarity:'Mythic', cat:'armor', effect:{type:'statAll2',stats:['defense','speed'],vals:[14,8]} },
+  storm_armor:      { name:'Storm Armor',      cost:4000, rarity:'Mythic', cat:'armor', effect:{type:'statAll2',stats:['defense','speed'],vals:[20,10]} },
+  crystal_armor:    { name:'Crystal Armor',    cost:4500, rarity:'Mythic', cat:'armor', effect:{type:'statAll2',stats:['defense','magic'],vals:[18,12]} },
+  demon_armor:      { name:'Demon Armor',      cost:5000, rarity:'Mythic', cat:'armor', effect:{type:'statAll2',stats:['defense','maxHp'],vals:[26,20]} },
+  celestial_armor:  { name:'Celestial Armor',  cost:6500, rarity:'Mythic', cat:'armor', effect:{type:'statAll3',stats:['defense','magic','maxHp'],vals:[24,14,30]} },
+  soulguard_armor:  { name:'Soulguard Armor',  cost:8000, rarity:'Mythic', cat:'armor', effect:{type:'statAll2',stats:['defense','maxHp'],vals:[28,60]} },
   spell_scroll: { name:'Spell Scroll',    cost:150,  rarity:'Common', cat:'magic',   effect:{type:'statAll',stat:'magic',val:5} },
   arcane_tome:  { name:'Arcane Tome',     cost:300,  rarity:'Rare',   cat:'magic',   effect:{type:'statAll2',stats:['magic','attack'],vals:[10,3]} },
   crystal_orb:  { name:'Crystal Orb',     cost:360,  rarity:'Epic',   cat:'magic',   effect:{type:'statOne',stat:'magic',val:15} },
   phoenix_dust: { name:'Phoenix Dust',    cost:500,  rarity:'Epic',   cat:'magic',   effect:{type:'item',stat:'revive',val:50} },
   void_essence: { name:'Void Essence',    cost:640,  rarity:'Epic',   cat:'magic',   effect:{type:'statAll2',stats:['magic','defense'],vals:[12,5]} },
+  fireball_scroll:  { name:'Fireball Scroll',   cost:1000,  rarity:'Rare',   cat:'magic', effect:{type:'statAll',stat:'magic',val:10} },
+  ice_nova_scroll:  { name:'Ice Nova Scroll',   cost:1300,  rarity:'Rare',   cat:'magic', effect:{type:'statAll2',stats:['magic','defense'],vals:[12,4]} },
+  lightning_scroll: { name:'Lightning Scroll',  cost:1500,  rarity:'Epic',   cat:'magic', effect:{type:'statAll2',stats:['magic','speed'],vals:[14,6]} },
+  healing_tome:     { name:'Healing Tome',      cost:2000,  rarity:'Epic',   cat:'magic', effect:{type:'item',stat:'healAllPercent',val:20} },
+  meteor_tome:      { name:'Meteor Tome',       cost:3000,  rarity:'Epic',   cat:'magic', effect:{type:'statOne',stat:'magic',val:30} },
+  shadow_grimoire:  { name:'Shadow Grimoire',   cost:3500,  rarity:'Mythic', cat:'magic', effect:{type:'statAll2',stats:['magic','attack'],vals:[16,8]} },
+  arcane_crystal:   { name:'Arcane Crystal',    cost:4000,  rarity:'Mythic', cat:'magic', effect:{type:'statAll2',stats:['magic','attack'],vals:[20,10]} },
+  soul_crystal:     { name:'Soul Crystal',      cost:5000,  rarity:'Mythic', cat:'magic', effect:{type:'item',stat:'soulRestore',val:15} },
+  dragonheart_relic:{ name:'Dragonheart Relic', cost:7000,  rarity:'Mythic', cat:'magic', effect:{type:'statAll2',stats:['magic','attack'],vals:[24,14]} },
+  astral_orb:       { name:'Astral Orb',        cost:10000, rarity:'Mythic', cat:'magic', effect:{type:'statAll3',stats:['magic','attack','defense'],vals:[22,14,10]} },
   card_boost:   { name:'Card Boost',      cost:240,  rarity:'Rare',   cat:'cards',   effect:{type:'cardLevel',val:1} },
   card_boost2:  { name:'Double Boost',    cost:440,  rarity:'Epic',   cat:'cards',   effect:{type:'cardLevel',val:2} },
   xp_tome:      { name:'XP Tome',         cost:160,  rarity:'Rare',   cat:'cards',   effect:{type:'cardXp',val:200} },
   heal_all:     { name:'Full Restore',    cost:200,  rarity:'Rare',   cat:'cards',   effect:{type:'healAll',val:0} },
   reroll_token: { name:'Reroll Token',    cost:600,  rarity:'Epic',   cat:'cards',   effect:{type:'reroll',val:0} },
+  gold_boost_card:    { name:'Gold Boost',      cost:1500, rarity:'Rare',   cat:'cards', effect:{type:'cardXp',val:300} },
+  luck_boost_card:    { name:'Luck Boost',      cost:1800, rarity:'Rare',   cat:'cards', effect:{type:'cardXp',val:360} },
+  damage_boost_card:  { name:'Damage Boost',    cost:1600, rarity:'Rare',   cat:'cards', effect:{type:'statAll',stat:'attack',val:10} },
+  defense_boost_card: { name:'Defense Boost',   cost:1600, rarity:'Rare',   cat:'cards', effect:{type:'statAll',stat:'defense',val:10} },
+  speed_boost_card:   { name:'Speed Boost',     cost:1800, rarity:'Rare',   cat:'cards', effect:{type:'statAll',stat:'speed',val:8} },
+  xp_boost2_card:      { name:'XP Boost II',    cost:2200, rarity:'Epic',   cat:'cards', effect:{type:'cardXp',val:500} },
+  loot_boost_card:    { name:'Loot Boost',      cost:2500, rarity:'Epic',   cat:'cards', effect:{type:'cardXp',val:550} },
+  crit_boost_card:    { name:'Critical Boost',  cost:3000, rarity:'Epic',   cat:'cards', effect:{type:'statOne',stat:'attack',val:20} },
+  treasure_card:      { name:'Treasure Card',   cost:4000, rarity:'Epic',   cat:'cards', effect:{type:'cardXp',val:800} },
+  fortune_card:       { name:'Fortune Card',    cost:6000, rarity:'Mythic', cat:'cards', effect:{type:'cardLevel',val:1} },
   legend_sword: { name:"Legend's Blade",  cost:1600, rarity:'Mythic', cat:'rare',    effect:{type:'statAll',stat:'attack',val:20} },
   god_armor:    { name:'Godplate Armor',  cost:1800, rarity:'Mythic', cat:'rare',    effect:{type:'statAll2',stats:['defense','maxHp'],vals:[25,50]} },
   void_heart:   { name:'Void Heart',      cost:2400, rarity:'Mythic', cat:'rare',    effect:{type:'statAll3',stats:['magic','attack','defense'],vals:[20,10,10]} },
   phoenix_core: { name:'Phoenix Core',    cost:1200, rarity:'Mythic', cat:'rare',    effect:{type:'fullRestorePlus',val:30} },
   abyss_crown:  { name:'Abyss Crown',     cost:4000, rarity:'Mythic', cat:'rare',    effect:{type:'allStats',val:15} },
+  dragon_king_blade: { name:"Dragon King's Blade", cost:12000, rarity:'Mythic', cat:'rare', effect:{type:'statAll2',stats:['attack','magic'],vals:[40,16]} },
+  eternal_crown:     { name:'Eternal Crown',       cost:14000, rarity:'Mythic', cat:'rare', effect:{type:'statAll2',stats:['maxHp','magic'],vals:[80,20]} },
+  celestial_heart:   { name:'Celestial Heart',     cost:16000, rarity:'Mythic', cat:'rare', effect:{type:'statAll2',stats:['attack','defense'],vals:[30,30]} },
+  abyssal_armor:     { name:'Abyssal Armor',       cost:18000, rarity:'Mythic', cat:'rare', effect:{type:'statAll2',stats:['defense','maxHp'],vals:[45,60]} },
+  worldbreaker_axe:  { name:'Worldbreaker Axe',    cost:20000, rarity:'Mythic', cat:'rare', effect:{type:'statOne',stat:'attack',val:70} },
+  soulfire_blade:    { name:'Soulfire Blade',      cost:22000, rarity:'Mythic', cat:'rare', effect:{type:'statAll2',stats:['attack','magic'],vals:[38,22]} },
+  ancient_dragon_core:{ name:'Ancient Dragon Core',cost:25000, rarity:'Mythic', cat:'rare', effect:{type:'statAll3',stats:['attack','magic','defense'],vals:[26,26,20]} },
+  gods_eye:          { name:"God's Eye",           cost:28000, rarity:'Mythic', cat:'rare', effect:{type:'statAll2',stats:['attack','speed'],vals:[34,22]} },
+  eternal_phoenix:   { name:'Eternal Phoenix',     cost:35000, rarity:'Mythic', cat:'rare', effect:{type:'allStats',val:22} },
+  void_emperor_crown:{ name:"Void Emperor's Crown",cost:50000, rarity:'Mythic', cat:'rare', effect:{type:'allStats',val:30} },
 };
 
 // Items that are "consumable" (can be bought multiple times / stackable)
@@ -576,6 +636,225 @@ async function persistShopStock() {
 }
 
 // ── Server-side quest catalog (authoritative rewards) ─────
+// ═══════════════════════════════════════════════════════════
+//  PLAYER MARKET + AUCTION HOUSE
+//  Server-authoritative, database-persistent, real-time.
+//  In-memory Maps are the source of truth for instant, race-free checks
+//  (same pattern as shopStock above); MongoDB mirrors them so listings
+//  survive a restart. Every gold/item change goes through the same
+//  addGold/removeGold/persistSave helpers used everywhere else, so market
+//  trades participate in the exact same account-persistence pipeline as
+//  shop purchases, sales and battle rewards.
+// ═══════════════════════════════════════════════════════════
+const MARKET_FEE_PERCENT       = 5;   // seller receives totalPrice minus this %
+const MAX_LISTINGS_PER_PLAYER  = 10;
+const MAX_ACTIVE_LISTINGS      = 1000;
+const MAX_AUCTIONS_PER_PLAYER  = 5;
+const MAX_ACTIVE_AUCTIONS      = 500;
+const AUCTION_ALLOWED_HOURS    = [1, 6, 12, 24, 48];
+const AUCTION_MIN_RAISE_PCT    = 5;   // each new bid must beat the last by at least this %
+const AUCTION_SWEEP_MS         = 15_000;
+
+const marketListings  = new Map(); // id → listing   (status: 'active' while live)
+const auctionListings = new Map(); // id → auction   (status: 'active' while live)
+let marketDataLoaded  = false;
+
+const MarketListingSchema = new mongoose.Schema({
+  id:            { type: String, required: true, unique: true },
+  sellerUname:   String,
+  sellerDisplay: String,
+  item:          String,
+  rarity:        String,
+  effect:        mongoose.Schema.Types.Mixed,
+  qty:           Number,
+  totalPrice:    Number,
+  createdAt:     Number,
+  status:        { type: String, default: 'active' },
+}, { minimize: false });
+const MarketListing = mongoose.model('MarketListing', MarketListingSchema);
+
+const AuctionSchema = new mongoose.Schema({
+  id:                    { type: String, required: true, unique: true },
+  sellerUname:           String,
+  sellerDisplay:         String,
+  item:                  String,
+  rarity:                String,
+  effect:                mongoose.Schema.Types.Mixed,
+  startingBid:           Number,
+  currentBid:            Number,
+  currentBidderUname:    String,
+  currentBidderDisplay:  String,
+  bidCount:              { type: Number, default: 0 },
+  createdAt:             Number,
+  endsAt:                Number,
+  status:                { type: String, default: 'active' },
+}, { minimize: false });
+const Auction = mongoose.model('Auction', AuctionSchema);
+
+// ── DB mirror helpers (best-effort — the in-memory Map is always correct
+//    immediately; these just make it survive a restart) ────────────────
+async function dbSaveListing(listing) {
+  if (!MONGO_URI || !dbConnected) return;
+  try { await MarketListing.findOneAndUpdate({ id: listing.id }, listing, { upsert: true, maxTimeMS: 3000 }); }
+  catch (e) { console.warn('[MARKET DB] save failed:', e.message); }
+}
+async function dbDeleteListing(id) {
+  if (!MONGO_URI || !dbConnected) return;
+  try { await MarketListing.deleteOne({ id }); } catch (e) {}
+}
+async function dbSaveAuction(auction) {
+  if (!MONGO_URI || !dbConnected) return;
+  try { await Auction.findOneAndUpdate({ id: auction.id }, auction, { upsert: true, maxTimeMS: 3000 }); }
+  catch (e) { console.warn('[AUCTION DB] save failed:', e.message); }
+}
+async function dbDeleteAuction(id) {
+  if (!MONGO_URI || !dbConnected) return;
+  try { await Auction.deleteOne({ id }); } catch (e) {}
+}
+async function loadMarketAndAuctions() {
+  if (!MONGO_URI || !dbConnected) { marketDataLoaded = true; return; }
+  try {
+    const listings = await MarketListing.find({ status: 'active' }).lean().maxTimeMS(3000);
+    for (const l of listings) marketListings.set(l.id, l);
+    const auctions = await Auction.find({ status: 'active' }).lean().maxTimeMS(3000);
+    for (const a of auctions) auctionListings.set(a.id, a);
+    marketDataLoaded = true;
+    console.log(`[MARKET] Restored ${listings.length} listing(s) and ${auctions.length} auction(s) from database`);
+  } catch (e) {
+    console.warn('[MARKET] Could not load market/auction data:', e.message);
+  }
+}
+
+// ── Inventory helpers that PRESERVE full item metadata (rarity, effect) ──
+// across a trade — the buyer/winner must receive the actual item, not a
+// generic re-creation of it by name alone.
+function removeInventoryQty(save, itemName, qty) {
+  if (!save.inventory) return null;
+  const idx = save.inventory.findIndex(i => i.item === itemName);
+  if (idx < 0) return null;
+  const entry = save.inventory[idx];
+  const have  = entry.qty || 1;
+  if (have < qty) return null;
+  const snapshot = { item: entry.item, rarity: entry.rarity || 'Common', effect: entry.effect };
+  entry.qty = have - qty;
+  if (entry.qty <= 0) save.inventory.splice(idx, 1);
+  return snapshot;
+}
+function addInventoryItemSnapshot(save, snapshot, qty) {
+  if (!save.inventory) save.inventory = [];
+  if (save.inventory.length >= 200) return false;
+  const existing = save.inventory.find(i => i.item === snapshot.item);
+  if (existing) {
+    existing.qty = (existing.qty || 1) + qty;
+    if (snapshot.effect && !existing.effect) existing.effect = snapshot.effect;
+  } else {
+    save.inventory.push({ item: snapshot.item, rarity: snapshot.rarity || 'Common', qty, effect: snapshot.effect || undefined });
+  }
+  return true;
+}
+
+// ── Capped trade history (kept on the player's own save — no extra collection) ──
+function addMarketHistory(save, entry) {
+  if (!save.marketHistory) save.marketHistory = [];
+  save.marketHistory.unshift({ ...entry, date: Date.now() });
+  if (save.marketHistory.length > 30) save.marketHistory.length = 30;
+}
+
+// ── Public, read-only payloads sent to every client ───────────────────
+function buildMarketStatePayload() {
+  return [...marketListings.values()]
+    .filter(l => l.status === 'active')
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .slice(0, 300)
+    .map(l => ({
+      id: l.id, item: l.item, rarity: l.rarity, qty: l.qty,
+      totalPrice: l.totalPrice, sellerUname: l.sellerUname,
+      sellerDisplay: l.sellerDisplay, createdAt: l.createdAt,
+    }));
+}
+function buildAuctionStatePayload() {
+  return [...auctionListings.values()]
+    .filter(a => a.status === 'active')
+    .sort((a, b) => a.endsAt - b.endsAt)
+    .slice(0, 300)
+    .map(a => ({
+      id: a.id, item: a.item, rarity: a.rarity,
+      startingBid: a.startingBid, currentBid: a.currentBid,
+      currentBidderDisplay: a.currentBidderDisplay, bidCount: a.bidCount,
+      sellerUname: a.sellerUname, sellerDisplay: a.sellerDisplay,
+      createdAt: a.createdAt, endsAt: a.endsAt,
+    }));
+}
+function sendMarketState(target) { target.emit('market:state', buildMarketStatePayload()); }
+function sendAuctionState(target) { target.emit('auction:state', buildAuctionStatePayload()); }
+
+// ── Auction resolution sweep — runs on a timer, not on request, so an
+//    auction ends for everyone the moment its clock hits zero regardless
+//    of who is or isn't online at that instant. ─────────────────────────
+async function resolveExpiredAuctions() {
+  const now = Date.now();
+  const expired = [...auctionListings.values()].filter(a => a.status === 'active' && a.endsAt <= now);
+  if (!expired.length) return;
+  for (const auction of expired) {
+    auction.status = 'ending'; // atomic lock — no bid can land on this auction anymore
+    try {
+      if (auction.bidCount > 0 && auction.currentBidderUname) {
+        const winnerUname = auction.currentBidderUname;
+        const fee      = Math.floor(auction.currentBid * MARKET_FEE_PERCENT / 100);
+        const proceeds = auction.currentBid - fee;
+
+        const winnerAcc = accounts.get(winnerUname) || await dbGetAccount(winnerUname);
+        if (winnerAcc) {
+          const winnerSave = loadPlayerSave(winnerAcc);
+          addInventoryItemSnapshot(winnerSave, { item: auction.item, rarity: auction.rarity, effect: auction.effect }, 1);
+          addMarketHistory(winnerSave, { type: 'auction_won', item: auction.item, price: auction.currentBid, other: auction.sellerDisplay });
+          await persistSave(winnerAcc, winnerSave, winnerUname);
+          const wSock = getSocketOfPlayer(winnerUname);
+          if (wSock) {
+            io.to(wSock).emit('player:state', buildClientState(winnerSave));
+            io.to(wSock).emit('market:notify', { msg: `🏆 Auction won! ${auction.item} is now yours.` });
+          }
+        }
+
+        const sellerAcc = accounts.get(auction.sellerUname) || await dbGetAccount(auction.sellerUname);
+        if (sellerAcc) {
+          const sellerSave = loadPlayerSave(sellerAcc);
+          addGold(sellerSave, proceeds, `auction:sold:${auction.item}`);
+          addMarketHistory(sellerSave, { type: 'auction_sale', item: auction.item, price: proceeds, other: auction.currentBidderDisplay });
+          await persistSave(sellerAcc, sellerSave, auction.sellerUname);
+          const sSock = getSocketOfPlayer(auction.sellerUname);
+          if (sSock) {
+            io.to(sSock).emit('player:state', buildClientState(sellerSave));
+            io.to(sSock).emit('market:notify', { msg: `⚖️ Your auction for ${auction.item} sold for ${proceeds.toLocaleString()} Gold!` });
+          }
+        }
+        console.log(`[AUCTION] ${auction.item} → ${winnerUname} for ${auction.currentBid}g (seller ${auction.sellerUname} got ${proceeds}g)`);
+      } else {
+        // No bids — item returns to the seller untouched.
+        const sellerAcc = accounts.get(auction.sellerUname) || await dbGetAccount(auction.sellerUname);
+        if (sellerAcc) {
+          const sellerSave = loadPlayerSave(sellerAcc);
+          addInventoryItemSnapshot(sellerSave, { item: auction.item, rarity: auction.rarity, effect: auction.effect }, 1);
+          await persistSave(sellerAcc, sellerSave, auction.sellerUname);
+          const sSock = getSocketOfPlayer(auction.sellerUname);
+          if (sSock) {
+            io.to(sSock).emit('player:state', buildClientState(sellerSave));
+            io.to(sSock).emit('market:notify', { msg: `↩️ Your auction for ${auction.item} ended with no bids — item returned.` });
+          }
+        }
+        console.log(`[AUCTION] ${auction.item} (seller ${auction.sellerUname}) ended with no bids — returned`);
+      }
+      auction.status = 'ended';
+      auctionListings.delete(auction.id);
+      await dbDeleteAuction(auction.id);
+    } catch (e) {
+      console.error('[AUCTION] resolve error:', e && e.message);
+      auction.status = 'active'; // retry on the next sweep
+    }
+  }
+  io.emit('auction:state', buildAuctionStatePayload());
+}
+
 const SERVER_QUEST_CATALOG = {
   kill3:    { desc:'Defeat 3 monsters',          type:'kill',    target:3,   reward:{gold:30,  xp:60,  item:null} },
   kill8:    { desc:'Defeat 8 monsters',          type:'kill',    target:8,   reward:{gold:80,  xp:150, item:null} },
@@ -751,6 +1030,7 @@ function buildClientState(save) {
     duelWins:       save.duelWins       || 0,
     duelLosses:     save.duelLosses     || 0,
     questClaims:    save.questClaims    || {},
+    marketHistory:  save.marketHistory  || [],
   };
 }
 
@@ -2073,6 +2353,296 @@ io.on('connection', (socket) => {
     console.log(`[SELL] ${uname} sold ${sellQty}× ${itemName} for ${totalGold}g`);
   });
 
+  // ═══════════════════════════════════════════════════════
+  //  PLAYER MARKET
+  // ═══════════════════════════════════════════════════════
+
+  // Read-only: current live listings. Public data — nothing here can change
+  // server state, so an unauthenticated peek is fine (same policy as shop:getState).
+  socket.on('market:getState', () => {
+    const uname = socket.data.uname;
+    if (uname) { if (!checkActionRateLimit(uname)) return; }
+    else {
+      const now = Date.now();
+      if (now - (socket.data.lastMarketStateAt || 0) < 1000) return;
+      socket.data.lastMarketStateAt = now;
+    }
+    sendMarketState(socket);
+  });
+
+  // ── CREATE LISTING ─────────────────────────────────────
+  socket.on('player:marketList', async ({ itemName, qty, totalPrice } = {}) => {
+    const fail = (msg) => socket.emit('market:listResult', { ok: false, msg });
+    const session = await requireSession(socket);
+    if (!session) return;
+    const { uname, acc } = session;
+    if (!checkActionRateLimit(uname)) { fail('You are doing that too fast. Please wait a moment.'); return; }
+
+    const f = flagged.get(uname);
+    if ((f && f.level === 'banned') || isOnHold(uname)) { fail('Trading is unavailable right now.'); return; }
+
+    if (typeof itemName !== 'string' || !itemName.trim() || itemName.length > 60) { fail('Invalid item.'); return; }
+    // safeNum floors to an integer — decimal quantities/prices are impossible to submit even if the client is tampered with.
+    const cleanQty   = safeNum(qty, 1, 999, 0);
+    const cleanPrice = safeNum(totalPrice, 1, 999_999_999, 0);
+    if (cleanQty < 1)   { fail('Quantity must be a whole number of at least 1.'); return; }
+    if (cleanPrice < 1) { fail('Price must be a whole number of at least 1 Gold.'); return; }
+
+    if (marketListings.size >= MAX_ACTIVE_LISTINGS) { fail('The Market is full right now — try again soon.'); return; }
+    const activeByUser = [...marketListings.values()].filter(l => l.sellerUname === uname && l.status === 'active').length;
+    if (activeByUser >= MAX_LISTINGS_PER_PLAYER) { fail(`You can only have ${MAX_LISTINGS_PER_PLAYER} active listings at once.`); return; }
+
+    const save = loadPlayerSave(acc);
+    const snapshot = removeInventoryQty(save, itemName.trim(), cleanQty);
+    if (!snapshot) { fail('You do not have that many to sell.'); return; }
+
+    const id = crypto.randomBytes(8).toString('hex');
+    const listing = {
+      id, sellerUname: uname, sellerDisplay: acc.username,
+      item: snapshot.item, rarity: snapshot.rarity || 'Common', effect: snapshot.effect || null,
+      qty: cleanQty, totalPrice: cleanPrice,
+      createdAt: Date.now(), status: 'active',
+    };
+    marketListings.set(id, listing);
+
+    await persistSave(acc, save, uname);
+    await dbSaveListing(listing);
+    socket.emit('player:state', buildClientState(save));
+    socket.emit('market:listResult', { ok: true, listingId: id });
+    io.emit('market:state', buildMarketStatePayload()); // live for everyone
+    console.log(`[MARKET] ${uname} listed ${cleanQty}× ${listing.item} for ${cleanPrice}g`);
+  });
+
+  // ── BUY LISTING ─────────────────────────────────────────
+  socket.on('player:marketBuy', async ({ listingId } = {}) => {
+    const id = typeof listingId === 'string' ? listingId.slice(0, 64) : '';
+    const fail = (msg, extra = {}) => socket.emit('market:buyResult', { ok: false, listingId: id, msg, ...extra });
+    const buyerUname = socket.data.uname;
+    if (!buyerUname) { fail('Not logged in — please log in again.'); return; }
+    if (!checkActionRateLimit(buyerUname)) { fail('You are doing that too fast. Please wait a moment.'); return; }
+    if (!id) { fail('Unknown listing.'); return; }
+
+    // ── ATOMIC LOCK ── everything from the read to the status flip below is
+    // synchronous (no `await`), so two simultaneous buyers can never both
+    // pass this check — the second one always sees status !== 'active'.
+    const listing = marketListings.get(id);
+    if (!listing || listing.status !== 'active') { fail('This item has already been sold.'); return; }
+    if (listing.sellerUname === buyerUname) { fail('You cannot buy your own listing.'); return; }
+    listing.status = 'pending';
+
+    try {
+      const f = flagged.get(buyerUname);
+      if ((f && f.level === 'banned') || isOnHold(buyerUname)) { listing.status = 'active'; fail('Trading is unavailable right now.'); return; }
+
+      const buyerAcc = accounts.get(buyerUname) || await dbGetAccount(buyerUname);
+      if (!buyerAcc) { listing.status = 'active'; fail('Account not found.'); return; }
+
+      const buyerSave = loadPlayerSave(buyerAcc);
+      if ((buyerSave.playerGold || 0) < listing.totalPrice) {
+        listing.status = 'active';
+        fail('Not enough Gold.', { playerGold: buyerSave.playerGold || 0 });
+        return;
+      }
+
+      removeGold(buyerSave, listing.totalPrice, `market:buy:${listing.item}`);
+      addInventoryItemSnapshot(buyerSave, { item: listing.item, rarity: listing.rarity, effect: listing.effect }, listing.qty);
+      addMarketHistory(buyerSave, { type: 'purchase', item: listing.item, qty: listing.qty, price: listing.totalPrice, other: listing.sellerDisplay });
+
+      // Finalize — remove from the live market immediately so it can never be bought twice.
+      listing.status = 'sold';
+      marketListings.delete(id);
+
+      const fee      = Math.floor(listing.totalPrice * MARKET_FEE_PERCENT / 100);
+      const proceeds = listing.totalPrice - fee;
+      // Seller is paid whether they're online or not (#9 — offline sellers).
+      const sellerAcc = accounts.get(listing.sellerUname) || await dbGetAccount(listing.sellerUname);
+      if (sellerAcc) {
+        const sellerSave = loadPlayerSave(sellerAcc);
+        addGold(sellerSave, proceeds, `market:sold:${listing.item}`);
+        addMarketHistory(sellerSave, { type: 'sale', item: listing.item, qty: listing.qty, price: proceeds, other: buyerAcc.username });
+        await persistSave(sellerAcc, sellerSave, listing.sellerUname);
+        const sellerSock = getSocketOfPlayer(listing.sellerUname);
+        if (sellerSock) {
+          io.to(sellerSock).emit('player:state', buildClientState(sellerSave));
+          io.to(sellerSock).emit('market:notify', { msg: `💰 Your ${listing.item} sold for ${proceeds.toLocaleString()} Gold!` });
+        }
+      }
+
+      await persistSave(buyerAcc, buyerSave, buyerUname);
+      await dbDeleteListing(id);
+
+      socket.emit('player:state', buildClientState(buyerSave));
+      socket.emit('market:buyResult', { ok: true, listingId: id });
+      io.emit('market:state', buildMarketStatePayload()); // disappears for everyone, instantly
+      console.log(`[MARKET] ${buyerUname} bought ${listing.qty}× ${listing.item} from ${listing.sellerUname} for ${listing.totalPrice}g`);
+    } catch (err) {
+      listing.status = 'active'; // roll back the lock on an unexpected error
+      console.error('[MARKET] buy error:', err && err.message);
+      fail('Purchase failed. Please try again.');
+    }
+  });
+
+  // ── CANCEL LISTING ──────────────────────────────────────
+  socket.on('player:marketCancel', async ({ listingId } = {}) => {
+    const id = typeof listingId === 'string' ? listingId.slice(0, 64) : '';
+    const fail = (msg) => socket.emit('market:cancelResult', { ok: false, listingId: id, msg });
+    const uname = socket.data.uname;
+    if (!uname) { fail('Not logged in — please log in again.'); return; }
+    if (!checkActionRateLimit(uname)) { fail('You are doing that too fast. Please wait a moment.'); return; }
+    if (!id) { fail('Unknown listing.'); return; }
+
+    const listing = marketListings.get(id);
+    if (!listing || listing.status !== 'active') { fail('Listing not found — it may already be sold or cancelled.'); return; }
+    if (listing.sellerUname !== uname) { fail('This is not your listing.'); return; }
+    listing.status = 'cancelled'; // atomic lock — same pattern as buy
+
+    try {
+      const session = await requireSession(socket);
+      if (!session) { listing.status = 'active'; return; }
+      const { acc } = session;
+      const save = loadPlayerSave(acc);
+      addInventoryItemSnapshot(save, { item: listing.item, rarity: listing.rarity, effect: listing.effect }, listing.qty);
+      marketListings.delete(id);
+      await persistSave(acc, save, uname);
+      await dbDeleteListing(id);
+      socket.emit('player:state', buildClientState(save));
+      socket.emit('market:cancelResult', { ok: true, listingId: id });
+      io.emit('market:state', buildMarketStatePayload());
+      console.log(`[MARKET] ${uname} cancelled listing of ${listing.qty}× ${listing.item}`);
+    } catch (err) {
+      listing.status = 'active';
+      console.error('[MARKET] cancel error:', err && err.message);
+      fail('Cancel failed. Please try again.');
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════
+  //  AUCTION HOUSE
+  // ═══════════════════════════════════════════════════════
+
+  socket.on('auction:getState', () => {
+    const uname = socket.data.uname;
+    if (uname) { if (!checkActionRateLimit(uname)) return; }
+    else {
+      const now = Date.now();
+      if (now - (socket.data.lastAuctionStateAt || 0) < 1000) return;
+      socket.data.lastAuctionStateAt = now;
+    }
+    sendAuctionState(socket);
+  });
+
+  // ── CREATE AUCTION ──────────────────────────────────────
+  socket.on('player:auctionCreate', async ({ itemName, startingBid, durationHours } = {}) => {
+    const fail = (msg) => socket.emit('auction:createResult', { ok: false, msg });
+    const session = await requireSession(socket);
+    if (!session) return;
+    const { uname, acc } = session;
+    if (!checkActionRateLimit(uname)) { fail('You are doing that too fast. Please wait a moment.'); return; }
+
+    const f = flagged.get(uname);
+    if ((f && f.level === 'banned') || isOnHold(uname)) { fail('Trading is unavailable right now.'); return; }
+
+    if (typeof itemName !== 'string' || !itemName.trim() || itemName.length > 60) { fail('Invalid item.'); return; }
+    const bid = safeNum(startingBid, 1, 999_999_999, 0); // integer only — decimals are floored/rejected
+    if (bid < 1) { fail('Starting bid must be a whole number of at least 1 Gold.'); return; }
+    const hours = AUCTION_ALLOWED_HOURS.includes(Number(durationHours)) ? Number(durationHours) : 24;
+
+    if (auctionListings.size >= MAX_ACTIVE_AUCTIONS) { fail('The Auction House is full right now — try again soon.'); return; }
+    const activeByUser = [...auctionListings.values()].filter(a => a.sellerUname === uname && a.status === 'active').length;
+    if (activeByUser >= MAX_AUCTIONS_PER_PLAYER) { fail(`You can only run ${MAX_AUCTIONS_PER_PLAYER} auctions at once.`); return; }
+
+    const save = loadPlayerSave(acc);
+    const snapshot = removeInventoryQty(save, itemName.trim(), 1); // one unique item per auction
+    if (!snapshot) { fail('You do not have that item.'); return; }
+
+    const id = crypto.randomBytes(8).toString('hex');
+    const auction = {
+      id, sellerUname: uname, sellerDisplay: acc.username,
+      item: snapshot.item, rarity: snapshot.rarity || 'Common', effect: snapshot.effect || null,
+      startingBid: bid, currentBid: 0, currentBidderUname: null, currentBidderDisplay: null,
+      bidCount: 0, createdAt: Date.now(), endsAt: Date.now() + hours * HOUR_MS, status: 'active',
+    };
+    auctionListings.set(id, auction);
+
+    await persistSave(acc, save, uname);
+    await dbSaveAuction(auction);
+    socket.emit('player:state', buildClientState(save));
+    socket.emit('auction:createResult', { ok: true, auctionId: id });
+    io.emit('auction:state', buildAuctionStatePayload());
+    console.log(`[AUCTION] ${uname} listed ${auction.item} — starting bid ${bid}g, ${hours}h`);
+  });
+
+  // ── PLACE BID ────────────────────────────────────────────
+  socket.on('player:auctionBid', async ({ auctionId, bidAmount } = {}) => {
+    const id = typeof auctionId === 'string' ? auctionId.slice(0, 64) : '';
+    const fail = (msg) => socket.emit('auction:bidResult', { ok: false, auctionId: id, msg });
+    const bidderUname = socket.data.uname;
+    if (!bidderUname) { fail('Not logged in — please log in again.'); return; }
+    if (!checkActionRateLimit(bidderUname)) { fail('You are doing that too fast. Please wait a moment.'); return; }
+    if (!id) { fail('Unknown auction.'); return; }
+
+    const auction = auctionListings.get(id);
+    if (!auction || auction.status !== 'active' || auction.endsAt <= Date.now()) { fail('This auction has ended.'); return; }
+    if (auction.sellerUname === bidderUname) { fail('You cannot bid on your own auction.'); return; }
+
+    const minNext = auction.bidCount > 0
+      ? Math.ceil(auction.currentBid * (1 + AUCTION_MIN_RAISE_PCT / 100))
+      : auction.startingBid;
+    const bid = safeNum(bidAmount, 0, 999_999_999, 0); // integer only
+    if (bid < minNext) { fail(`Bid must be at least ${minNext.toLocaleString()} Gold.`); return; }
+
+    // ── ATOMIC LOCK ── snapshot the previous bid, then lock the auction
+    // synchronously before any await — a second simultaneous bid always
+    // sees status !== 'active' and is rejected outright.
+    const prevBid = auction.currentBid, prevBidder = auction.currentBidderUname;
+    auction.status = 'bidding';
+
+    try {
+      const f = flagged.get(bidderUname);
+      if ((f && f.level === 'banned') || isOnHold(bidderUname)) { auction.status = 'active'; fail('Trading is unavailable right now.'); return; }
+
+      const bidderAcc = accounts.get(bidderUname) || await dbGetAccount(bidderUname);
+      if (!bidderAcc) { auction.status = 'active'; fail('Account not found.'); return; }
+      const bidderSave = loadPlayerSave(bidderAcc);
+      if ((bidderSave.playerGold || 0) < bid) { auction.status = 'active'; fail('Not enough Gold.', { playerGold: bidderSave.playerGold || 0 }); return; }
+
+      removeGold(bidderSave, bid, `auction:bid:${auction.item}`); // hold the new bid
+      await persistSave(bidderAcc, bidderSave, bidderUname);
+
+      // Refund the previous bidder (online or not) — their Gold is never lost or duplicated.
+      if (prevBidder) {
+        const prevAcc = accounts.get(prevBidder) || await dbGetAccount(prevBidder);
+        if (prevAcc) {
+          const prevSave = loadPlayerSave(prevAcc);
+          addGold(prevSave, prevBid, `auction:outbid:${auction.item}`);
+          await persistSave(prevAcc, prevSave, prevBidder);
+          const prevSock = getSocketOfPlayer(prevBidder);
+          if (prevSock) {
+            io.to(prevSock).emit('player:state', buildClientState(prevSave));
+            io.to(prevSock).emit('market:notify', { msg: `⚠️ You've been outbid on ${auction.item}!` });
+          }
+        }
+      }
+
+      auction.currentBid           = bid;
+      auction.currentBidderUname   = bidderUname;
+      auction.currentBidderDisplay = bidderAcc.username;
+      auction.bidCount            += 1;
+      auction.status = 'active';
+      await dbSaveAuction(auction);
+
+      socket.emit('player:state', buildClientState(bidderSave));
+      socket.emit('auction:bidResult', { ok: true, auctionId: id });
+      io.emit('auction:state', buildAuctionStatePayload());
+      console.log(`[AUCTION] ${bidderUname} bid ${bid}g on ${auction.item} (was ${prevBid}g by ${prevBidder || 'nobody'})`);
+    } catch (err) {
+      auction.currentBid = prevBid; auction.currentBidderUname = prevBidder;
+      auction.status = 'active';
+      console.error('[AUCTION] bid error:', err && err.message);
+      fail('Bid failed. Please try again.');
+    }
+  });
+
   // ── ACTION: BATTLE REWARD ─────────────────────────────
   // Client reports battle outcome. Server calculates the reward.
   // The client CANNOT choose the reward amount.
@@ -2421,38 +2991,6 @@ io.on('connection', (socket) => {
   });
 
   // ── ANTI-CHEAT: STATUS CHECK ──────────────────────
-  // ── PROFILE IMPORT VALIDATION ────────────────────
-  // Client sends username to check before loading a JSON profile
-  socket.on('profile:validate', ({ username } = {}) => {
-    if (!username?.trim()) { socket.emit('profile:invalid', { reason: 'No username' }); return; }
-    const uname = username.trim().toLowerCase();
-    const f = flagged.get(uname);
-
-    if (f && f.level === 'banned') {
-      // Remove from leaderboard too
-      leaderboard.delete(uname);
-      socket.emit('profile:invalid', {
-        reason: 'banned',
-        message: 'This profile belongs to a banned account. Veylor has invalidated it.'
-      });
-      console.log(`[PROFILE BLOCKED] ${username} — banned account tried to import save`);
-      return;
-    }
-
-    if (isOnHold(uname)) {
-      const daysLeft = Math.ceil(getHoldTimeLeft(uname) / (24*60*60*1000));
-      socket.emit('profile:invalid', {
-        reason: 'suspended',
-        daysLeft,
-        message: `This account is suspended for ${daysLeft} more day${daysLeft!==1?'s':''}. Profile cannot be loaded.`
-      });
-      console.log(`[PROFILE BLOCKED] ${username} — suspended account tried to import save`);
-      return;
-    }
-
-    socket.emit('profile:valid', { username: username.trim() });
-  });
-
   socket.on('anticheat:check', ({ username } = {}) => {
     if (!username?.trim()) return;
     const uname = username.trim().toLowerCase();
@@ -3187,6 +3725,15 @@ setInterval(async () => {
   } catch (e) { console.warn('[SHOP] sweep error:', e.message); }
 }, SHOP_STOCK_CONFIG.cleanupIntervalMs).unref();
 
+// ── Auction sweep: resolves any auction whose timer has hit zero, whether
+// or not the seller or the winning bidder is online right now. ──────────
+setInterval(async () => {
+  try {
+    if (!marketDataLoaded) await loadMarketAndAuctions();
+    await resolveExpiredAuctions();
+  } catch (e) { console.warn('[AUCTION] sweep error:', e.message); }
+}, AUCTION_SWEEP_MS).unref();
+
 // ─────────────────────────────────────────────────────────
 //  START
 // ─────────────────────────────────────────────────────────
@@ -3197,6 +3744,7 @@ const localIP = getLocalIP();
 connectDB().then(async () => {
   // Restore the global shop stock/cooldowns so a restart doesn't reset them.
   try { await loadShopStock(); } catch (e) { console.warn('[SHOP] load failed:', e.message); }
+  try { await loadMarketAndAuctions(); } catch (e) { console.warn('[MARKET] load failed:', e.message); }
   server.listen(PORT, () => {
     console.log(`
 ╔══════════════════════════════════════════════╗
