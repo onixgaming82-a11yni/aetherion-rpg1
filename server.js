@@ -636,225 +636,6 @@ async function persistShopStock() {
 }
 
 // ── Server-side quest catalog (authoritative rewards) ─────
-// ═══════════════════════════════════════════════════════════
-//  PLAYER MARKET + AUCTION HOUSE
-//  Server-authoritative, database-persistent, real-time.
-//  In-memory Maps are the source of truth for instant, race-free checks
-//  (same pattern as shopStock above); MongoDB mirrors them so listings
-//  survive a restart. Every gold/item change goes through the same
-//  addGold/removeGold/persistSave helpers used everywhere else, so market
-//  trades participate in the exact same account-persistence pipeline as
-//  shop purchases, sales and battle rewards.
-// ═══════════════════════════════════════════════════════════
-const MARKET_FEE_PERCENT       = 5;   // seller receives totalPrice minus this %
-const MAX_LISTINGS_PER_PLAYER  = 10;
-const MAX_ACTIVE_LISTINGS      = 1000;
-const MAX_AUCTIONS_PER_PLAYER  = 5;
-const MAX_ACTIVE_AUCTIONS      = 500;
-const AUCTION_ALLOWED_HOURS    = [1, 6, 12, 24, 48];
-const AUCTION_MIN_RAISE_PCT    = 5;   // each new bid must beat the last by at least this %
-const AUCTION_SWEEP_MS         = 15_000;
-
-const marketListings  = new Map(); // id → listing   (status: 'active' while live)
-const auctionListings = new Map(); // id → auction   (status: 'active' while live)
-let marketDataLoaded  = false;
-
-const MarketListingSchema = new mongoose.Schema({
-  id:            { type: String, required: true, unique: true },
-  sellerUname:   String,
-  sellerDisplay: String,
-  item:          String,
-  rarity:        String,
-  effect:        mongoose.Schema.Types.Mixed,
-  qty:           Number,
-  totalPrice:    Number,
-  createdAt:     Number,
-  status:        { type: String, default: 'active' },
-}, { minimize: false });
-const MarketListing = mongoose.model('MarketListing', MarketListingSchema);
-
-const AuctionSchema = new mongoose.Schema({
-  id:                    { type: String, required: true, unique: true },
-  sellerUname:           String,
-  sellerDisplay:         String,
-  item:                  String,
-  rarity:                String,
-  effect:                mongoose.Schema.Types.Mixed,
-  startingBid:           Number,
-  currentBid:            Number,
-  currentBidderUname:    String,
-  currentBidderDisplay:  String,
-  bidCount:              { type: Number, default: 0 },
-  createdAt:             Number,
-  endsAt:                Number,
-  status:                { type: String, default: 'active' },
-}, { minimize: false });
-const Auction = mongoose.model('Auction', AuctionSchema);
-
-// ── DB mirror helpers (best-effort — the in-memory Map is always correct
-//    immediately; these just make it survive a restart) ────────────────
-async function dbSaveListing(listing) {
-  if (!MONGO_URI || !dbConnected) return;
-  try { await MarketListing.findOneAndUpdate({ id: listing.id }, listing, { upsert: true, maxTimeMS: 3000 }); }
-  catch (e) { console.warn('[MARKET DB] save failed:', e.message); }
-}
-async function dbDeleteListing(id) {
-  if (!MONGO_URI || !dbConnected) return;
-  try { await MarketListing.deleteOne({ id }); } catch (e) {}
-}
-async function dbSaveAuction(auction) {
-  if (!MONGO_URI || !dbConnected) return;
-  try { await Auction.findOneAndUpdate({ id: auction.id }, auction, { upsert: true, maxTimeMS: 3000 }); }
-  catch (e) { console.warn('[AUCTION DB] save failed:', e.message); }
-}
-async function dbDeleteAuction(id) {
-  if (!MONGO_URI || !dbConnected) return;
-  try { await Auction.deleteOne({ id }); } catch (e) {}
-}
-async function loadMarketAndAuctions() {
-  if (!MONGO_URI || !dbConnected) { marketDataLoaded = true; return; }
-  try {
-    const listings = await MarketListing.find({ status: 'active' }).lean().maxTimeMS(3000);
-    for (const l of listings) marketListings.set(l.id, l);
-    const auctions = await Auction.find({ status: 'active' }).lean().maxTimeMS(3000);
-    for (const a of auctions) auctionListings.set(a.id, a);
-    marketDataLoaded = true;
-    console.log(`[MARKET] Restored ${listings.length} listing(s) and ${auctions.length} auction(s) from database`);
-  } catch (e) {
-    console.warn('[MARKET] Could not load market/auction data:', e.message);
-  }
-}
-
-// ── Inventory helpers that PRESERVE full item metadata (rarity, effect) ──
-// across a trade — the buyer/winner must receive the actual item, not a
-// generic re-creation of it by name alone.
-function removeInventoryQty(save, itemName, qty) {
-  if (!save.inventory) return null;
-  const idx = save.inventory.findIndex(i => i.item === itemName);
-  if (idx < 0) return null;
-  const entry = save.inventory[idx];
-  const have  = entry.qty || 1;
-  if (have < qty) return null;
-  const snapshot = { item: entry.item, rarity: entry.rarity || 'Common', effect: entry.effect };
-  entry.qty = have - qty;
-  if (entry.qty <= 0) save.inventory.splice(idx, 1);
-  return snapshot;
-}
-function addInventoryItemSnapshot(save, snapshot, qty) {
-  if (!save.inventory) save.inventory = [];
-  if (save.inventory.length >= 200) return false;
-  const existing = save.inventory.find(i => i.item === snapshot.item);
-  if (existing) {
-    existing.qty = (existing.qty || 1) + qty;
-    if (snapshot.effect && !existing.effect) existing.effect = snapshot.effect;
-  } else {
-    save.inventory.push({ item: snapshot.item, rarity: snapshot.rarity || 'Common', qty, effect: snapshot.effect || undefined });
-  }
-  return true;
-}
-
-// ── Capped trade history (kept on the player's own save — no extra collection) ──
-function addMarketHistory(save, entry) {
-  if (!save.marketHistory) save.marketHistory = [];
-  save.marketHistory.unshift({ ...entry, date: Date.now() });
-  if (save.marketHistory.length > 30) save.marketHistory.length = 30;
-}
-
-// ── Public, read-only payloads sent to every client ───────────────────
-function buildMarketStatePayload() {
-  return [...marketListings.values()]
-    .filter(l => l.status === 'active')
-    .sort((a, b) => b.createdAt - a.createdAt)
-    .slice(0, 300)
-    .map(l => ({
-      id: l.id, item: l.item, rarity: l.rarity, qty: l.qty,
-      totalPrice: l.totalPrice, sellerUname: l.sellerUname,
-      sellerDisplay: l.sellerDisplay, createdAt: l.createdAt,
-    }));
-}
-function buildAuctionStatePayload() {
-  return [...auctionListings.values()]
-    .filter(a => a.status === 'active')
-    .sort((a, b) => a.endsAt - b.endsAt)
-    .slice(0, 300)
-    .map(a => ({
-      id: a.id, item: a.item, rarity: a.rarity,
-      startingBid: a.startingBid, currentBid: a.currentBid,
-      currentBidderDisplay: a.currentBidderDisplay, bidCount: a.bidCount,
-      sellerUname: a.sellerUname, sellerDisplay: a.sellerDisplay,
-      createdAt: a.createdAt, endsAt: a.endsAt,
-    }));
-}
-function sendMarketState(target) { target.emit('market:state', buildMarketStatePayload()); }
-function sendAuctionState(target) { target.emit('auction:state', buildAuctionStatePayload()); }
-
-// ── Auction resolution sweep — runs on a timer, not on request, so an
-//    auction ends for everyone the moment its clock hits zero regardless
-//    of who is or isn't online at that instant. ─────────────────────────
-async function resolveExpiredAuctions() {
-  const now = Date.now();
-  const expired = [...auctionListings.values()].filter(a => a.status === 'active' && a.endsAt <= now);
-  if (!expired.length) return;
-  for (const auction of expired) {
-    auction.status = 'ending'; // atomic lock — no bid can land on this auction anymore
-    try {
-      if (auction.bidCount > 0 && auction.currentBidderUname) {
-        const winnerUname = auction.currentBidderUname;
-        const fee      = Math.floor(auction.currentBid * MARKET_FEE_PERCENT / 100);
-        const proceeds = auction.currentBid - fee;
-
-        const winnerAcc = accounts.get(winnerUname) || await dbGetAccount(winnerUname);
-        if (winnerAcc) {
-          const winnerSave = loadPlayerSave(winnerAcc);
-          addInventoryItemSnapshot(winnerSave, { item: auction.item, rarity: auction.rarity, effect: auction.effect }, 1);
-          addMarketHistory(winnerSave, { type: 'auction_won', item: auction.item, price: auction.currentBid, other: auction.sellerDisplay });
-          await persistSave(winnerAcc, winnerSave, winnerUname);
-          const wSock = getSocketOfPlayer(winnerUname);
-          if (wSock) {
-            io.to(wSock).emit('player:state', buildClientState(winnerSave));
-            io.to(wSock).emit('market:notify', { msg: `🏆 Auction won! ${auction.item} is now yours.` });
-          }
-        }
-
-        const sellerAcc = accounts.get(auction.sellerUname) || await dbGetAccount(auction.sellerUname);
-        if (sellerAcc) {
-          const sellerSave = loadPlayerSave(sellerAcc);
-          addGold(sellerSave, proceeds, `auction:sold:${auction.item}`);
-          addMarketHistory(sellerSave, { type: 'auction_sale', item: auction.item, price: proceeds, other: auction.currentBidderDisplay });
-          await persistSave(sellerAcc, sellerSave, auction.sellerUname);
-          const sSock = getSocketOfPlayer(auction.sellerUname);
-          if (sSock) {
-            io.to(sSock).emit('player:state', buildClientState(sellerSave));
-            io.to(sSock).emit('market:notify', { msg: `⚖️ Your auction for ${auction.item} sold for ${proceeds.toLocaleString()} Gold!` });
-          }
-        }
-        console.log(`[AUCTION] ${auction.item} → ${winnerUname} for ${auction.currentBid}g (seller ${auction.sellerUname} got ${proceeds}g)`);
-      } else {
-        // No bids — item returns to the seller untouched.
-        const sellerAcc = accounts.get(auction.sellerUname) || await dbGetAccount(auction.sellerUname);
-        if (sellerAcc) {
-          const sellerSave = loadPlayerSave(sellerAcc);
-          addInventoryItemSnapshot(sellerSave, { item: auction.item, rarity: auction.rarity, effect: auction.effect }, 1);
-          await persistSave(sellerAcc, sellerSave, auction.sellerUname);
-          const sSock = getSocketOfPlayer(auction.sellerUname);
-          if (sSock) {
-            io.to(sSock).emit('player:state', buildClientState(sellerSave));
-            io.to(sSock).emit('market:notify', { msg: `↩️ Your auction for ${auction.item} ended with no bids — item returned.` });
-          }
-        }
-        console.log(`[AUCTION] ${auction.item} (seller ${auction.sellerUname}) ended with no bids — returned`);
-      }
-      auction.status = 'ended';
-      auctionListings.delete(auction.id);
-      await dbDeleteAuction(auction.id);
-    } catch (e) {
-      console.error('[AUCTION] resolve error:', e && e.message);
-      auction.status = 'active'; // retry on the next sweep
-    }
-  }
-  io.emit('auction:state', buildAuctionStatePayload());
-}
-
 const SERVER_QUEST_CATALOG = {
   kill3:    { desc:'Defeat 3 monsters',          type:'kill',    target:3,   reward:{gold:30,  xp:60,  item:null} },
   kill8:    { desc:'Defeat 8 monsters',          type:'kill',    target:8,   reward:{gold:80,  xp:150, item:null} },
@@ -949,8 +730,11 @@ function loadPlayerSave(acc) {
 // ── Persist updated save back to DB ──────────────────────
 async function persistSave(acc, save, uname) {
   acc.save = JSON.stringify(save);
-  await dbSaveAccount({ ...acc, uname });
-  accounts.set(uname, acc);
+  accounts.set(uname, acc);                 // cache first: it is the authoritative copy
+  // Same per-account write queue the Market/Auction uses, so an older snapshot
+  // can never land in MongoDB after a newer one and undo a trade.
+  try { await economy.persistAccount(uname); }
+  catch (e) { console.error(`[DB] persistSave failed for '${uname}':`, e.message); }
 }
 
 // ── Authoritative: add gold ───────────────────────────────
@@ -1447,6 +1231,100 @@ async function dbDeleteAccount(uname) {
 
 // ── In-memory fallback (used when no MongoDB) ──────────────
 const accounts = new Map();
+
+// ═══════════════════════════════════════════════════════════
+//  PLAYER MARKET + AUCTION HOUSE — persistence wiring
+//  All rules live in economy.js (server-authoritative, journaled,
+//  idempotent). This block only supplies MongoDB storage + socket hooks.
+//  Store methods THROW on failure — the engine relies on that to keep
+//  memory and database from silently disagreeing.
+// ═══════════════════════════════════════════════════════════
+const { createEconomy } = require('./economy');
+function socketsOfPlayer(uname) {
+  const out = [];
+  for (const [sid, sock] of io.sockets.sockets) if (sock.data && sock.data.uname === uname) out.push(sid);
+  return out;
+}
+
+const MarketListingSchema = new mongoose.Schema({
+  id:            { type: String, required: true, unique: true },
+  sellerUname:   String,
+  sellerDisplay: String,
+  item:          String,
+  rarity:        String,
+  effect:        mongoose.Schema.Types.Mixed,
+  qty:           Number,
+  totalPrice:    Number,
+  snapshot:      mongoose.Schema.Types.Mixed,   // immutable item snapshot taken at listing time
+  createdAt:     Number,
+  status:        { type: String, default: 'active' },
+}, { minimize: false });
+const MarketListing = mongoose.model('MarketListing', MarketListingSchema);
+
+const AuctionSchema = new mongoose.Schema({
+  id:                    { type: String, required: true, unique: true },
+  sellerUname:           String,
+  sellerDisplay:         String,
+  item:                  String,
+  rarity:                String,
+  effect:                mongoose.Schema.Types.Mixed,
+  snapshot:              mongoose.Schema.Types.Mixed,
+  startingBid:           Number,
+  currentBid:            Number,
+  currentBidderUname:    String,
+  currentBidderDisplay:  String,
+  bidCount:              { type: Number, default: 0 },
+  createdAt:             Number,
+  endsAt:                Number,
+  status:                { type: String, default: 'active' }, // active | settlement_pending
+}, { minimize: false });
+const Auction = mongoose.model('Auction', AuctionSchema);
+
+// Write-ahead journal + permanent transaction record (also serves as trade history).
+const MarketTxSchema = new mongoose.Schema({
+  id:        { type: String, required: true, unique: true },   // e.g. market:<listingId>:purchase
+  type:      String,
+  state:     { type: String, default: 'pending', index: true }, // pending | done | aborted
+  legs:      mongoose.Schema.Types.Mixed,
+  finalize:  mongoose.Schema.Types.Mixed,
+  record:    mongoose.Schema.Types.Mixed,
+  abortReason: String,
+  createdAt: Number,
+  completedAt: Number,
+}, { minimize: false });
+const MarketTx = mongoose.model('MarketTx', MarketTxSchema);
+
+const dbReady = () => !MONGO_URI || dbConnected;
+const marketStore = {
+  isReady: dbReady,
+  async saveListing(d)   { if (!MONGO_URI) return; await MarketListing.findOneAndUpdate({ id: d.id }, { $set: d }, { upsert: true, maxTimeMS: 3000 }); },
+  async deleteListing(id){ if (!MONGO_URI) return; await MarketListing.deleteOne({ id }).maxTimeMS(3000); },
+  async saveAuction(d)   { if (!MONGO_URI) return; await Auction.findOneAndUpdate({ id: d.id }, { $set: d }, { upsert: true, maxTimeMS: 3000 }); },
+  async deleteAuction(id){ if (!MONGO_URI) return; await Auction.deleteOne({ id }).maxTimeMS(3000); },
+  async saveTx(tx) {
+    if (!MONGO_URI) return;
+    const { id, type, state, legs, finalize, record, abortReason, createdAt, completedAt } = tx;
+    await MarketTx.findOneAndUpdate({ id }, { $set: { id, type, state, legs, finalize, record, abortReason, createdAt, completedAt } }, { upsert: true, maxTimeMS: 3000 });
+  },
+  async loadListings()   { return MONGO_URI ? await MarketListing.find({ status: 'active' }).lean().maxTimeMS(5000) : []; },
+  async loadAuctions()   { return MONGO_URI ? await Auction.find({ status: { $in: ['active', 'settlement_pending'] } }).lean().maxTimeMS(5000) : []; },
+  async loadPendingTxs() { return MONGO_URI ? await MarketTx.find({ state: 'pending' }).lean().maxTimeMS(5000) : []; },
+};
+
+const economy = createEconomy({
+  store: marketStore,
+  accounts,
+  getAccount: (uname) => dbGetAccount(uname),
+  persistAccount: (uname, acc) => dbSaveAccount({ ...acc, uname }),
+  canTrade: (uname) => { const f = flagged.get(uname); return !((f && f.level === 'banned') || isOnHold(uname)); },
+  config: { FEE_PERCENT: 5, HOUR_MS },
+  hooks: {
+    // every open tab/device of the account gets the update, not just the first socket found
+    pushState(uname, save) { for (const sid of socketsOfPlayer(uname)) io.to(sid).emit('player:state', buildClientState(save)); },
+    notify(uname, msg)     { for (const sid of socketsOfPlayer(uname)) io.to(sid).emit('market:notify', { msg }); },
+    broadcast(event, payload) { io.emit(event, payload); },
+  },
+});
 
 // ─────────────────────────────────────────────────────────
 //  HELPERS
@@ -2354,294 +2232,43 @@ io.on('connection', (socket) => {
   });
 
   // ═══════════════════════════════════════════════════════
-  //  PLAYER MARKET
+  //  PLAYER MARKET + AUCTION HOUSE
+  //  Thin socket layer: identity + rate limit here, ALL rules and every
+  //  Gold/item movement in economy.js. Client-supplied prices, quantities,
+  //  item data and bids are inputs to be validated — never trusted.
   // ═══════════════════════════════════════════════════════
 
-  // Read-only: current live listings. Public data — nothing here can change
-  // server state, so an unauthenticated peek is fine (same policy as shop:getState).
-  socket.on('market:getState', () => {
+  // Read-only public data. Rate-limited like shop:getState.
+  const publicStateGate = (key) => {
     const uname = socket.data.uname;
-    if (uname) { if (!checkActionRateLimit(uname)) return; }
-    else {
-      const now = Date.now();
-      if (now - (socket.data.lastMarketStateAt || 0) < 1000) return;
-      socket.data.lastMarketStateAt = now;
-    }
-    sendMarketState(socket);
-  });
+    if (uname) return checkActionRateLimit(uname);
+    const now = Date.now();
+    if (now - (socket.data[key] || 0) < 1000) return false;
+    socket.data[key] = now;
+    return true;
+  };
+  socket.on('market:getState',  () => { if (publicStateGate('lastMarketStateAt'))  socket.emit('market:state',  economy.marketPayload()); });
+  socket.on('auction:getState', () => { if (publicStateGate('lastAuctionStateAt')) socket.emit('auction:state', economy.auctionPayload()); });
 
-  // ── CREATE LISTING ─────────────────────────────────────
-  socket.on('player:marketList', async ({ itemName, qty, totalPrice } = {}) => {
-    const fail = (msg) => socket.emit('market:listResult', { ok: false, msg });
-    const session = await requireSession(socket);
-    if (!session) return;
-    const { uname, acc } = session;
-    if (!checkActionRateLimit(uname)) { fail('You are doing that too fast. Please wait a moment.'); return; }
-
-    const f = flagged.get(uname);
-    if ((f && f.level === 'banned') || isOnHold(uname)) { fail('Trading is unavailable right now.'); return; }
-
-    if (typeof itemName !== 'string' || !itemName.trim() || itemName.length > 60) { fail('Invalid item.'); return; }
-    // safeNum floors to an integer — decimal quantities/prices are impossible to submit even if the client is tampered with.
-    const cleanQty   = safeNum(qty, 1, 999, 0);
-    const cleanPrice = safeNum(totalPrice, 1, 999_999_999, 0);
-    if (cleanQty < 1)   { fail('Quantity must be a whole number of at least 1.'); return; }
-    if (cleanPrice < 1) { fail('Price must be a whole number of at least 1 Gold.'); return; }
-
-    if (marketListings.size >= MAX_ACTIVE_LISTINGS) { fail('The Market is full right now — try again soon.'); return; }
-    const activeByUser = [...marketListings.values()].filter(l => l.sellerUname === uname && l.status === 'active').length;
-    if (activeByUser >= MAX_LISTINGS_PER_PLAYER) { fail(`You can only have ${MAX_LISTINGS_PER_PLAYER} active listings at once.`); return; }
-
-    const save = loadPlayerSave(acc);
-    const snapshot = removeInventoryQty(save, itemName.trim(), cleanQty);
-    if (!snapshot) { fail('You do not have that many to sell.'); return; }
-
-    const id = crypto.randomBytes(8).toString('hex');
-    const listing = {
-      id, sellerUname: uname, sellerDisplay: acc.username,
-      item: snapshot.item, rarity: snapshot.rarity || 'Common', effect: snapshot.effect || null,
-      qty: cleanQty, totalPrice: cleanPrice,
-      createdAt: Date.now(), status: 'active',
-    };
-    marketListings.set(id, listing);
-
-    await persistSave(acc, save, uname);
-    await dbSaveListing(listing);
-    socket.emit('player:state', buildClientState(save));
-    socket.emit('market:listResult', { ok: true, listingId: id });
-    io.emit('market:state', buildMarketStatePayload()); // live for everyone
-    console.log(`[MARKET] ${uname} listed ${cleanQty}× ${listing.item} for ${cleanPrice}g`);
-  });
-
-  // ── BUY LISTING ─────────────────────────────────────────
-  socket.on('player:marketBuy', async ({ listingId } = {}) => {
-    const id = typeof listingId === 'string' ? listingId.slice(0, 64) : '';
-    const fail = (msg, extra = {}) => socket.emit('market:buyResult', { ok: false, listingId: id, msg, ...extra });
-    const buyerUname = socket.data.uname;
-    if (!buyerUname) { fail('Not logged in — please log in again.'); return; }
-    if (!checkActionRateLimit(buyerUname)) { fail('You are doing that too fast. Please wait a moment.'); return; }
-    if (!id) { fail('Unknown listing.'); return; }
-
-    // ── ATOMIC LOCK ── everything from the read to the status flip below is
-    // synchronous (no `await`), so two simultaneous buyers can never both
-    // pass this check — the second one always sees status !== 'active'.
-    const listing = marketListings.get(id);
-    if (!listing || listing.status !== 'active') { fail('This item has already been sold.'); return; }
-    if (listing.sellerUname === buyerUname) { fail('You cannot buy your own listing.'); return; }
-    listing.status = 'pending';
-
-    try {
-      const f = flagged.get(buyerUname);
-      if ((f && f.level === 'banned') || isOnHold(buyerUname)) { listing.status = 'active'; fail('Trading is unavailable right now.'); return; }
-
-      const buyerAcc = accounts.get(buyerUname) || await dbGetAccount(buyerUname);
-      if (!buyerAcc) { listing.status = 'active'; fail('Account not found.'); return; }
-
-      const buyerSave = loadPlayerSave(buyerAcc);
-      if ((buyerSave.playerGold || 0) < listing.totalPrice) {
-        listing.status = 'active';
-        fail('Not enough Gold.', { playerGold: buyerSave.playerGold || 0 });
-        return;
-      }
-
-      removeGold(buyerSave, listing.totalPrice, `market:buy:${listing.item}`);
-      addInventoryItemSnapshot(buyerSave, { item: listing.item, rarity: listing.rarity, effect: listing.effect }, listing.qty);
-      addMarketHistory(buyerSave, { type: 'purchase', item: listing.item, qty: listing.qty, price: listing.totalPrice, other: listing.sellerDisplay });
-
-      // Finalize — remove from the live market immediately so it can never be bought twice.
-      listing.status = 'sold';
-      marketListings.delete(id);
-
-      const fee      = Math.floor(listing.totalPrice * MARKET_FEE_PERCENT / 100);
-      const proceeds = listing.totalPrice - fee;
-      // Seller is paid whether they're online or not (#9 — offline sellers).
-      const sellerAcc = accounts.get(listing.sellerUname) || await dbGetAccount(listing.sellerUname);
-      if (sellerAcc) {
-        const sellerSave = loadPlayerSave(sellerAcc);
-        addGold(sellerSave, proceeds, `market:sold:${listing.item}`);
-        addMarketHistory(sellerSave, { type: 'sale', item: listing.item, qty: listing.qty, price: proceeds, other: buyerAcc.username });
-        await persistSave(sellerAcc, sellerSave, listing.sellerUname);
-        const sellerSock = getSocketOfPlayer(listing.sellerUname);
-        if (sellerSock) {
-          io.to(sellerSock).emit('player:state', buildClientState(sellerSave));
-          io.to(sellerSock).emit('market:notify', { msg: `💰 Your ${listing.item} sold for ${proceeds.toLocaleString()} Gold!` });
-        }
-      }
-
-      await persistSave(buyerAcc, buyerSave, buyerUname);
-      await dbDeleteListing(id);
-
-      socket.emit('player:state', buildClientState(buyerSave));
-      socket.emit('market:buyResult', { ok: true, listingId: id });
-      io.emit('market:state', buildMarketStatePayload()); // disappears for everyone, instantly
-      console.log(`[MARKET] ${buyerUname} bought ${listing.qty}× ${listing.item} from ${listing.sellerUname} for ${listing.totalPrice}g`);
-    } catch (err) {
-      listing.status = 'active'; // roll back the lock on an unexpected error
-      console.error('[MARKET] buy error:', err && err.message);
-      fail('Purchase failed. Please try again.');
-    }
-  });
-
-  // ── CANCEL LISTING ──────────────────────────────────────
-  socket.on('player:marketCancel', async ({ listingId } = {}) => {
-    const id = typeof listingId === 'string' ? listingId.slice(0, 64) : '';
-    const fail = (msg) => socket.emit('market:cancelResult', { ok: false, listingId: id, msg });
+  // Runs one economy action for a logged-in socket and reports the result.
+  const econAction = (event, resultEvent, run) => socket.on(event, async (payload) => {
     const uname = socket.data.uname;
-    if (!uname) { fail('Not logged in — please log in again.'); return; }
-    if (!checkActionRateLimit(uname)) { fail('You are doing that too fast. Please wait a moment.'); return; }
-    if (!id) { fail('Unknown listing.'); return; }
-
-    const listing = marketListings.get(id);
-    if (!listing || listing.status !== 'active') { fail('Listing not found — it may already be sold or cancelled.'); return; }
-    if (listing.sellerUname !== uname) { fail('This is not your listing.'); return; }
-    listing.status = 'cancelled'; // atomic lock — same pattern as buy
-
+    const reply = (res) => socket.emit(resultEvent, res);
     try {
-      const session = await requireSession(socket);
-      if (!session) { listing.status = 'active'; return; }
-      const { acc } = session;
-      const save = loadPlayerSave(acc);
-      addInventoryItemSnapshot(save, { item: listing.item, rarity: listing.rarity, effect: listing.effect }, listing.qty);
-      marketListings.delete(id);
-      await persistSave(acc, save, uname);
-      await dbDeleteListing(id);
-      socket.emit('player:state', buildClientState(save));
-      socket.emit('market:cancelResult', { ok: true, listingId: id });
-      io.emit('market:state', buildMarketStatePayload());
-      console.log(`[MARKET] ${uname} cancelled listing of ${listing.qty}× ${listing.item}`);
+      if (!uname) { reply({ ok: false, msg: 'Not logged in — please log in again.' }); return; }
+      if (!checkActionRateLimit(uname)) { reply({ ok: false, msg: 'You are doing that too fast. Please wait a moment.' }); return; }
+      const p = (payload && typeof payload === 'object') ? payload : {};
+      reply(await run(uname, p));
     } catch (err) {
-      listing.status = 'active';
-      console.error('[MARKET] cancel error:', err && err.message);
-      fail('Cancel failed. Please try again.');
+      console.error(`[ECONOMY] ${event} error:`, err && err.message);
+      reply({ ok: false, msg: 'Something went wrong. Please try again.' });
     }
   });
-
-  // ═══════════════════════════════════════════════════════
-  //  AUCTION HOUSE
-  // ═══════════════════════════════════════════════════════
-
-  socket.on('auction:getState', () => {
-    const uname = socket.data.uname;
-    if (uname) { if (!checkActionRateLimit(uname)) return; }
-    else {
-      const now = Date.now();
-      if (now - (socket.data.lastAuctionStateAt || 0) < 1000) return;
-      socket.data.lastAuctionStateAt = now;
-    }
-    sendAuctionState(socket);
-  });
-
-  // ── CREATE AUCTION ──────────────────────────────────────
-  socket.on('player:auctionCreate', async ({ itemName, startingBid, durationHours } = {}) => {
-    const fail = (msg) => socket.emit('auction:createResult', { ok: false, msg });
-    const session = await requireSession(socket);
-    if (!session) return;
-    const { uname, acc } = session;
-    if (!checkActionRateLimit(uname)) { fail('You are doing that too fast. Please wait a moment.'); return; }
-
-    const f = flagged.get(uname);
-    if ((f && f.level === 'banned') || isOnHold(uname)) { fail('Trading is unavailable right now.'); return; }
-
-    if (typeof itemName !== 'string' || !itemName.trim() || itemName.length > 60) { fail('Invalid item.'); return; }
-    const bid = safeNum(startingBid, 1, 999_999_999, 0); // integer only — decimals are floored/rejected
-    if (bid < 1) { fail('Starting bid must be a whole number of at least 1 Gold.'); return; }
-    const hours = AUCTION_ALLOWED_HOURS.includes(Number(durationHours)) ? Number(durationHours) : 24;
-
-    if (auctionListings.size >= MAX_ACTIVE_AUCTIONS) { fail('The Auction House is full right now — try again soon.'); return; }
-    const activeByUser = [...auctionListings.values()].filter(a => a.sellerUname === uname && a.status === 'active').length;
-    if (activeByUser >= MAX_AUCTIONS_PER_PLAYER) { fail(`You can only run ${MAX_AUCTIONS_PER_PLAYER} auctions at once.`); return; }
-
-    const save = loadPlayerSave(acc);
-    const snapshot = removeInventoryQty(save, itemName.trim(), 1); // one unique item per auction
-    if (!snapshot) { fail('You do not have that item.'); return; }
-
-    const id = crypto.randomBytes(8).toString('hex');
-    const auction = {
-      id, sellerUname: uname, sellerDisplay: acc.username,
-      item: snapshot.item, rarity: snapshot.rarity || 'Common', effect: snapshot.effect || null,
-      startingBid: bid, currentBid: 0, currentBidderUname: null, currentBidderDisplay: null,
-      bidCount: 0, createdAt: Date.now(), endsAt: Date.now() + hours * HOUR_MS, status: 'active',
-    };
-    auctionListings.set(id, auction);
-
-    await persistSave(acc, save, uname);
-    await dbSaveAuction(auction);
-    socket.emit('player:state', buildClientState(save));
-    socket.emit('auction:createResult', { ok: true, auctionId: id });
-    io.emit('auction:state', buildAuctionStatePayload());
-    console.log(`[AUCTION] ${uname} listed ${auction.item} — starting bid ${bid}g, ${hours}h`);
-  });
-
-  // ── PLACE BID ────────────────────────────────────────────
-  socket.on('player:auctionBid', async ({ auctionId, bidAmount } = {}) => {
-    const id = typeof auctionId === 'string' ? auctionId.slice(0, 64) : '';
-    const fail = (msg) => socket.emit('auction:bidResult', { ok: false, auctionId: id, msg });
-    const bidderUname = socket.data.uname;
-    if (!bidderUname) { fail('Not logged in — please log in again.'); return; }
-    if (!checkActionRateLimit(bidderUname)) { fail('You are doing that too fast. Please wait a moment.'); return; }
-    if (!id) { fail('Unknown auction.'); return; }
-
-    const auction = auctionListings.get(id);
-    if (!auction || auction.status !== 'active' || auction.endsAt <= Date.now()) { fail('This auction has ended.'); return; }
-    if (auction.sellerUname === bidderUname) { fail('You cannot bid on your own auction.'); return; }
-
-    const minNext = auction.bidCount > 0
-      ? Math.ceil(auction.currentBid * (1 + AUCTION_MIN_RAISE_PCT / 100))
-      : auction.startingBid;
-    const bid = safeNum(bidAmount, 0, 999_999_999, 0); // integer only
-    if (bid < minNext) { fail(`Bid must be at least ${minNext.toLocaleString()} Gold.`); return; }
-
-    // ── ATOMIC LOCK ── snapshot the previous bid, then lock the auction
-    // synchronously before any await — a second simultaneous bid always
-    // sees status !== 'active' and is rejected outright.
-    const prevBid = auction.currentBid, prevBidder = auction.currentBidderUname;
-    auction.status = 'bidding';
-
-    try {
-      const f = flagged.get(bidderUname);
-      if ((f && f.level === 'banned') || isOnHold(bidderUname)) { auction.status = 'active'; fail('Trading is unavailable right now.'); return; }
-
-      const bidderAcc = accounts.get(bidderUname) || await dbGetAccount(bidderUname);
-      if (!bidderAcc) { auction.status = 'active'; fail('Account not found.'); return; }
-      const bidderSave = loadPlayerSave(bidderAcc);
-      if ((bidderSave.playerGold || 0) < bid) { auction.status = 'active'; fail('Not enough Gold.', { playerGold: bidderSave.playerGold || 0 }); return; }
-
-      removeGold(bidderSave, bid, `auction:bid:${auction.item}`); // hold the new bid
-      await persistSave(bidderAcc, bidderSave, bidderUname);
-
-      // Refund the previous bidder (online or not) — their Gold is never lost or duplicated.
-      if (prevBidder) {
-        const prevAcc = accounts.get(prevBidder) || await dbGetAccount(prevBidder);
-        if (prevAcc) {
-          const prevSave = loadPlayerSave(prevAcc);
-          addGold(prevSave, prevBid, `auction:outbid:${auction.item}`);
-          await persistSave(prevAcc, prevSave, prevBidder);
-          const prevSock = getSocketOfPlayer(prevBidder);
-          if (prevSock) {
-            io.to(prevSock).emit('player:state', buildClientState(prevSave));
-            io.to(prevSock).emit('market:notify', { msg: `⚠️ You've been outbid on ${auction.item}!` });
-          }
-        }
-      }
-
-      auction.currentBid           = bid;
-      auction.currentBidderUname   = bidderUname;
-      auction.currentBidderDisplay = bidderAcc.username;
-      auction.bidCount            += 1;
-      auction.status = 'active';
-      await dbSaveAuction(auction);
-
-      socket.emit('player:state', buildClientState(bidderSave));
-      socket.emit('auction:bidResult', { ok: true, auctionId: id });
-      io.emit('auction:state', buildAuctionStatePayload());
-      console.log(`[AUCTION] ${bidderUname} bid ${bid}g on ${auction.item} (was ${prevBid}g by ${prevBidder || 'nobody'})`);
-    } catch (err) {
-      auction.currentBid = prevBid; auction.currentBidderUname = prevBidder;
-      auction.status = 'active';
-      console.error('[AUCTION] bid error:', err && err.message);
-      fail('Bid failed. Please try again.');
-    }
-  });
+  econAction('player:marketList',    'market:listResult',    (u, p) => economy.createListing(u, p));
+  econAction('player:marketBuy',     'market:buyResult',     (u, p) => economy.buyListing(u, p.listingId));
+  econAction('player:marketCancel',  'market:cancelResult',  (u, p) => economy.cancelListing(u, p.listingId));
+  econAction('player:auctionCreate', 'auction:createResult', (u, p) => economy.createAuction(u, p));
+  econAction('player:auctionBid',    'auction:bidResult',    (u, p) => economy.placeBid(u, p.auctionId, p.bidAmount));
 
   // ── ACTION: BATTLE REWARD ─────────────────────────────
   // Client reports battle outcome. Server calculates the reward.
@@ -3728,11 +3355,9 @@ setInterval(async () => {
 // ── Auction sweep: resolves any auction whose timer has hit zero, whether
 // or not the seller or the winning bidder is online right now. ──────────
 setInterval(async () => {
-  try {
-    if (!marketDataLoaded) await loadMarketAndAuctions();
-    await resolveExpiredAuctions();
-  } catch (e) { console.warn('[AUCTION] sweep error:', e.message); }
-}, AUCTION_SWEEP_MS).unref();
+  try { await economy.sweep(); }   // initialises/recovers if needed, retries deferred DB writes, settles auctions
+  catch (e) { console.warn('[AUCTION] sweep error:', e.message); }
+}, 15_000).unref();
 
 // ─────────────────────────────────────────────────────────
 //  START
@@ -3744,7 +3369,8 @@ const localIP = getLocalIP();
 connectDB().then(async () => {
   // Restore the global shop stock/cooldowns so a restart doesn't reset them.
   try { await loadShopStock(); } catch (e) { console.warn('[SHOP] load failed:', e.message); }
-  try { await loadMarketAndAuctions(); } catch (e) { console.warn('[MARKET] load failed:', e.message); }
+  // Load listings/auctions and replay any journaled-but-unfinished transactions BEFORE accepting connections.
+  try { await economy.initialize(); } catch (e) { console.warn('[MARKET] load failed:', e.message); }
   server.listen(PORT, () => {
     console.log(`
 ╔══════════════════════════════════════════════╗
