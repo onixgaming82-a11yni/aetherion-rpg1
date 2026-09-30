@@ -3802,6 +3802,20 @@ function setupMarketListeners(sock){
     _auctionData = Array.isArray(list) ? list : [];
     if(document.getElementById('screen-market')?.classList.contains('active') && _marketMainTab==='auction') renderAuctionPanel();
   });
+  // Targeted removals — the server broadcasts these the instant a listing/auction
+  // is sold, cancelled or settled. (The full market:state that follows is still
+  // the source of truth and simply replaces everything.)
+  sock.on('market:listingRemoved', ({ listingId } = {})=>{
+    _marketData = _marketData.filter(l=>l.id!==listingId);
+    if(document.getElementById('screen-market')?.classList.contains('active') && _marketMainTab==='market') renderMarketPanel();
+  });
+  sock.on('auction:removed', ({ auctionId } = {})=>{
+    _auctionData = _auctionData.filter(a=>a.id!==auctionId);
+    if(document.getElementById('screen-market')?.classList.contains('active') && _marketMainTab==='auction') renderAuctionPanel();
+  });
+  // Never leave the market buttons locked if a request got no normal reply.
+  sock.on('player:actionError', ()=>{ _marketActionPending = false; });
+  sock.on('disconnect',         ()=>{ _marketActionPending = false; });
   sock.on('market:listResult',   onMarketListResult);
   sock.on('market:buyResult',    onMarketBuyResult);
   sock.on('market:cancelResult', onMarketCancelResult);
@@ -3862,7 +3876,7 @@ function renderAuctionPanel(){
     const rc = RARITY_COLORS[a.rarity] || '#888';
     const isMine = a.sellerDisplay === gameState.username;
     const isHighBidder = a.bidCount>0 && a.currentBidderDisplay === gameState.username;
-    const minNext = a.bidCount>0 ? Math.ceil(a.currentBid*1.05) : a.startingBid;
+    const minNext = Number.isFinite(a.minimumBid) ? a.minimumBid : (a.bidCount>0 ? Math.floor((a.currentBid*105+99)/100) : a.startingBid); // server-computed; integer fallback
     const remaining = Math.max(0, a.endsAt - Date.now());
     return `<div class="shop-item">
       <div class="shop-item-icon">${icon}</div>
@@ -3962,7 +3976,7 @@ function submitSellOnMarket(){
 function onMarketListResult(res){
   _marketActionPending = false;
   if(!res) return;
-  if(!res.ok){ toast(res.msg||'Listing failed.'); return; }
+  if(!res.ok){ toast(res.msg||'Listing failed.'); requestMarketState(); return; }
   toast('📥 Item listed on the Market!');
   closeModal();
   marketMainTab('market');
@@ -4006,7 +4020,7 @@ function cancelMarketListing(id){
 function onMarketCancelResult(res){
   _marketActionPending = false;
   if(!res) return;
-  if(!res.ok){ toast(res.msg||'Cancel failed.'); return; }
+  if(!res.ok){ toast(res.msg||'Cancel failed.'); requestMarketState(); return; }
   toast('↩️ Listing cancelled — item returned to your bag.');
   closeModal();
   requestMarketState();
@@ -4080,6 +4094,7 @@ function onAuctionBidResult(res){
   if(!res.ok){
     if(Number.isFinite(res.playerGold)) gameState.playerGold = res.playerGold;
     toast(res.msg||'Bid failed.');
+    requestAuctionState(); // stale price/ended auction → show the server's current state
     return;
   }
   toast('✓ Bid placed!');
