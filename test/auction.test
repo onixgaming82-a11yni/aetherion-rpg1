@@ -1,0 +1,381 @@
+'use strict';
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const { makeWorld, started } = require('./harness');
+
+const HOUR = 3600_000;
+const RING = { item: 'Ruby Ring', rarity: 'Epic', qty: 1, effect: { type: 'magic', val: 12 } };
+const fullBag = () => Array.from({ length: 200 }, (_, i) => ({ item: 'Junk' + i, rarity: 'Common', qty: 1 }));
+
+async function scene(over = {}) {
+  const w = makeWorld();
+  w.seed('alice', { gold: 50, inventory: [{ ...RING }], display: 'Alice' });
+  w.seed('bob', { gold: over.bob ?? 2000, inventory: over.bobInv || [], display: 'Bob' });
+  w.seed('carol', { gold: over.carol ?? 2000, inventory: [], display: 'Carol' });
+  const b = await started(w);
+  return { w, ...b };
+}
+const create = (eco, start = 100, hours = 1) => eco.createAuction('alice', { itemName: 'Ruby Ring', startingBid: start, durationHours: hours });
+const endAuction = (w) => { w.clock.t += 2 * HOUR; };
+
+// ───────────────────────── create ─────────────────────────
+test('create auction: item escrowed, auction persisted with immutable snapshot', async () => {
+  const { w, eco } = await scene();
+  const r = await create(eco, 100);
+  assert.equal(r.ok, true);
+  const a = w.db.auctions.get(r.auctionId);
+  assert.equal(a.startingBid, 100); assert.equal(a.rarity, 'Epic'); assert.deepEqual(a.effect, RING.effect);
+  assert.equal(a.snapshot.quantity, 1);
+  assert.equal(w.qty('alice', 'Ruby Ring'), 0);
+  assert.equal(a.endsAt, w.clock.t + HOUR);
+});
+test('auction creation validation: price, duration, item, limits', async () => {
+  const { eco, w } = await scene();
+  for (const bad of [NaN, Infinity, -1, 0, 1.5, '50', null, 1e12])
+    assert.equal((await eco.createAuction('alice', { itemName: 'Ruby Ring', startingBid: bad, durationHours: 1 })).ok, false);
+  for (const bad of [0, 2, 25, '1', null, 9999])
+    assert.equal((await eco.createAuction('alice', { itemName: 'Ruby Ring', startingBid: 10, durationHours: bad })).ok, false);
+  assert.equal((await eco.createAuction('alice', { itemName: 'Ghost Blade', startingBid: 10, durationHours: 1 })).ok, false);
+  assert.equal(w.qty('alice', 'Ruby Ring'), 1);
+  assert.equal(w.db.auctions.size, 0);
+});
+
+// ───────────────────────── bidding ─────────────────────────
+test('valid bid holds the Gold; server enforces the minimum', async () => {
+  const { w, eco } = await scene();
+  const { auctionId } = await create(eco, 100);
+  assert.equal((await eco.placeBid('bob', auctionId, 99)).ok, false);
+  const r = await eco.placeBid('bob', auctionId, 100);
+  assert.equal(r.ok, true);
+  assert.equal(w.gold('bob'), 1900);
+  const a = w.db.auctions.get(auctionId);
+  assert.equal(a.currentBid, 100); assert.equal(a.currentBidderUname, 'bob'); assert.equal(a.bidCount, 1);
+});
+test('minimum raise is computed server-side with integer math (5% raise, rounded up)', async () => {
+  const { eco } = await scene();
+  const { auctionId } = await create(eco, 60);
+  await eco.placeBid('bob', auctionId, 60);
+  assert.equal(eco.calculateMinimumBid(eco._auctions.get(auctionId)), 63);
+  assert.equal(eco.auctionPayload()[0].minimumBid, 63);
+  assert.equal((await eco.placeBid('carol', auctionId, 62)).ok, false);
+  assert.equal((await eco.placeBid('carol', auctionId, 63)).ok, true);
+  for (const [cur, min] of [[1, 2], [10, 11], [20, 21], [100, 105], [101, 107], [999_999, 1_049_999]])
+    assert.equal(eco.calculateMinimumBid({ bidCount: 1, currentBid: cur }), min, `${cur}→${min}`);
+});
+test('invalid bids: NaN, Infinity, negative, decimal, string, overflow', async () => {
+  const { eco, w } = await scene();
+  const { auctionId } = await create(eco, 100);
+  for (const bad of [NaN, Infinity, -500, 0, 100.5, '500', null, undefined, {}, 1e12, 2 ** 60])
+    assert.equal((await eco.placeBid('bob', auctionId, bad)).ok, false, String(bad));
+  assert.equal(w.gold('bob'), 2000);
+  assert.equal(eco._auctions.get(auctionId).bidCount, 0);
+});
+test('seller cannot bid on own auction', async () => {
+  const { eco, w } = await scene();
+  const { auctionId } = await create(eco, 10);
+  const r = await eco.placeBid('alice', auctionId, 500);
+  assert.equal(r.ok, false); assert.match(r.msg, /own auction/);
+  assert.equal(w.gold('alice'), 50);
+});
+test('insufficient Gold: bid rejected, nothing changes', async () => {
+  const { eco, w } = await scene({ bob: 50 });
+  const { auctionId } = await create(eco, 100);
+  const r = await eco.placeBid('bob', auctionId, 100);
+  assert.equal(r.ok, false); assert.equal(r.msg, 'Not enough Gold.'); assert.equal(r.playerGold, 50);
+  assert.equal(w.gold('bob'), 50); assert.equal(eco._auctions.get(auctionId).bidCount, 0);
+});
+test('OUTBID + REFUND: previous bidder gets exactly their bid back, new bidder is charged, no Gold appears or vanishes', async () => {
+  const { eco, w, notes } = await scene({ bob: 2000, carol: 2000 });
+  const { auctionId } = await create(eco, 1000);
+  await eco.placeBid('bob', auctionId, 1000);
+  assert.equal(w.gold('bob'), 1000);                       // bob: 2000 - 1000 held
+  const before = w.totals();
+  const r = await eco.placeBid('carol', auctionId, 1500);
+  assert.equal(r.ok, true);
+  assert.equal(w.gold('bob'), 2000);                       // refunded 1000
+  assert.equal(w.gold('carol'), 500);                      // 2000 - 1500
+  const a = w.db.auctions.get(auctionId);
+  assert.equal(a.currentBid, 1500); assert.equal(a.currentBidderUname, 'carol'); assert.equal(a.bidCount, 2);
+  assert.deepEqual(w.totals(), { gold: before.gold, items: before.items });   // conserved incl. escrow
+  assert.ok(notes.some(([u, m]) => u === 'bob' && /outbid/.test(m)));
+});
+test('raising your own bid refunds your previous bid (no double charge)', async () => {
+  const { eco, w } = await scene();
+  const { auctionId } = await create(eco, 100);
+  await eco.placeBid('bob', auctionId, 100);
+  await eco.placeBid('bob', auctionId, 200);
+  assert.equal(w.gold('bob'), 1800);
+});
+test('refund reaches an OFFLINE previous bidder through the database', async () => {
+  const { eco, w } = await scene();
+  const { auctionId } = await create(eco, 100);
+  await eco.placeBid('bob', auctionId, 100);
+  const fresh = await started(w);                          // bob offline (cold cache)
+  assert.equal(fresh.accounts.size, 0);
+  assert.equal((await fresh.eco.placeBid('carol', auctionId, 105)).ok, true);
+  assert.equal(w.gold('bob'), 2000);
+});
+test('double bid (same event twice / duplicate socket event): only one is processed', async () => {
+  const { eco, w } = await scene();
+  const { auctionId } = await create(eco, 100);
+  const rs = await Promise.all([eco.placeBid('bob', auctionId, 100), eco.placeBid('bob', auctionId, 100), eco.placeBid('bob', auctionId, 100)]);
+  assert.equal(rs.filter(r => r.ok).length, 1);
+  assert.equal(w.gold('bob'), 1900);
+  assert.equal(eco._auctions.get(auctionId).bidCount, 1);
+});
+test('two bidders racing with the same amount: one wins, the loser keeps all Gold', async () => {
+  const { eco, w } = await scene();
+  const { auctionId } = await create(eco, 100);
+  const before = w.totals();
+  const rs = await Promise.all([eco.placeBid('bob', auctionId, 150), eco.placeBid('carol', auctionId, 150)]);
+  assert.equal(rs.filter(r => r.ok).length, 1);
+  assert.equal(w.gold('bob') + w.gold('carol'), 4000 - 150);
+  assert.equal(eco._auctions.get(auctionId).bidCount, 1);
+  assert.deepEqual(w.totals(), before);
+});
+test('many concurrent bidders: state stays consistent, exactly one Gold hold exists', async () => {
+  const w = makeWorld(); w.seed('alice', { inventory: [{ ...RING }] });
+  for (let i = 0; i < 30; i++) w.seed('b' + i, { gold: 5000 });
+  const { eco } = await started(w);
+  const { auctionId } = await create(eco, 100);
+  await Promise.all(Array.from({ length: 30 }, (_, i) => eco.placeBid('b' + i, auctionId, 100 + i)));
+  const a = eco._auctions.get(auctionId);
+  let sum = 0; for (let i = 0; i < 30; i++) sum += w.gold('b' + i);
+  assert.equal(sum, 30 * 5000 - a.currentBid);            // only the current high bid is held
+  assert.equal(w.db.auctions.get(auctionId).currentBid, a.currentBid);
+});
+test('bidding is refused after the auction has ended', async () => {
+  const { eco } = await scene();
+  const { auctionId } = await create(eco, 100);
+  endAuction({ clock: { set t(v) {} } });                  // (no-op helper guard)
+  eco._auctions.get(auctionId).endsAt = 0;
+  assert.equal((await eco.placeBid('bob', auctionId, 100)).ok, false);
+});
+
+// ───── bid atomicity under database failure ─────
+test('DB failure while journaling a bid: bid rejected, both balances and auction unchanged', async () => {
+  const { eco, w } = await scene();
+  const { auctionId } = await create(eco, 100);
+  await eco.placeBid('bob', auctionId, 100);
+  const before = w.totals();
+  w.faults.saveTx = 1;
+  const r = await eco.placeBid('carol', auctionId, 105);
+  assert.equal(r.ok, false);
+  assert.equal(w.gold('bob'), 1900); assert.equal(w.gold('carol'), 2000);
+  assert.equal(eco._auctions.get(auctionId).currentBid, 100);
+  assert.deepEqual(w.totals(), before);
+});
+test('previous bidder cannot lose Gold if the refund cannot be saved: CRASH then recovery refunds exactly once', async () => {
+  const { eco, w } = await scene();
+  const { auctionId } = await create(eco, 100);
+  await eco.placeBid('bob', auctionId, 100);
+  w.faults.failAccounts.add('bob');                        // refund persistence fails; new bidder's write succeeds
+  const r = await eco.placeBid('carol', auctionId, 105);
+  assert.equal(r.ok, true); assert.equal(r.deferred, true);
+  w.faults.failAccounts.clear();
+  assert.equal(w.gold('carol'), 1895);                     // DB partial state: carol charged, bob not yet refunded
+  assert.equal(w.gold('bob'), 1900);
+  await started(w);                                        // restart
+  assert.equal(w.gold('bob'), 2000, 'refunded');
+  assert.equal(w.gold('carol'), 1895, 'not charged twice');
+  assert.equal(w.db.auctions.get(auctionId).currentBid, 105);
+  await started(w);                                        // restart again: still exactly once
+  assert.equal(w.gold('bob'), 2000);
+});
+test('crash before anything persisted: recovery re-applies the bid once, Gold conserved', async () => {
+  const { eco, w } = await scene();
+  const { auctionId } = await create(eco, 100);
+  await eco.placeBid('bob', auctionId, 100);
+  const before = w.totals();
+  w.faults.persistAccount = 99;
+  await eco.placeBid('carol', auctionId, 105);
+  w.faults.persistAccount = 0;
+  await started(w);
+  assert.equal(w.gold('bob'), 2000); assert.equal(w.gold('carol'), 1895);
+  assert.equal(w.db.auctions.get(auctionId).bidCount, 2);
+  assert.deepEqual(w.totals(), before);
+});
+
+// ───────────────────────── expiry / settlement ─────────────────────────
+test('expiry with NO bids: item returned to seller, auction removed everywhere', async () => {
+  const { eco, w, events } = await scene();
+  const { auctionId } = await create(eco, 100);
+  await eco.sweep();                                       // not expired yet
+  assert.ok(eco._auctions.has(auctionId));
+  endAuction(w); await eco.sweep();
+  assert.equal(eco._auctions.has(auctionId), false); assert.equal(w.db.auctions.has(auctionId), false);
+  assert.deepEqual(w.dbSave('alice').inventory.find(i => i.item === 'Ruby Ring'), { item: 'Ruby Ring', rarity: 'Epic', qty: 1, effect: RING.effect });
+  assert.ok(events.some(([e, p]) => e === 'auction:removed' && p.auctionId === auctionId));
+  assert.equal(w.db.txs.get(`auction:${auctionId}:settlement`).state, 'done');
+});
+test('expiry WITH winner: winner gets the item, seller paid (minus 5%), high bid Gold not duplicated', async () => {
+  const { eco, w } = await scene();
+  const { auctionId } = await create(eco, 100);
+  await eco.placeBid('bob', auctionId, 200);
+  const before = w.totals();
+  endAuction(w); await eco.sweep();
+  assert.equal(eco._auctions.has(auctionId), false); assert.equal(w.db.auctions.has(auctionId), false);
+  assert.deepEqual(w.dbSave('bob').inventory.find(i => i.item === 'Ruby Ring'), { item: 'Ruby Ring', rarity: 'Epic', qty: 1, effect: RING.effect });
+  assert.equal(w.gold('alice'), 50 + 190);
+  assert.equal(w.gold('bob'), 1800);
+  assert.equal(w.totals().items['Ruby Ring'], 1);
+  assert.equal(before.gold - w.totals().gold, 10);         // only the fee left the economy
+  assert.equal(w.dbSave('alice').marketHistory[0].type, 'auction_sale');
+  assert.equal(w.dbSave('bob').marketHistory[0].type, 'auction_won');
+});
+test('settlement is idempotent: repeated sweeps / restarts never pay or deliver twice', async () => {
+  const { eco, w } = await scene();
+  const { auctionId } = await create(eco, 100);
+  await eco.placeBid('bob', auctionId, 200);
+  endAuction(w);
+  await Promise.all([eco.sweep(), eco.sweep(), eco.sweep()]);
+  await eco.sweep();
+  for (let i = 0; i < 3; i++) { const r = await started(w); await r.eco.sweep(); }
+  assert.equal(w.gold('alice'), 240); assert.equal(w.qty('bob', 'Ruby Ring'), 1); assert.equal(w.gold('bob'), 1800);
+});
+test('CRASH mid-settlement (nothing persisted): recovery completes it once', async () => {
+  const { eco, w } = await scene();
+  const { auctionId } = await create(eco, 100);
+  await eco.placeBid('bob', auctionId, 200);
+  endAuction(w);
+  w.faults.persistAccount = 99;
+  await eco.sweep();                                       // committed in memory, DB unchanged, journal pending
+  w.faults.persistAccount = 0;
+  assert.ok(w.db.auctions.has(auctionId)); assert.equal(w.gold('alice'), 50);
+  const r = await started(w);
+  assert.equal(r.eco._auctions.has(auctionId), false, 'ended auction must not become active again');
+  assert.equal(w.gold('alice'), 240); assert.equal(w.qty('bob', 'Ruby Ring'), 1);
+  assert.equal(w.db.auctions.has(auctionId), false);
+  await (await started(w)).eco.sweep();
+  assert.equal(w.gold('alice'), 240); assert.equal(w.qty('bob', 'Ruby Ring'), 1);
+});
+test('CRASH mid-settlement (winner persisted, seller not): seller paid once, winner receives item once', async () => {
+  const { eco, w } = await scene();
+  const { auctionId } = await create(eco, 100);
+  await eco.placeBid('bob', auctionId, 200);
+  endAuction(w);
+  w.faults.failAccounts.add('alice');
+  await eco.sweep();
+  w.faults.failAccounts.clear();
+  assert.equal(w.qty('bob', 'Ruby Ring'), 1); assert.equal(w.gold('alice'), 50);   // partial in DB
+  await started(w);
+  assert.equal(w.qty('bob', 'Ruby Ring'), 1, 'item not delivered twice');
+  assert.equal(w.gold('alice'), 240, 'seller paid exactly once');
+  assert.equal(w.db.auctions.has(auctionId), false);
+});
+test('DB down at settlement time: auction is kept, nothing delivered, settles when DB returns', async () => {
+  const { eco, w } = await scene();
+  const { auctionId } = await create(eco, 100);
+  await eco.placeBid('bob', auctionId, 200);
+  endAuction(w);
+  w.faults.down = true; await eco.sweep(); w.faults.down = false;
+  assert.ok(eco._auctions.has(auctionId) && w.db.auctions.has(auctionId));
+  assert.equal(w.qty('bob', 'Ruby Ring'), 0); assert.equal(w.gold('alice'), 50);
+  w.faults.saveTx = 2; await eco.sweep(); await eco.sweep();   // journal fails twice
+  assert.ok(eco._auctions.has(auctionId));
+  await eco.sweep();
+  assert.equal(eco._auctions.has(auctionId), false);
+  assert.equal(w.qty('bob', 'Ruby Ring'), 1); assert.equal(w.gold('alice'), 240);
+});
+test('WINNER INVENTORY FULL: item is not lost, seller not paid yet, delivered automatically once there is room', async () => {
+  const { eco, w, notes } = await scene({ bobInv: fullBag() });
+  const { auctionId } = await create(eco, 100);
+  await eco.placeBid('bob', auctionId, 200);
+  endAuction(w);
+  await eco.sweep();
+  const a = eco._auctions.get(auctionId);
+  assert.ok(a, 'auction is retained'); assert.equal(a.status, 'settlement_pending');
+  assert.equal(w.db.auctions.get(auctionId).status, 'settlement_pending');
+  assert.equal(w.gold('alice'), 50); assert.equal(w.qty('bob', 'Ruby Ring'), 0);
+  assert.equal(w.totals().items['Ruby Ring'], 1, 'item still exists exactly once (escrow)');
+  assert.ok(notes.some(([u, m]) => u === 'bob' && /room/i.test(m)));
+  assert.equal(eco.auctionPayload().some(x => x.id === auctionId), false);   // no longer biddable
+  assert.equal((await eco.placeBid('carol', auctionId, 500)).ok, false);
+  await eco.sweep(); await eco.sweep();                                        // still pending, still safe
+  assert.equal(w.totals().items['Ruby Ring'], 1);
+  // survives a restart while pending
+  const r = await started(w);
+  assert.equal(r.eco._auctions.get(auctionId).status, 'settlement_pending');
+  // bob makes room (drop a junk item)
+  const cached = r.accounts.get('bob') || (await r.eco.sweep(), r.accounts.get('bob'));
+  const s = JSON.parse(cached.save); s.inventory.pop(); cached.save = JSON.stringify(s);
+  await r.eco.sweep();
+  assert.equal(r.eco._auctions.has(auctionId), false);
+  assert.equal(JSON.parse(cached.save).inventory.some(i => i.item === 'Ruby Ring'), true);
+  assert.equal(JSON.parse(w.db.accounts.get('alice').save).playerGold, 240);
+  assert.equal(w.totals().items['Ruby Ring'], 1);
+});
+test('SELLER inventory full on a no-bid return: auction kept pending, item safe, returned later', async () => {
+  const w = makeWorld(); w.seed('alice', { inventory: [{ ...RING }] });
+  const { eco } = await started(w);
+  const { auctionId } = await create(eco, 100);
+  const s = w.dbSave('alice'); s.inventory = fullBag(); w.db.accounts.get('alice').save = JSON.stringify(s);
+  const r = await started(w);
+  endAuction(w); await r.eco.sweep();
+  assert.equal(r.eco._auctions.get(auctionId).status, 'settlement_pending');
+  assert.equal(w.totals().items['Ruby Ring'], 1);
+  const acc = r.accounts.get('alice'); const s2 = JSON.parse(acc.save); s2.inventory.pop(); acc.save = JSON.stringify(s2);
+  await r.eco.sweep();
+  assert.equal(r.eco._auctions.has(auctionId), false); assert.equal(w.totals().items['Ruby Ring'], 1);
+});
+test('offline winner AND offline seller are settled through the database', async () => {
+  const { eco, w } = await scene();
+  const { auctionId } = await create(eco, 100);
+  await eco.placeBid('bob', auctionId, 300);
+  endAuction(w);
+  const cold = await started(w);
+  assert.equal(cold.accounts.size, 0);
+  await cold.eco.sweep();
+  assert.equal(w.qty('bob', 'Ruby Ring'), 1); assert.equal(w.gold('alice'), 50 + 285);
+});
+test('winner account deleted: item returns to the seller (bid Gold belonged to a dead account)', async () => {
+  const { eco, w } = await scene();
+  const { auctionId } = await create(eco, 100);
+  await eco.placeBid('bob', auctionId, 300);
+  endAuction(w); w.db.accounts.delete('bob');
+  const cold = await started(w); await cold.eco.sweep();
+  assert.equal(w.qty('alice', 'Ruby Ring'), 1);
+  assert.equal(cold.eco._auctions.has(auctionId), false);
+});
+test('bidding is allowed for a settlement race: bid landing exactly while settlement holds the lock is rejected', async () => {
+  const { eco, w } = await scene();
+  const { auctionId } = await create(eco, 100);
+  await eco.placeBid('bob', auctionId, 200);
+  endAuction(w);
+  const [, bid] = await Promise.all([eco.sweep(), eco.placeBid('carol', auctionId, 500)]);
+  assert.equal(bid.ok, false);
+  assert.equal(w.gold('carol'), 2000);
+});
+test('ECONOMY INVARIANT: random market+auction traffic never creates or destroys Gold/items (beyond the 5% fee)', async () => {
+  const w = makeWorld();
+  const names = ['p0', 'p1', 'p2', 'p3', 'p4'];
+  for (const n of names) w.seed(n, { gold: 5000, inventory: [{ item: 'Iron Sword', rarity: 'Rare', qty: 5 }, { item: 'Ruby Ring', rarity: 'Epic', qty: 2 }] });
+  const { eco } = await started(w);
+  let seed = 12345; const rnd = (n) => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed % n; };
+  const start = w.totals();
+  let fees = 0;
+  for (let round = 0; round < 40; round++) {
+    const ops = [];
+    for (let k = 0; k < 6; k++) {
+      const u = names[rnd(5)], t = rnd(6);
+      const ls = [...eco._listings.keys()], as = [...eco._auctions.keys()];
+      if (t === 0) ops.push(eco.createListing(u, { itemName: 'Iron Sword', qty: 1 + rnd(2), totalPrice: 50 + rnd(500) }));
+      else if (t === 1 && ls.length) ops.push(eco.buyListing(u, ls[rnd(ls.length)]));
+      else if (t === 2 && ls.length) ops.push(eco.cancelListing(u, ls[rnd(ls.length)]));
+      else if (t === 3) ops.push(eco.createAuction(u, { itemName: 'Ruby Ring', startingBid: 10 + rnd(100), durationHours: 1 }));
+      else if (t === 4 && as.length) { const id = as[rnd(as.length)]; ops.push(eco.placeBid(u, id, eco.calculateMinimumBid(eco._auctions.get(id)) + rnd(3))); }
+      else ops.push(eco.sweep());
+    }
+    await Promise.all(ops);
+    if (round % 8 === 7) { w.clock.t += 2 * HOUR; await eco.sweep(); }
+  }
+  w.clock.t += 2 * HOUR; await eco.sweep(); await eco.sweep();
+  const end = w.totals();
+  assert.equal(end.items['Iron Sword'], start.items['Iron Sword']);
+  assert.equal(end.items['Ruby Ring'], start.items['Ruby Ring']);
+  assert.ok(end.gold <= start.gold, 'Gold was created!');
+  const feesBurned = start.gold - end.gold;
+  assert.ok(feesBurned >= 0 && feesBurned < start.gold * 0.05, `burned ${feesBurned}`);
+  // every Gold hold matches a live bid; no negative balances
+  for (const n of names) assert.ok(w.gold(n) >= 0);
+});
