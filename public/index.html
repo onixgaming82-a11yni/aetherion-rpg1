@@ -359,6 +359,25 @@ body.light-mode #menu-bg-light{opacity:1;}
 }
 .btn-start:active{transform:translateY(0);}
 
+/* Remember-me row (login) */
+.login-options{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;flex-wrap:wrap;}
+.login-options .intro-forgot{float:none;margin-top:0;}
+.remember-row{display:flex;align-items:center;gap:8px;cursor:pointer;font-family:'Cinzel',serif;
+  font-size:.6rem;letter-spacing:.03em;color:var(--text-muted);user-select:none;min-height:32px;}
+.remember-row:hover{color:var(--gold);}
+.remember-row input{-webkit-appearance:none;appearance:none;flex:none;width:18px;height:18px;margin:0;cursor:pointer;
+  display:grid;place-content:center;border:1px solid var(--border);border-radius:4px;background:rgba(0,0,0,.45);
+  transition:border-color .15s,background .15s;}
+.remember-row input::after{content:'';width:10px;height:10px;transform:scale(0);transition:transform .12s;background:var(--gold);
+  clip-path:polygon(14% 44%,0 65%,50% 100%,100% 16%,80% 0%,43% 62%);}
+.remember-row input:checked{border-color:var(--gold);}
+.remember-row input:checked::after{transform:scale(1);}
+.remember-row input:focus-visible{outline:2px solid var(--gold);outline-offset:2px;}
+.auth-note{font-size:.58rem;line-height:1.6;color:var(--dim);text-align:center;letter-spacing:.03em;}
+.auth-link{background:none;border:none;color:var(--text-muted);font-size:.6rem;cursor:pointer;text-decoration:underline;
+  font-family:'Cinzel',serif;letter-spacing:.03em;min-height:unset;padding:4px;}
+.auth-link:hover{color:var(--gold);}
+
 /* Forgot password link */
 .intro-forgot{
   background:none;border:none;color:var(--text-muted);
@@ -1411,8 +1430,13 @@ input, textarea { font-size: 16px !important; } /* Prevents iOS zoom on focus */
               background:none;border:none;color:rgba(201,154,69,.4);cursor:pointer;
               font-size:.9rem;min-height:unset;padding:0;">👁</button>
           </div>
-          <div style="text-align:right;">
-            <button class="intro-forgot">Forgot password?</button>
+          <div class="login-options">
+            <label class="remember-row" for="login-remember"
+              title="Keeps you signed in on this browser for up to 30 days. Don't use on shared computers.">
+              <input type="checkbox" id="login-remember" onchange="saveRememberPref(this.checked)">
+              <span>Remember me on this device</span>
+            </label>
+            <button type="button" class="intro-forgot" onclick="showForgotPanel()">Forgot password?</button>
           </div>
         </div>
       </div>
@@ -1448,9 +1472,50 @@ input, textarea { font-size: 16px !important; } /* Prevents iOS zoom on focus */
         </div>
       </div>
 
+      <div style="margin:-6px 0 20px;">
+        <div class="intro-label">Recovery Email <span style="opacity:.6;text-transform:none;letter-spacing:.03em;">(optional)</span></div>
+        <input class="username-input" id="reg-email" maxlength="254" type="email" inputmode="email"
+          placeholder="For password resets only" autocomplete="email"
+          onkeydown="if(event.key==='Enter')doRegister()">
+      </div>
+
       <button class="btn-start" onclick="doRegister()">Create Account</button>
       <div id="reg-error" style="font-size:.6rem;text-align:center;
         margin-top:10px;min-height:18px;letter-spacing:.03em;"></div>
+    </div>
+
+    <!-- ── FORGOT PASSWORD PANEL ─────────────────────── -->
+    <div id="intro-forgot-panel" style="width:100%;display:none;">
+      <div class="auth-note" style="margin:6px 0 16px;">Enter your username or recovery email and we'll send a reset link.</div>
+      <div style="margin-bottom:16px;">
+        <div class="intro-label">Username or Email</div>
+        <input class="username-input" id="forgot-id" maxlength="254" autocomplete="username"
+          placeholder="Username or email" onkeydown="if(event.key==='Enter')doForgot()">
+      </div>
+      <button class="btn-start" id="forgot-btn" onclick="doForgot()">Send Reset Link</button>
+      <div id="forgot-msg" role="status" style="font-size:.6rem;text-align:center;margin-top:10px;min-height:18px;letter-spacing:.03em;line-height:1.6;"></div>
+      <div class="auth-note" style="margin-top:6px;">Accounts without a recovery email can't be reset automatically.</div>
+      <div style="text-align:center;margin-top:10px;"><button type="button" class="auth-link" onclick="showLoginPanel()">← Back to login</button></div>
+    </div>
+
+    <!-- ── RESET PASSWORD PANEL (opened from the emailed link) ── -->
+    <div id="intro-reset-panel" style="width:100%;display:none;">
+      <div class="auth-note" style="margin:6px 0 16px;">Choose a new password for your account.</div>
+      <div style="display:flex;flex-direction:column;gap:14px;margin-bottom:20px;">
+        <div>
+          <div class="intro-label">New Password</div>
+          <input class="username-input" id="reset-pass" maxlength="128" type="password" autocomplete="new-password"
+            placeholder="Minimum 6 characters" onkeydown="if(event.key==='Enter')document.getElementById('reset-pass2').focus()">
+        </div>
+        <div>
+          <div class="intro-label">Confirm Password</div>
+          <input class="username-input" id="reset-pass2" maxlength="128" type="password" autocomplete="new-password"
+            placeholder="Repeat the password" onkeydown="if(event.key==='Enter')doResetPassword()">
+        </div>
+      </div>
+      <button class="btn-start" id="reset-btn" onclick="doResetPassword()">Set New Password</button>
+      <div id="reset-msg" role="status" style="font-size:.6rem;text-align:center;margin-top:10px;min-height:18px;letter-spacing:.03em;line-height:1.6;"></div>
+      <div style="text-align:center;margin-top:10px;"><button type="button" class="auth-link" onclick="showForgotPanel()">Request a new link</button></div>
     </div>
 
     <!-- Footer tagline -->
@@ -2774,7 +2839,13 @@ function togglePassVis(inputId, btn){
   else { el.type='password'; btn.textContent='👁️'; }
 }
 
+function hideExtraAuthPanels(){
+  const f=document.getElementById('intro-forgot-panel'), r=document.getElementById('intro-reset-panel');
+  if(f)f.style.display='none'; if(r)r.style.display='none';
+  const tabs=document.querySelector('.intro-tabs'); if(tabs)tabs.style.display='';
+}
 function showLoginPanel(){
+  hideExtraAuthPanels();
   document.getElementById('intro-login').style.display='';
   document.getElementById('intro-register').style.display='none';
   document.getElementById('login-error').textContent='';
@@ -2789,6 +2860,7 @@ function showLoginPanel(){
 }
 
 function showRegisterPanel(){
+  hideExtraAuthPanels();
   document.getElementById('intro-login').style.display='none';
   document.getElementById('intro-register').style.display='';
   document.getElementById('reg-error').textContent='';
@@ -2841,34 +2913,10 @@ function doLogin(){
 
   const s = getSocket();
 
-  const onLoggedIn = ({ username: uname, save, isNew }) => {
+  const onLoggedIn = ({ username: uname, save, isNew, hasEmail }) => {
     cleanup();
-    localStorage.setItem('aetherion_hero_name', uname);
-    localStorage.removeItem('aetherion_hero_pass');
-    gameState.username = uname;
-    gameState.onlineUsername = uname;
-    gameState.isOfflineDebug = false;
-    if (save && !isNew) {
-      try {
-        const sd = typeof save === 'string' ? JSON.parse(save) : save;
-        gameState.playerLevel    = sd.playerLevel    || 1;
-        gameState.playerXp       = sd.playerXp       || 0;
-        gameState.xpToNext       = sd.xpToNext       || 100;
-        gameState.playerGold     = sd.playerGold     || 0;
-        gameState.inventory      = sd.inventory      || [];
-        gameState.deck           = sd.deck           || [];
-        gameState.unlockedSkills = sd.unlockedSkills || [];
-        gameState.skillXp        = sd.skillXp        || 0;
-        gameState.shopOwned      = sd.shopOwned      || {};
-        gameState.activeCardIdx  = sd.activeCardIdx  || 0;
-      } catch(e) {}
-    }
-    if (gameState.deck.length > 0) {
-      updateMenuHud(); showScreen('screen-menu');
-      toast('⚔️ Welcome back, ' + uname + '!');
-    } else {
-      goCardPick('menu');
-    }
+    gameState.hasEmail = !!hasEmail;
+    enterGameAfterAuth(uname, save, isNew, 'Welcome back, ');
   };
 
   const onErr = ({ msg }) => {
@@ -2887,8 +2935,44 @@ function doLogin(){
   s.once('account:error',    onErr);
   s.once('disconnect',       onDisconnect);
 
-  s.emit('account:login', { username, password });
+  // Remember Me controls only the lifetime of the server-issued session cookie.
+  // It is NOT the same as remembering the username (aetherion_hero_name below).
+  const remember = !!document.getElementById('login-remember')?.checked;
+  saveRememberPref(remember);
+  s.emit('account:login', { username, password, remember });
 }
+
+// Shared by password login and session restore: apply the server's save and enter the game.
+function enterGameAfterAuth(uname, save, isNew, greeting){
+  localStorage.setItem('aetherion_hero_name', uname); // username convenience only — never a credential
+  localStorage.removeItem('aetherion_hero_pass');
+  gameState.username = uname;
+  gameState.onlineUsername = uname;
+  gameState.isOfflineDebug = false;
+  if (save && !isNew) {
+    try {
+      const sd = typeof save === 'string' ? JSON.parse(save) : save;
+      gameState.playerLevel    = sd.playerLevel    || 1;
+      gameState.playerXp       = sd.playerXp       || 0;
+      gameState.xpToNext       = sd.xpToNext       || 100;
+      gameState.playerGold     = sd.playerGold     || 0;
+      gameState.inventory      = sd.inventory      || [];
+      gameState.deck           = sd.deck           || [];
+      gameState.unlockedSkills = sd.unlockedSkills || [];
+      gameState.skillXp        = sd.skillXp        || 0;
+      gameState.shopOwned      = sd.shopOwned      || {};
+      gameState.activeCardIdx  = sd.activeCardIdx  || 0;
+    } catch(e) {}
+  }
+  if (gameState.deck.length > 0) {
+    updateMenuHud(); showScreen('screen-menu');
+    toast('⚔️ ' + greeting + uname + '!');
+  } else {
+    goCardPick('menu');
+  }
+}
+
+function saveRememberPref(on){ try{ localStorage.setItem('aetherion_remember_pref', on ? '1' : '0'); }catch(e){} }
 
 let _registerInProgress = false;
 
@@ -2897,6 +2981,7 @@ function doRegister(){
 
   const username = document.getElementById('reg-username').value.trim();
   const password = document.getElementById('reg-password').value;
+  const email    = (document.getElementById('reg-email')?.value || '').trim();
   const errEl    = document.getElementById('reg-error');
   const regBtn   = document.querySelector('.btn-start[onclick="doRegister()"]');
 
@@ -2906,6 +2991,7 @@ function doRegister(){
   if (username.length < 3) { errEl.textContent = 'Username must be at least 3 characters.'; return; }
   if (!password)           { errEl.textContent = 'Choose a password.'; return; }
   if (password.length < 6) { errEl.textContent = 'Password must be at least 6 characters.'; return; }
+  if (email && !/^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/.test(email)) { errEl.textContent = 'Enter a valid email, or leave it blank.'; return; }
 
   _registerInProgress = true;
   errEl.textContent = 'Creating account...';
@@ -2936,8 +3022,9 @@ function doRegister(){
 
   const s = getSocket();
 
-  const onRegistered = ({ username: uname }) => {
+  const onRegistered = ({ username: uname, hasEmail }) => {
     cleanup(); // Bug 7: was not calling cleanup, left 3 stale listeners
+    gameState.hasEmail = !!hasEmail;
     localStorage.setItem('aetherion_hero_name', uname);
     localStorage.removeItem('aetherion_hero_pass');
     gameState.username = uname;
@@ -2993,7 +3080,170 @@ function doRegister(){
   s.once('account:error',      onErr);
   s.once('disconnect',         onDisconnect);
 
-  s.emit('account:register', { username, password });
+  s.emit('account:register', { username, password, email: email || undefined });
+}
+
+// ═══════════════ SESSION RESTORE / FORGOT / RESET ═══════════════
+// The five situations, kept distinct on purpose:
+//  1. Browser refresh / 3. browser restart: page loads fresh → restoreSession() below
+//     validates the HttpOnly cookie (JS cannot read it) and re-authenticates the socket.
+//  2. Socket.IO reconnect (same page): the new socket starts unauthenticated, so the
+//     'connect' handler in getSocket() calls restoreSession({reconnect:true}).
+//  4. Expired / revoked session: server says so → cookie cleared → login screen + message.
+//  5. Explicit logout: doLogout() revokes server-side and drops the socket.
+const SESSION_MSGS = {
+  expired:   'Your session expired. Please log in again.',
+  revoked:   'You were signed out. Please log in again.',
+  invalid:   'Your saved login is no longer valid. Please log in again.',
+  suspended: 'This account has been suspended.',
+};
+let _resetToken = null;
+let _restoring = false;
+
+function authPost(path, body, timeoutMs){
+  const ctl = new AbortController();
+  const t = setTimeout(()=>ctl.abort(), timeoutMs || 6000);
+  return fetch(path, {
+    method:'POST', credentials:'same-origin', signal:ctl.signal,
+    headers:{'Content-Type':'application/json'}, body: JSON.stringify(body || {})
+  }).then(async r => { clearTimeout(t); let j = {}; try{ j = await r.json(); }catch(e){} return { status:r.status, ...j }; })
+    .catch(e => { clearTimeout(t); return { status:0, ok:false, reason:'network' }; });
+}
+function waitForSocketConnect(s, ms){
+  return new Promise(res => {
+    if (s.connected) return res(true);
+    const t = setTimeout(()=>{ s.off('connect', on); res(false); }, ms || 6000);
+    const on = ()=>{ clearTimeout(t); res(true); };
+    s.once('connect', on);
+  });
+}
+
+async function restoreSession({ reconnect } = {}){
+  if (_restoring) return;
+  _restoring = true;
+  const errEl = document.getElementById('login-error');
+  const say = (msg, color) => { if (!reconnect && errEl) { errEl.style.color = color || '#d06060'; errEl.textContent = msg; } };
+  try {
+    if (!reconnect) say('Checking saved login…', 'var(--dim)');
+    const r = await authPost('/auth/session');
+    if (r.ok && r.ticket) {
+      const s = getSocket();
+      if (!(await waitForSocketConnect(s))) { say('Could not reach the server. Please log in.'); return; }
+      const ack = await new Promise(res => {
+        const t = setTimeout(()=>res({ ok:false, reason:'timeout' }), 6000);
+        s.emit('session:restore', { ticket: r.ticket }, a => { clearTimeout(t); res(a || { ok:false }); });
+      });
+      if (ack.ok) {
+        if (errEl) errEl.textContent = '';
+        gameState.hasEmail = !!ack.hasEmail;
+        if (reconnect) { console.log('[Auth] Session re-established after reconnect'); return; }
+        enterGameAfterAuth(ack.username, ack.save, false, 'Welcome back, ');
+        return;
+      }
+      return handleRestoreFailure(ack.reason, reconnect, say);
+    }
+    return handleRestoreFailure(r.status === 0 || r.status >= 500 ? 'unavailable' : r.reason, reconnect, say);
+  } finally { _restoring = false; }
+}
+function handleRestoreFailure(reason, reconnect, say){
+  if (reason === 'none') { if (reconnect) forceLoginScreen(SESSION_MSGS.invalid); else say('', 'var(--dim)'); return; }
+  if (reason === 'unavailable' || reason === 'network' || reason === 'timeout' || reason === 'rate') {
+    // Temporary — the credential may still be fine, so do NOT treat it as logged out.
+    if (reconnect) toast('Reconnecting…'); else say('Could not reach the server to restore your login. You can log in manually.');
+    return;
+  }
+  forceLoginScreen(SESSION_MSGS[reason] || SESSION_MSGS.invalid, reconnect);
+}
+function forceLoginScreen(msg){
+  gameState.onlineUsername = '';
+  showScreen('screen-intro');
+  showLoginPanel();
+  const el = document.getElementById('login-error');
+  if (el) { el.style.color = 'var(--gold)'; el.textContent = msg; }
+}
+
+function showForgotPanel(){
+  document.getElementById('intro-login').style.display='none';
+  document.getElementById('intro-register').style.display='none';
+  document.getElementById('intro-reset-panel').style.display='none';
+  document.getElementById('intro-forgot-panel').style.display='';
+  const tabs=document.querySelector('.intro-tabs'); if(tabs)tabs.style.display='none';
+  const m=document.getElementById('forgot-msg'); if(m)m.textContent='';
+  const id=document.getElementById('forgot-id'), ln=document.getElementById('login-username');
+  if(id && !id.value && ln && ln.value) id.value = ln.value;
+  const b=document.getElementById('forgot-btn'); if(b)b.disabled=false;
+}
+let _forgotBusy = false;
+function doForgot(){
+  if (_forgotBusy) return;
+  const id = document.getElementById('forgot-id').value.trim();
+  const msg = document.getElementById('forgot-msg');
+  const btn = document.getElementById('forgot-btn');
+  if (!id) { msg.style.color='#d06060'; msg.textContent='Enter your username or email.'; return; }
+  _forgotBusy = true; btn.disabled = true;
+  msg.style.color='var(--dim)'; msg.textContent='Sending…';
+  const s = getSocket();
+  const done = ()=>{ clearTimeout(t); s.off('account:forgotSent', onSent); s.off('account:forgotError', onErr); _forgotBusy=false; };
+  const onSent = ()=>{
+    done();
+    msg.style.color='var(--gold)';
+    msg.textContent='If a matching account has a recovery email on file, a reset link is on its way. Check your spam folder. The link works once and expires in 30 minutes.';
+    setTimeout(()=>{ btn.disabled=false; }, 15000); // cooldown against re-sending
+  };
+  const onErr = ({msg:m})=>{ done(); btn.disabled=false; msg.style.color='#d06060'; msg.textContent=m||'Something went wrong. Please try again.'; };
+  const t = setTimeout(()=>{ done(); btn.disabled=false; msg.style.color='#d06060'; msg.textContent='Server took too long to respond. Please try again.'; }, 8000);
+  s.once('account:forgotSent', onSent);
+  s.once('account:forgotError', onErr);
+  s.emit('account:forgot', { identifier: id });
+}
+
+// Called once on page load. The token lives in the URL fragment (never sent to servers or
+// logged in referrers); it is removed from the address bar immediately.
+function checkResetLink(){
+  const m = /(?:^|[#&])reset=([A-Za-z0-9_-]{43})(?:&|$)/.exec(location.hash || '');
+  if (!m) return false;
+  _resetToken = m[1];
+  try { history.replaceState(null, '', location.pathname + location.search); } catch(e) {}
+  showScreen('screen-intro');
+  document.getElementById('intro-login').style.display='none';
+  document.getElementById('intro-register').style.display='none';
+  document.getElementById('intro-forgot-panel').style.display='none';
+  document.getElementById('intro-reset-panel').style.display='';
+  const tabs=document.querySelector('.intro-tabs'); if(tabs)tabs.style.display='none';
+  return true;
+}
+let _resetBusy = false;
+function doResetPassword(){
+  if (_resetBusy) return;
+  const p1 = document.getElementById('reset-pass').value;
+  const p2 = document.getElementById('reset-pass2').value;
+  const msg = document.getElementById('reset-msg');
+  const btn = document.getElementById('reset-btn');
+  msg.style.color='#d06060';
+  if (!_resetToken)   { msg.textContent='This reset link has already been used. Request a new one.'; return; }
+  if (p1.length < 6)  { msg.textContent='Password must be at least 6 characters.'; return; }
+  if (p1 !== p2)      { msg.textContent='Passwords do not match.'; return; }
+  _resetBusy = true; btn.disabled = true;
+  msg.style.color='var(--dim)'; msg.textContent='Saving…';
+  const s = getSocket();
+  const done = ()=>{ clearTimeout(t); s.off('account:passwordReset', onOk); s.off('account:resetError', onErr); _resetBusy=false; btn.disabled=false; };
+  const onOk = ({username})=>{
+    done(); _resetToken = null;
+    document.getElementById('reset-pass').value=''; document.getElementById('reset-pass2').value='';
+    showLoginPanel();
+    const ln=document.getElementById('login-username'); if(ln&&username) ln.value=username;
+    document.getElementById('login-password').value='';
+    const el=document.getElementById('login-error');
+    el.style.color='#60d060'; el.textContent='Password updated. Log in with your new password.';
+  };
+  const onErr = ({msg:m, fatal})=>{
+    done(); msg.style.color='#d06060'; msg.textContent=m||'Reset failed. Please try again.';
+    if (fatal) _resetToken = null;
+  };
+  const t = setTimeout(()=>{ done(); msg.style.color='#d06060'; msg.textContent='Server took too long to respond. Please try again.'; }, 10000);
+  s.once('account:passwordReset', onOk);
+  s.once('account:resetError', onErr);
+  s.emit('account:resetPassword', { token: _resetToken, newPassword: p1 });
 }
 
 function initIntroScreen(){
@@ -3004,6 +3254,12 @@ function initIntroScreen(){
     const nameEl = document.getElementById('login-username');
     if (nameEl) nameEl.value = savedName;
   }
+  // Remember-me checkbox: restore the player's last CHOICE (default: off — safest on shared devices).
+  const rb = document.getElementById('login-remember');
+  if (rb) rb.checked = localStorage.getItem('aetherion_remember_pref') === '1';
+
+  if (checkResetLink()) return;  // a reset link takes priority over auto-login
+  restoreSession();              // refresh / browser restart: log in from the cookie if it is still valid
 }
 
 // Legacy functions — guard against calling doLogin with empty fields
@@ -3081,6 +3337,21 @@ function openSettings(){
       </div>
     </div>
 
+    <div style="border-bottom:1px solid var(--border);padding-bottom:14px;margin-bottom:14px;">
+      <div style="font-family:'Cinzel',serif;font-size:.65rem;color:var(--gold);margin-bottom:6px;">✉️ Recovery Email</div>
+      <div id="set-email-status" style="font-size:.55rem;color:var(--dim);margin-bottom:8px;line-height:1.5;">${gameState.hasEmail ? 'A recovery email is on file. Enter a new one to change it, or leave blank to remove it.' : 'No recovery email yet — add one so you can reset a forgotten password.'}</div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <input id="set-email" type="email" placeholder="Email address" autocomplete="email"
+          style="background:rgba(0,0,0,.5);border:1px solid var(--border);border-radius:8px;
+          color:var(--text);font-size:.7rem;padding:10px 12px;outline:none;width:100%;">
+        <input id="set-email-pass" type="password" placeholder="Current password" autocomplete="current-password"
+          style="background:rgba(0,0,0,.5);border:1px solid var(--border);border-radius:8px;
+          color:var(--text);font-size:.7rem;padding:10px 12px;outline:none;width:100%;">
+        <div id="set-email-err" style="color:#d06060;font-size:.6rem;min-height:16px;"></div>
+        <button class="btn" onclick="doSetEmail()" style="width:100%;">✉️ Save Email</button>
+      </div>
+    </div>
+
     <div style="padding-top:4px;">
       <div style="font-family:'Cinzel',serif;font-size:.65rem;color:var(--gold);margin-bottom:10px;">⚠️ Account</div>
       <button class="btn-ghost" onclick="doLogout()" style="width:100%;border-color:rgba(200,50,50,.3);color:#d06060;font-size:.65rem;margin-bottom:8px;">
@@ -3123,15 +3394,42 @@ function doChangePassword(){
   });
 }
 
-function doLogout(){
+async function doLogout(){
+  // Revoke server-side FIRST so the credential is dead even if the page is closed right now.
+  await authPost('/auth/logout', {}, 4000);          // revokes by cookie + clears the cookie
+  const s = socket;
+  if (s && s.connected) {
+    await new Promise(res => { const t = setTimeout(res, 2000); s.emit('account:logout', {}, ()=>{ clearTimeout(t); res(); }); });
+    s.disconnect(); s.connect();                      // fresh, unauthenticated socket
+  }
   localStorage.removeItem('aetherion_hero_name');
   localStorage.removeItem('aetherion_hero_pass'); // should already be absent
   localStorage.removeItem(SAVE_KEY);
   gameState.username = '';
+  gameState.onlineUsername = '';
+  gameState.hasEmail = false;
   gameState.deck = [];
   closeModal();
   showScreen('screen-intro');
+  showLoginPanel();
+  const pw = document.getElementById('login-password'); if (pw) pw.value = '';
   toast('Logged out!');
+}
+
+function doSetEmail(){
+  const email = document.getElementById('set-email').value.trim();
+  const pw    = document.getElementById('set-email-pass').value;
+  const errEl = document.getElementById('set-email-err');
+  errEl.style.color = '#d06060';
+  if (!pw) { errEl.textContent = 'Enter your current password.'; return; }
+  errEl.style.color = 'var(--dim)'; errEl.textContent = 'Saving…';
+  const s = getSocket();
+  const off = ()=>{ s.off('account:emailSet', onOk); s.off('account:emailError', onErr); };
+  const onOk  = ({ hasEmail })=>{ off(); gameState.hasEmail = !!hasEmail; errEl.style.color='#60d060'; errEl.textContent = hasEmail ? '✓ Recovery email saved.' : '✓ Recovery email removed.'; document.getElementById('set-email-pass').value=''; };
+  const onErr = ({ msg })=>{ off(); errEl.style.color='#d06060'; errEl.textContent = msg || 'Could not save.'; };
+  s.once('account:emailSet', onOk);
+  s.once('account:emailError', onErr);
+  s.emit('account:setEmail', { password: pw, email });
 }
 
 function confirmDeleteAccount(){
@@ -3169,6 +3467,7 @@ function doDeleteAccount(){
   });
 
   s.once('account:deleted', ()=>{
+    authPost('/auth/logout', {}, 3000); // sessions are already deleted server-side; this just clears the cookie
     // Clear everything locally
     localStorage.removeItem('aetherion_hero_name');
     localStorage.removeItem('aetherion_hero_pass');
@@ -5704,8 +6003,16 @@ function getSocket() {
   setupShopListeners(socket);
   setupMarketListeners(socket);
 
+  // Login hands us a one-time ticket; trading it over HTTP is the only way a cookie can be set.
+  socket.on('auth:cookieTicket', ({ ticket }) => { authPost('/auth/cookie', { ticket }); });
+
+  let _everConnected = false;
   socket.on('connect', () => {
     console.log('[Socket] Connected:', socket.id);
+    // A reconnect gives us a brand-new, unauthenticated server socket. If the player was
+    // logged in, silently re-authenticate it from the cookie.
+    if (_everConnected && gameState.onlineUsername) restoreSession({ reconnect: true });
+    _everConnected = true;
 
     // Ask the server for the current global shop stock on every (re)connect,
     // so a reconnect shows the server's real state rather than a stale copy.
