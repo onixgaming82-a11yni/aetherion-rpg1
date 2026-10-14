@@ -28,6 +28,8 @@ const http      = require('http');
 const { Server } = require('socket.io');
 const path      = require('path');
 const crypto    = require('crypto');
+const authLib   = require('./auth');
+const mailer    = require('./mailer');
 const os        = require('os');
 const mongoose  = require('mongoose');
 const bcrypt    = require('bcryptjs');
@@ -46,8 +48,13 @@ function canonicalCharacter(card) {
 
 const app    = express();
 const server = http.createServer(app);
+// SECURITY: login now relies on an HttpOnly cookie, so cross-origin access is no
+// longer wide open. By default only the same origin that serves public/ may talk
+// to Socket.IO. To host the client elsewhere, set ALLOWED_ORIGINS="https://a.com,https://b.com".
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '').split(',').map(x => x.trim()).filter(Boolean);
+app.set('trust proxy', 1); // Render/Heroku-style single proxy: makes req.secure reflect X-Forwarded-Proto
 const io     = new Server(server, {
-  cors: { origin: '*', methods: ['GET', 'POST'] },
+  cors: ALLOWED_ORIGINS.length ? { origin: ALLOWED_ORIGINS, methods: ['GET', 'POST'], credentials: true } : undefined,
   pingTimeout:  60000,
   pingInterval: 25000,
 });
@@ -919,6 +926,8 @@ const AccountSchema = new mongoose.Schema({
   save:      { type: String, default: null }, // JSON string of game save
   createdAt: { type: Number, default: Date.now },
   lastLogin: { type: Number, default: Date.now },
+  // Optional recovery email (lowercased). Only used to send password-reset links.
+  email:     { type: String, default: null, index: true },
   // Dev/QA accounts only — set via /admin/player/:uname/setdebug. A debug
   // account plays normally (duels, raids, everything) but is invisible to
   // the leaderboard/rankings, so testing never pollutes real player stats.
@@ -1231,6 +1240,126 @@ async function dbDeleteAccount(uname) {
 
 // ── In-memory fallback (used when no MongoDB) ──────────────
 const accounts = new Map();
+
+// ═══════════════════════════════════════════════════════════
+//  AUTH — Remember Me / persistent sessions / password reset
+//  Logic lives in auth.js (unit-tested). This block supplies storage
+//  (MongoDB when MONGO_URI is set, else memory — same rule as accounts),
+//  HTTP routes (the only place a cookie can be set) and helpers.
+// ═══════════════════════════════════════════════════════════
+const authStore = MONGO_URI
+  ? authLib.createMongoStore(mongoose, () => { if (!dbConnected) throw new Error('database not connected'); })
+  : authLib.createMemoryStore();
+const auth = authLib.createAuth({ store: authStore });
+if (!MONGO_URI) console.warn('[AUTH] No MONGO_URI — login sessions live in memory and will not survive a server restart (accounts do not either).');
+setInterval(() => { auth.sweep(); auth.sweepTickets(); }, 60_000).unref();
+
+const EMAIL_RE = /^[^\s@]{1,64}@[^\s@.]+(\.[^\s@.]+)+$/;
+function normalizeEmail(v) {
+  if (typeof v !== 'string') return null;
+  const e = v.trim().toLowerCase();
+  return e.length <= 254 && EMAIL_RE.test(e) ? e : null;
+}
+async function dbFindAccountsByEmail(email) {
+  const out = new Map();
+  for (const a of accounts.values()) if (a.email === email) out.set(a.uname, a);
+  if (MONGO_URI && dbConnected) {
+    try { for (const a of await Account.find({ email }).lean().limit(5).maxTimeMS(3000)) if (!out.has(a.uname)) out.set(a.uname, a); }
+    catch (e) { console.warn('[AUTH] email lookup failed:', e.message); }
+  }
+  return [...out.values()].slice(0, 5);
+}
+// Behind a trusted proxy every user shares the proxy's address, so the per-IP limits
+// below key on the address the proxy appended to X-Forwarded-For (rightmost entry;
+// the client cannot forge that one). Off unless a proxy is known to be present.
+function clientIp(reqLike) {
+  const h = reqLike.headers || {};
+  const trusted = process.env.TRUST_PROXY === '1' || !!process.env.RENDER;
+  const xff = trusted && h['x-forwarded-for'];
+  if (xff) return String(xff).split(',').pop().trim();
+  return reqLike.address || reqLike.ip || (reqLike.socket && reqLike.socket.remoteAddress) || 'unknown';
+}
+function isOriginAllowed(req) {
+  const origin = req.headers.origin;
+  if (!origin) return true; // non-browser client; cookie-bearing browser POSTs always send Origin
+  if (ALLOWED_ORIGINS.includes(origin)) return true;
+  try { return new URL(origin).host === req.headers.host; } catch (_) { return false; }
+}
+function cookieSecure(req) {
+  if (process.env.COOKIE_SECURE === 'true') return true;
+  if (process.env.COOKIE_SECURE === 'false') return false;
+  return !!req.secure;
+}
+function publicBase(handshake) {
+  if (process.env.PUBLIC_URL) return process.env.PUBLIC_URL.replace(/\/+$/, '');
+  if (process.env.NODE_ENV === 'production') return null; // never build links from a client-controlled Host header in production
+  const h = handshake.headers || {};
+  return h.origin || (h.host ? `http://${h.host}` : null);
+}
+const authHttpLimiter  = authLib.createLimiter(60, 60_000);
+const forgotIpLimiter  = authLib.createLimiter(5, 15 * 60_000);
+const forgotIdLimiter  = authLib.createLimiter(3, 15 * 60_000);
+const resetIpLimiter   = authLib.createLimiter(10, 15 * 60_000);
+const restoreIpLimiter = authLib.createLimiter(60, 60_000);
+
+function isBanned(uname) { const f = flagged.get(uname); return !!(f && f.level === 'banned'); }
+
+app.use('/auth', express.json({ limit: '2kb' }));
+app.use('/auth', (req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store');
+  if (req.method !== 'POST') return res.status(405).json({ ok: false });
+  if (!isOriginAllowed(req)) return res.status(403).json({ ok: false, reason: 'origin' });
+  if (!authHttpLimiter(clientIp(req))) return res.status(429).json({ ok: false, reason: 'rate' });
+  next();
+});
+
+// Login handed the client a one-time ticket; trade it for the HttpOnly cookie.
+app.post('/auth/cookie', async (req, res) => {
+  const r = await auth.redeemCookieTicket(req.body && req.body.ticket);
+  if (r.status === 'unavailable') return res.status(503).json({ ok: false, reason: 'unavailable' });
+  if (r.status !== 'ok') return res.status(400).json({ ok: false, reason: r.status });
+  res.setHeader('Set-Cookie', authLib.buildSetCookie(r.token, { maxAgeSec: r.maxAgeSec, secure: cookieSecure(req) }));
+  res.json({ ok: true, persistent: r.maxAgeSec != null });
+});
+
+// Page-load restore: validate the cookie (rotating it if due) and hand back a one-time
+// ticket the client presents over the socket (session:restore).
+app.post('/auth/session', async (req, res) => {
+  const token = authLib.readCookieToken(req.headers.cookie);
+  if (!token) return res.json({ ok: false, reason: 'none' });
+  const secure = cookieSecure(req);
+  const r = await auth.resolveCookie(token);
+  if (r.status === 'unavailable') return res.status(503).json({ ok: false, reason: 'unavailable' }); // keep the cookie
+  if (r.status !== 'ok') {
+    res.setHeader('Set-Cookie', authLib.buildClearCookie({ secure }));
+    return res.json({ ok: false, reason: r.status }); // invalid | expired | revoked
+  }
+  const acc = accounts.get(r.uname) || await dbGetAccount(r.uname);
+  if (!acc || isBanned(r.uname)) {
+    await auth.revokeSession(r.sid);
+    res.setHeader('Set-Cookie', authLib.buildClearCookie({ secure }));
+    return res.json({ ok: false, reason: acc ? 'suspended' : 'invalid' });
+  }
+  if (r.newToken) res.setHeader('Set-Cookie', authLib.buildSetCookie(r.newToken, { maxAgeSec: r.maxAgeSec, secure }));
+  res.json({ ok: true, username: acc.username, ticket: auth.issueBindTicket(r.sid) });
+});
+
+// Explicit logout: revoke server-side and clear the cookie.
+app.post('/auth/logout', async (req, res) => {
+  const token = authLib.readCookieToken(req.headers.cookie);
+  if (token) { const r = await auth.resolveCookie(token); if (r.sid) await auth.revokeSession(r.sid); }
+  res.setHeader('Set-Cookie', authLib.buildClearCookie({ secure: cookieSecure(req) }));
+  res.json({ ok: true });
+});
+
+// Bind a fresh session to a just-authenticated socket and give the client its cookie ticket.
+async function establishSession(socket, uname, remember) {
+  if (socket.data.sid) auth.revokeSession(socket.data.sid); // re-login on the same socket replaces the old session
+  const r = await auth.startSession(uname, { remember: remember === true, userAgent: socket.handshake.headers['user-agent'] });
+  if (r.status !== 'ok') { console.warn('[AUTH] could not start persistent session:', r.error && r.error.message); socket.data.sid = null; return; }
+  socket.data.sid = r.sid;
+  socket.emit('auth:cookieTicket', { ticket: r.cookieTicket, remember: r.remember });
+}
 
 // ═══════════════════════════════════════════════════════════
 //  PLAYER MARKET + AUCTION HOUSE — persistence wiring
@@ -1871,7 +2000,7 @@ io.on('connection', (socket) => {
 
   // ── ACCOUNT: REGISTER ────────────────────────────────
   // Payload: { username, password }
-  socket.on('account:register', async ({ username, password } = {}) => {
+  socket.on('account:register', async ({ username, password, email } = {}) => {
     const authStartedAt = Date.now();
     // SECURITY: throttle registration spam per IP (account:register has no
     // password to brute-force, but nothing previously stopped a script from
@@ -1889,6 +2018,12 @@ io.on('connection', (socket) => {
     if (pw.length > 128) {
       socket.emit('account:error', { msg: 'Password too long.' });
       return;
+    }
+    // Optional recovery email — only for password-reset links.
+    let cleanEmail = null;
+    if (email != null && String(email).trim() !== '') {
+      cleanEmail = normalizeEmail(email);
+      if (!cleanEmail) { socket.emit('account:error', { msg: 'Enter a valid email address, or leave it blank.' }); return; }
     }
 
     let base  = username.trim().substring(0, 20);
@@ -1924,7 +2059,7 @@ io.on('connection', (socket) => {
     const hashStartedAt = Date.now();
     const hashed = await hashPassword(pw);
     console.log(`[AUTH] Register password hash: ${Date.now() - hashStartedAt}ms`);
-    const data   = { username: base, uname, password: hashed, save: null, createdAt: Date.now(), lastLogin: Date.now() };
+    const data   = { username: base, uname, password: hashed, save: null, createdAt: Date.now(), lastLogin: Date.now(), email: cleanEmail };
 
     const saveStartedAt = Date.now();
     const saved = await dbSaveAccount(data);
@@ -1946,13 +2081,14 @@ io.on('connection', (socket) => {
     socket.data.uname    = uname;
     socket.data.username = base;
 
-    socket.emit('account:registered', { username: base, isNew: true });
+    socket.emit('account:registered', { username: base, isNew: true, hasEmail: !!cleanEmail });
+    await establishSession(socket, uname, false); // registration = non-persistent session; Remember Me is a login-time choice
     console.log(`[AUTH] Register total: ${Date.now() - authStartedAt}ms`);
     console.log(`[ACCOUNT] Registered: ${base}`);
   });
 
   // ── ACCOUNT: LOGIN ────────────────────────────────────
-  socket.on('account:login', async ({ username, password } = {}) => {
+  socket.on('account:login', async ({ username, password, remember } = {}) => {
     const authStartedAt = Date.now();
     // SECURITY: two independent throttles. The per-IP one stops a script
     // from spraying many different usernames from one connection; the
@@ -2022,7 +2158,8 @@ io.on('connection', (socket) => {
     socket.data.username = acc.username;
 
     const loginSave = loadPlayerSave(acc);
-    socket.emit('account:loggedin', { username: acc.username, save: acc.save, isNew: false });
+    socket.emit('account:loggedin', { username: acc.username, save: acc.save, isNew: false, hasEmail: !!acc.email });
+    await establishSession(socket, uname, remember === true);
     socket.emit('player:state', buildClientState(loginSave));
     console.log(`[AUTH] Login total: ${Date.now() - authStartedAt}ms`);
     console.log(`[ACCOUNT] Login: ${username}`);
@@ -2474,6 +2611,8 @@ io.on('connection', (socket) => {
     acc.password = await hashPassword(newPw);
     await dbSaveAccount({ ...acc, uname });
     accounts.set(uname, acc);
+    // SECURITY: a password change signs the account out everywhere else (stolen/forgotten devices).
+    await auth.revokeAllForUser(uname, socket.data.uname === uname ? socket.data.sid : null);
     socket.emit('account:passchanged', { ok: true });
     console.log(`[ACCOUNT] Password changed: ${username}`);
   });
@@ -2493,6 +2632,8 @@ io.on('connection', (socket) => {
     recordLoginSuccess(uname);
     await dbDeleteAccount(uname);
     accounts.delete(uname);
+    await auth.deleteAllForUser(uname);
+    socket.data.sid = null;
     socket.emit('account:deleted', { ok: true });
     console.log(`[ACCOUNT] Deleted: ${username}`);
   });
@@ -2819,21 +2960,132 @@ io.on('connection', (socket) => {
   function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
   // ── session:restore ──────────────────────────────
-  // Called by frontend on reconnect instead of re-sending password.
-  // Uses the server-side onlinePlayers map to validate the socket session.
+  // Page load / reconnect: the client first POSTs /auth/session (the browser attaches
+  // the HttpOnly cookie, which JS can never read), receives a one-time ticket, and
+  // presents it here. A username alone never authenticates anyone.
   socket.on('session:restore', async (payload, callback) => {
-    // For now: restore from onlinePlayers map (populated on account:login).
-    // If the socket reconnected and account:login fires on the 'connect' handler,
-    // this will be called after. Check if this socket is already authenticated.
-    const player = onlinePlayers.get(socket.id);
-    if (player?.username) {
-      const acc = accounts.get(player.username.toLowerCase()) || await dbGetAccount(player.username.toLowerCase());
-      if (acc) {
-        callback?.({ ok: true, player: { username: acc.username } });
-        return;
+    const cb = typeof callback === 'function' ? callback : () => {};
+    const ticket = payload && typeof payload.ticket === 'string' ? payload.ticket : null;
+
+    if (!ticket) {
+      // Legacy probe: "is THIS socket already authenticated?" (no credentials accepted here)
+      const player = onlinePlayers.get(socket.id);
+      if (player?.username) {
+        const acc = accounts.get(player.username.toLowerCase()) || await dbGetAccount(player.username.toLowerCase());
+        if (acc) { cb({ ok: true, player: { username: acc.username } }); return; }
       }
+      cb({ ok: false });
+      return;
     }
-    callback?.({ ok: false });
+
+    if (!restoreIpLimiter(clientIp({ headers: socket.handshake.headers, address: socket.handshake.address }))) { cb({ ok: false, reason: 'rate' }); return; }
+    const r = await auth.redeemBindTicket(ticket);
+    if (r.status !== 'ok') { cb({ ok: false, reason: r.status }); return; }
+    const acc = accounts.get(r.uname) || await dbGetAccount(r.uname);
+    if (!acc) { await auth.revokeSession(r.sid); cb({ ok: false, reason: 'invalid' }); return; }
+    if (isBanned(r.uname)) { await auth.revokeSession(r.sid); cb({ ok: false, reason: 'suspended' }); return; }
+
+    accounts.set(r.uname, acc);
+    socket.data.uname    = r.uname;
+    socket.data.username = acc.username;
+    socket.data.sid      = r.sid;
+    cb({ ok: true, username: acc.username, save: acc.save, hasEmail: !!acc.email });
+    socket.emit('player:state', buildClientState(loadPlayerSave(acc)));
+    console.log(`[AUTH] Session restored: ${acc.username}`);
+  });
+
+  // ── account:logout ───────────────────────────────
+  // Revokes this socket's session, then drops the connection so every piece of
+  // per-socket state (rooms, lobby, duels) is cleaned up by the normal disconnect path.
+  socket.on('account:logout', async (_payload, callback) => {
+    if (socket.data.sid) await auth.revokeSession(socket.data.sid);
+    socket.data.sid = null;
+    if (typeof callback === 'function') callback({ ok: true });
+    setTimeout(() => socket.disconnect(true), 50);
+  });
+
+  // ── account:setEmail ─────────────────────────────
+  socket.on('account:setEmail', async ({ password, email } = {}) => {
+    const uname = socket.data.uname;
+    if (!uname) { socket.emit('account:emailError', { msg: 'Not logged in.' }); return; }
+    const lockedMs = getLoginLockoutRemaining(uname);
+    if (lockedMs > 0) { socket.emit('account:emailError', { msg: `Too many failed attempts. Try again in ${Math.ceil(lockedMs / 1000)}s.` }); return; }
+    const acc = accounts.get(uname) || await dbGetAccount(uname);
+    if (!acc) { socket.emit('account:emailError', { msg: 'Account not found.' }); return; }
+    const pw = password ?? '';
+    if (!pw || !(await verifyPassword(pw, acc.password))) { recordLoginFailure(uname); socket.emit('account:emailError', { msg: 'Password is wrong.' }); return; }
+    recordLoginSuccess(uname);
+    let clean = null;
+    if (email != null && String(email).trim() !== '') {
+      clean = normalizeEmail(email);
+      if (!clean) { socket.emit('account:emailError', { msg: 'Enter a valid email address.' }); return; }
+    }
+    acc.email = clean;
+    const saved = await dbSaveAccount({ ...acc, uname });
+    if (saved === false && MONGO_URI) { socket.emit('account:emailError', { msg: 'Could not save. Please try again.' }); return; }
+    accounts.set(uname, acc);
+    socket.emit('account:emailSet', { hasEmail: !!clean });
+  });
+
+  // ── account:forgot ───────────────────────────────
+  // Always answers identically whether or not the account/email exists (no enumeration),
+  // and answers BEFORE doing any lookup/sending so timing is identical too.
+  socket.on('account:forgot', async ({ identifier } = {}) => {
+    const id = typeof identifier === 'string' ? identifier.trim().slice(0, 254) : '';
+    if (!id) { socket.emit('account:forgotError', { msg: 'Enter your username or email.' }); return; }
+    const ip = clientIp({ headers: socket.handshake.headers, address: socket.handshake.address });
+    if (!forgotIpLimiter(ip)) { socket.emit('account:forgotError', { msg: 'Too many requests. Please wait a few minutes and try again.' }); return; }
+    socket.emit('account:forgotSent', { ok: true });
+    if (!forgotIdLimiter(id.toLowerCase())) return; // per-target cap: stops using us to spam one inbox
+    try {
+      const base = publicBase(socket.handshake);
+      if (!base) { console.error('[AUTH] PUBLIC_URL is not set — cannot build password-reset links in production.'); return; }
+      let targets = []; // [{ acc, to }]
+      if (id.includes('@')) {
+        const e = normalizeEmail(id);
+        if (e) targets = (await dbFindAccountsByEmail(e)).map(acc => ({ acc, to: e }));
+      } else {
+        const u = id.toLowerCase();
+        const acc = accounts.get(u) || await dbGetAccount(u);
+        if (acc && acc.email) targets = [{ acc, to: acc.email }];
+      }
+      targets = targets.filter(t => !isBanned(t.acc.uname));
+      const byRecipient = new Map();
+      for (const t of targets) {
+        const r = await auth.createResetToken(t.acc.uname);
+        if (r.status !== 'ok') continue;
+        const list = byRecipient.get(t.to) || [];
+        list.push({ username: t.acc.username, url: `${base}/#reset=${r.token}` });
+        byRecipient.set(t.to, list);
+      }
+      for (const [to, links] of byRecipient) {
+        await mailer.sendPasswordReset(to, links, Math.round(auth.config.resetMs / 60000))
+          .catch(e => console.error('[AUTH] reset email failed:', e.message));
+      }
+    } catch (e) { console.error('[AUTH] account:forgot failed:', e.message); }
+  });
+
+  // ── account:resetPassword ────────────────────────
+  socket.on('account:resetPassword', async ({ token, newPassword } = {}) => {
+    const ip = clientIp({ headers: socket.handshake.headers, address: socket.handshake.address });
+    if (!resetIpLimiter(ip)) { socket.emit('account:resetError', { msg: 'Too many attempts. Please wait a few minutes.' }); return; }
+    const pw = typeof newPassword === 'string' ? newPassword : '';
+    if (pw.length < 6)   { socket.emit('account:resetError', { msg: 'Password must be at least 6 characters.', field: 'password' }); return; }
+    if (pw.length > 128) { socket.emit('account:resetError', { msg: 'Password too long.', field: 'password' }); return; }
+    const BAD_LINK = 'This reset link is invalid or has expired. Please request a new one.';
+    const r = await auth.consumeResetToken(token); // atomic: a link can only ever be used once
+    if (r.status === 'unavailable') { socket.emit('account:resetError', { msg: 'The service is temporarily unavailable. Please try again shortly.' }); return; }
+    if (r.status !== 'ok') { socket.emit('account:resetError', { msg: BAD_LINK, fatal: true }); return; }
+    const acc = accounts.get(r.uname) || await dbGetAccount(r.uname);
+    if (!acc) { socket.emit('account:resetError', { msg: BAD_LINK, fatal: true }); return; }
+    acc.password = await hashPassword(pw);
+    const saved = await dbSaveAccount({ ...acc, uname: r.uname });
+    if (saved === false && MONGO_URI) { socket.emit('account:resetError', { msg: 'Could not save the new password. Please request a new reset link.', fatal: true }); return; }
+    accounts.set(r.uname, acc);
+    recordLoginSuccess(r.uname);          // clears any failed-login lockout
+    await auth.revokeAllForUser(r.uname); // every device must sign in again with the new password
+    socket.emit('account:passwordReset', { ok: true, username: acc.username });
+    console.log(`[AUTH] Password reset: ${acc.username}`);
   });
 
   // ── guild:create ─────────────────────────────────
